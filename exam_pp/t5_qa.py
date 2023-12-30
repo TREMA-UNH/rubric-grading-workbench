@@ -1,16 +1,19 @@
 import itertools
 import os
 from pathlib import Path
-from typing import Tuple, List, Dict, Callable
+from typing import Tuple, List, Dict, Callable, NewType
 from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM
 
 from question_types import QuestionPromptWithChoices
 
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
-device = 1
-BATCH_SIZE=50
+device = os.environ.get("GPU_DEVICE")
+BATCH_SIZE = os.environ.get("BATCH_SIZE", 5)
+MAX_TOKEN_LEN = 512
 
+
+PromptGenerator = Callable[[QuestionPromptWithChoices],str]
 
 
 
@@ -28,26 +31,27 @@ class McqaPipeline():
         self.modelName = 'google/flan-t5-large'
         self.tokenizer = T5Tokenizer.from_pretrained(self.modelName)
         self.model = T5ForConditionalGeneration.from_pretrained(self.modelName)
+        print(f"T5 model config: { self.model.config}")
         # self.promptGenerator = promptGenerator
 
         # Create a Hugging Face pipeline
-        self.t5_pipeline = pipeline("text2text-generation", model=self.model, tokenizer=self.tokenizer)
+        self.t5_pipeline = pipeline("text2text-generation", model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
 
 
 
-    def answer_multiple_choice_question(self, qpc:QuestionPromptWithChoices, promptGenerator:Callable[[QuestionPromptWithChoices],str])->str:
+    def answer_multiple_choice_question(self, qpc:QuestionPromptWithChoices, promptGenerator:PromptGenerator)->str:
         prompt = promptGenerator(qpc)
 
         # print("prompt",prompt)
-        outputs = self.t5_pipeline(prompt, max_length=512, num_beams=5, early_stopping=True)
+        outputs = self.t5_pipeline(prompt, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
         return outputs[0]['generated_text']
         
 
-    def batch_answer_multiple_choice_questions(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:Callable[[QuestionPromptWithChoices],str])->List[Tuple[QuestionPromptWithChoices, str]]:
+    def batch_answer_multiple_choice_questions(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:PromptGenerator)->List[Tuple[QuestionPromptWithChoices, str]]:
         """Prepare a batch for question answering, tuple it up with the answers"""
         prompts = [promptGenerator(qpc) for qpc in qpcs]
         
-        outputs = self.t5_pipeline(prompts, max_length=512, num_beams=5, early_stopping=True)
+        outputs = self.t5_pipeline(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
         answers = [output['generated_text'] for output in outputs]
         return zip(qpcs, answers)
         
@@ -57,14 +61,14 @@ class BatchingPipeline():
         self.batchSize = batchSize
     
 
-    def answerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:Callable[[QuestionPromptWithChoices],str]):
+    def answerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGenerator):
         for qpc in questions:
             answer = pipeline.answer_multiple_choice_question(qpc,promptGenerator)
             print("answer", answer)
             print("correct?", qpc.check_answer(answer))
 
 
-    def batchAnswerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:Callable[[QuestionPromptWithChoices],str])->List[Tuple[QuestionPromptWithChoices, str]]:
+    def batchAnswerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGenerator)->List[Tuple[QuestionPromptWithChoices, str]]:
         """runs question answering over a single batch, and tuples it up with answers"""
         answerTuples = list(pipeline.batch_answer_multiple_choice_questions(questions, promptGenerator))
         # print('correct list?', [qpc.check_answer(answer) for qpc,answer in answerTuples])
@@ -94,7 +98,8 @@ def main():
     
     qa = McqaPipeline()
     batchPipe = BatchingPipeline(BATCH_SIZE)
-    promptGenerator=lambda qpc: qpc.generate_prompt()
+
+    promptGenerator=lambda qpc: qpc.generate_prompt(model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
         answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGenerator)

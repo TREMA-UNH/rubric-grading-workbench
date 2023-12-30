@@ -33,9 +33,8 @@ def main():
             for para in paragraphs:
                 paragraph_id = para.paragraph_id
                 paragraph_txt = para.text
-                paragraph_txt_limited = ' '.join(islice(paragraph_txt.split(' '), 200))
 
-                promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt_limited)
+                promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
                 # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
                 answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGenerator)
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]

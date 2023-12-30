@@ -27,19 +27,44 @@ class QuestionPromptWithChoices():
         correct_answers = {self.correct, f"{self.correctKey})", self.correctKey}
         self.normalized_correct_answers = {QuestionPromptWithChoices.normalize_answer(gold) for gold in correct_answers}
         self.correct_answers = correct_answers
-        
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens
+
+        # Tokenize and truncate the context
+        context_tokens = tokenizer.encode(context, add_special_tokens=False)
+        truncated_context_tokens = context_tokens[:available_tokens_for_context]
+
+        # Combine truncated context with the full question
+        combined_tokens = truncated_context_tokens + question_tokens
+        prompt = tokenizer.decode(combined_tokens)
+
+        return prompt
+
+
+
     @staticmethod
     def int_key_to_str(i:int)->str:
         return f"chr(65+i)"
 
-    def generate_prompt(self) -> str:
-        return f"question: {self.question} choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
+# to fix
+    def generate_prompt(self,model_tokenizer, max_token_len)  -> str:
+        prompt = f"question: {self.question} choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
+        return model_tokenizer.decode(model_tokenizer.encode(prompt, add_special_tokens=False, truncation = True, max_length = max_token_len-1))
 
-    def generate_prompt_with_context(self,context:str) -> str:
-        return f"context: {context}; question: {self.question}; choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
+    # def generate_prompt_with_context(self,context:str) -> str:
+    #     return f"context: {context}; question: {self.question}; choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
 
-    def generate_prompt_with_context_no_choices(self,context:str) -> str:
-        return f"context: {context}; question: {self.question}"
+    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {self.question}", max_length=max_token_len)
+        return prompt
 
 
     def check_answer(self,answer:str)->bool:
