@@ -9,7 +9,9 @@ from question_types import QuestionPromptWithChoices
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
 device = os.environ.get("GPU_DEVICE")
-BATCH_SIZE = os.environ.get("BATCH_SIZE", 5)
+if device is not None:
+    device = int(device)
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5"))
 MAX_TOKEN_LEN = 512
 
 
