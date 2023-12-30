@@ -1,8 +1,9 @@
 import itertools
+import math
 import os
 from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType
-from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM
+from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig
 
 from question_types import QuestionPromptWithChoices
 
@@ -16,6 +17,27 @@ MAX_TOKEN_LEN = 512
 
 
 PromptGenerator = Callable[[QuestionPromptWithChoices],str]
+
+
+@staticmethod
+def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
+    gpu_memory = 45634    # A40
+    # Constants
+    memory_for_activations_mib = gpu_memory / 2  # Half of the total GPU memory
+    d_model = modelConfig.d_model  # 1024 Model dimension
+    token_length = MAX_TOKEN_LEN   # 512 Maximum token length
+    bytes_per_parameter = 4  # FP32 precision
+
+    # Calculating the maximum batch size
+    # Memory required per token in a batch (in MiB)
+    memory_per_token_mib = d_model**2 * bytes_per_parameter / (1024**2)
+
+    # Total memory required for one batch of size 1
+    total_memory_per_batch_mib = token_length * memory_per_token_mib
+
+    # Estimate the maximum batch size
+    max_batch_size = memory_for_activations_mib / total_memory_per_batch_mib
+    return math.floor(max_batch_size)
 
 
 
