@@ -3,7 +3,7 @@ import math
 import os
 from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType
-from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig
+from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig
 
 from question_types import QuestionPromptWithChoices
 
@@ -14,6 +14,7 @@ if device is not None:
     device = int(device)
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "5"))
 MAX_TOKEN_LEN = 512
+print(f'Device = {device}; BATCH_SIZE = {BATCH_SIZE}')
 
 
 PromptGenerator = Callable[[QuestionPromptWithChoices],str]
@@ -53,7 +54,7 @@ class McqaPipeline():
            """
         # Initialize the tokenizer and model
         self.modelName = 'google/flan-t5-large'
-        self.tokenizer = T5Tokenizer.from_pretrained(self.modelName)
+        self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
         self.model = T5ForConditionalGeneration.from_pretrained(self.modelName)
         print(f"T5 model config: { self.model.config}")
         # self.promptGenerator = promptGenerator

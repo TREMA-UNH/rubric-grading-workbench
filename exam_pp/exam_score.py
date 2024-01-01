@@ -40,7 +40,8 @@ def main():
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
                 numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
                 numAll = len(answerTuples)
-                print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
+                if numAll > 0:
+                    print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
 
                 # adding exam data to the JSON file
                 exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
