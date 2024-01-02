@@ -12,7 +12,7 @@ def fix_car_query_id(input:List[Tuple[str,List[QuestionPromptWithChoices]]]) -> 
 
 
 def main():
-    """Entry point for the module."""
+    """Score paragraphs by number of questions that are correctly answered."""
     lesson_questions:Dict[str,List[QuestionPromptWithChoices]] = dict(fix_car_query_id(tqa_loader.load_all_tqa_data()))
     # print('question bank query ids', lesson_questions.keys())
     batchPipe = BatchingPipeline(BATCH_SIZE)
