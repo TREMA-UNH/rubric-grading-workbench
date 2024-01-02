@@ -40,20 +40,23 @@ def main():
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
                 numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
                 numAll = len(answerTuples)
-                if numAll > 0:
+                if numAll > 0: # can't provide exam when no questions are answered.
                     print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
 
-                # adding exam data to the JSON file
-                exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                                        , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                        , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
-                                        , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                        , llm = qa.modelName
-                                        , llm_options={"prompt_template":"generate_prompt_with_context_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
-                                ) 
-                if para.exam_grades is None:
-                    para.exam_grades = list()
-                para.exam_grades.append(exam_grades)
+                    # adding exam data to the JSON file
+                    exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                                            , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                            , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
+                                            , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
+                                            , llm = qa.modelName
+                                            , llm_options={"prompt_template":"generate_prompt_with_context_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                    ) 
+                    if para.exam_grades is None:
+                        para.exam_grades = list()
+                    para.exam_grades.append(exam_grades)
+
+                else:
+                    print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
             out_file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             out_file.write('\n')
             out_file.flush()

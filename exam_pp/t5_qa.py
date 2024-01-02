@@ -83,7 +83,7 @@ class McqaPipeline():
 
 class BatchingPipeline():
     def __init__(self, batchSize:int):
-        self.batchSize = batchSize
+        self.batchSize = 100 # batchSize
     
 
     def answerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGenerator):
@@ -103,7 +103,7 @@ class BatchingPipeline():
         iterator = iter(iterable)
         while True:
             batch = list(itertools.islice(iterator, self.batchSize))
-            if not batch:
+            if not batch or len(batch)<1:
                 break
             yield batch
 
