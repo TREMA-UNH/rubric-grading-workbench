@@ -217,10 +217,7 @@ def questionCoverage():
         if(len(ratios)>1):
             avgRatio =   statistics.mean(ratios)
             stdRatio =   statistics.stdev(ratios)
-            # if(any([ratio <=0.0 for ratio in ratios])):
-            #     print(method, ratios)
-            #     pass
-            # geometric_mean = statistics.geometric_mean(ratios)
+
             print(f'OVERALL method {method}: avg ratio {avgRatio:.2f} +/0 {stdRatio:.3f}')
 
 
@@ -253,6 +250,75 @@ def examCoverageScore(paras:List[FullParagraphData], total_questions:Optional[in
     examCoverScore = frac(len(correct), total_questions)
     return examCoverScore
 
+manualLeaderboard = { "dangnt-nlp": 1
+                    , "ReRnak3_BERT": 2
+                    , "ReRnak2_BERT": 3
+                    , "IRIT1" : 5
+                    , "IRIT2" : 5
+                    , "IRIT3" : 5
+                    , "ECNU_BM25_1" : 7.5
+                    , "ECNU_ReRank1" : 7.5
+                    , "Bert-ConvKNRM-50" : 9
+                    , "bm25-populated" : 10
+                    , "UNH-bm25-ecmpsg" : 11
+                    , "Bert-DRMMTKS" : 12
+                    , "UvABM25RM3" : 13
+                    , "UvABottomUpChangeOrder" : 14
+                    , "UvABottomUp2" : 15
+                    , "ICT-DRMMTKS" : 16
+}
+
+origExamLeaderboard = { "ReRnak2_BERT": 1
+                      , "dangnt-nlp": 2
+                      , "Bert-DRMMTKS": 3
+                      , "IRIT2": 4
+                      , "ReRnak3_BERT": 5
+                      , "Bert-ConvKNRM-50": 6
+                      , "IRIT1": 7
+                      , "bm25-populated": 8
+                      , "IRIT3": 9
+                      , "UNH-bm25-ecmpsg": 10
+                      , "ECNU_BM25_1": 11
+                      , "ECNU_ReRank1": 12
+                      , "ICT-DRMMTKS": 13
+                      , "UvABottomUpChangeOrder": 14
+                      , "UvABM25RM3": 15
+                      , "UvABottomUp2": 16
+}
+
+@dataclass
+class CorrelationStats:
+    spearman_correlation:float
+    kendall_correlation:float
+
+def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
+    from scipy.stats import spearmanr, kendalltau, rankdata
+
+    methods = list(manualLeaderboard.keys())
+    ranks1 = [manualLeaderboard[method] for method in methods]
+
+    # Extract scores for the methods
+    scores = [systemEval[method] for method in methods]
+    # Use rankdata to handle ties in scoring
+    ranks2 = rankdata([-score for score in scores], method='average')  # Negative scores for descending order
+
+    
+    # Calculate Spearman's Rank Correlation Coefficient
+    spearman_correlation, spearman_p_value = spearmanr(ranks1, ranks2)
+    kendall_res = kendalltau(ranks1, ranks2)
+
+    return CorrelationStats(spearman_correlation=spearman_correlation, kendall_correlation=kendall_res.correlation)
+
+@dataclass
+class LeaderboardEntry:
+    method:str
+    eval_score:float
+    rank:int
+
+def create_leaderboard(systemEval:Dict[str,float])->List[LeaderboardEntry]:
+    systemEvalSorted = sorted(list(systemEval.items()), key=lambda x: x[1], reverse=True)
+    systemEvalRanked = [LeaderboardEntry(method, score, rank) for rank, (method, score) in enumerate(systemEvalSorted, start=1)]
+    return systemEvalRanked
 
 def questionCoverage(rank_cut_off:int=20):
     """which method covers most questions? """
@@ -300,6 +366,18 @@ def questionCoverage(rank_cut_off:int=20):
             avgExam =   statistics.mean(examScores)
             stdExam =   statistics.stdev(examScores)
             print(f'OVERALL n-EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
+
+
+    nExamEval:Dict[str,float] = {method: statistics.mean(examScores) for method,examScores in nexamCoverPerMethod.items()}
+    examEval:Dict[str,float] = {method: statistics.mean(examScores) for method,examScores in examCoverPerMethod.items()}
+    
+    nExamCorrelation = leaderboard_rank_correlation(nExamEval)
+    examCorrelation = leaderboard_rank_correlation(examEval)
+    print(f' nExam:{nExamCorrelation}')
+    print(f' exam:{examCorrelation}')
+
+    print("\n".join( [str(x)  for x in create_leaderboard(examEval)]))
+    pass
 
 
 
