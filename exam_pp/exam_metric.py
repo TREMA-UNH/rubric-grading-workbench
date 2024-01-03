@@ -380,12 +380,41 @@ def questionCoverage(rank_cut_off:int=20):
     pass
 
 
+@dataclass
+class QrelEntry:
+    query_id:str
+    paragraph_id:str
+    grade:int
 
+    def format_qrels(self):
+        return ' '.join([self.query_id, '0', self.paragraph_id, str(self.grade)])+'\n'
+
+def examToQrels(qrel_out_file:Path):
+    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs("./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz")
+    qrel_entries = list()
+    
+    for queryWithFullParagraphList in query_paragraphs:
+
+        query_id = queryWithFullParagraphList.queryId
+        paragraphs = queryWithFullParagraphList.paragraphs
+
+        for para in paragraphs:
+            if para.exam_grades:
+                exam_grade = para.exam_grades[0]
+                numCorrect = len(exam_grade.correctAnswered)
+                qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=numCorrect))
+
+
+    
+    with open(qrel_out_file, 'wt', encoding='utf-8') as file:
+        file.writelines(entry.format_qrels() for entry in qrel_entries)
+        file.close()
 
 def main():
     # confusionMatrixCorrelation()
     # confusionExamVsJudgedCorrelation(exam_file = "./benchmarkY3test-exam-qrels-with-text.jsonl.gz", min_judgment_level=1, min_answers=1)
-    questionCoverage(rank_cut_off=10)
+    # questionCoverage(rank_cut_off=10)
+    examToQrels("./benchmarkY3test-exam.qrel")
 
 
 
