@@ -12,12 +12,27 @@ class QrelEntry:
     def format_qrels(self):
         return ' '.join([self.query_id, '0', self.paragraph_id, str(self.grade)])+'\n'
 
-def examToQrels(input_file:Path, qrel_out_file:Path):
-    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(input_file)
-    qrel_entries = list()
+def exam_to_qrels_files(exam_input_file:Path, qrel_out_file:Path):
+    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+    qrel_entries = exam_to_qrels(query_paragraphs)
+   
+    write_qrel_file(qrel_out_file, qrel_entries)
+
+def write_qrel_file(qrel_out_file, qrel_entries):
+    '''Use to write qrels file'''
+    with open(qrel_out_file, 'wt', encoding='utf-8') as file:
+        file.writelines(entry.format_qrels() for entry in qrel_entries)
+        file.close()
+
+def exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList])->List[QrelEntry]:
+    '''workhorse to convert exam-annotated paragraphs into qrel entries.
+    load input file with `parseQueryWithFullParagraphs`
+    write qrels file with `write_qrel_file`
+    or use convenience function `exam_to_qrels_file`
+    '''
+    qrel_entries:List[QrelEntry] = list()
     
     for queryWithFullParagraphList in query_paragraphs:
-
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
 
@@ -26,12 +41,7 @@ def examToQrels(input_file:Path, qrel_out_file:Path):
                 exam_grade = para.exam_grades[0]
                 numCorrect = len(exam_grade.correctAnswered)
                 qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=numCorrect))
-
-
-    
-    with open(qrel_out_file, 'wt', encoding='utf-8') as file:
-        file.writelines(entry.format_qrels() for entry in qrel_entries)
-        file.close()
+    return qrel_entries
 
 
 def main():
@@ -62,7 +72,7 @@ def main():
 
     # Parse the arguments
     args = parser.parse_args()    
-    examToQrels(input_file=args.exam_annotated_file, qrel_out_file=args.output)
+    exam_to_qrels_files(exam_input_file=args.exam_annotated_file, qrel_out_file=args.output)
 
 
 if __name__ == "__main__":

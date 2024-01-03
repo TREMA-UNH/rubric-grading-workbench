@@ -6,10 +6,10 @@ import statistics
 from question_types import *
 from parse_qrels_runs_with_text import *
 from typing import Set, List, Tuple
+from collections import defaultdict
 
 from pydantic import BaseModel
 import gzip
-import json
 
 def plainExamCoverageScore(method_paras:List[FullParagraphData])->float:
     '''Plain EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`'''
@@ -73,18 +73,16 @@ class ExamCoverEvalsDict(dict):
         return value
 
 
-from collections import defaultdict
 
+OVERALL_ENTRY = "_overall_"
 
-def computeExamCoverScores(exam_input_file:Path, out_jsonl_file:Path, rank_cut_off:int=20):
-    """which method covers most questions? """
-    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
-
-    examCoverPerMethod:Dict[str, List[float]] = defaultdict(list) 
-    nexamCoverPerMethod:Dict[str, List[float]] = defaultdict(list) 
-
+def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
+    '''Workhorse to compute exam cover scores from exam-annotated paragraphs.
+    Load input file with `parseQueryWithFullParagraphs`
+    Write output file with `write_exam_results`
+    or use convenience function `compute_exam_cover_scores_file`
+    '''
     resultsPerMethod:ExamCoverEvalsDict[str, ExamCoverEvals] = ExamCoverEvalsDict()
-
     
     for queryWithFullParagraphList in query_paragraphs:
 
@@ -95,26 +93,20 @@ def computeExamCoverScores(exam_input_file:Path, out_jsonl_file:Path, rank_cut_o
         total_correct = totalCorrectQuestions(paragraphs)
         total_questions = totalQuestions(paragraphs)
         overallExam = examCoverageScore(paragraphs)
-        examCoverPerMethod["_overall"].append(overallExam)
-        nexamCoverPerMethod["_overall"].append(1.0)
 
         print(f'{query_id}, overall ratio {overallExam}')
+        resultsPerMethod[OVERALL_ENTRY].examCoverPerQuery[query_id]=overallExam
+        resultsPerMethod[OVERALL_ENTRY].nExamCoverPerQuery[query_id]=1.0
 
         # collect top paragraphs per method
-        top_per_method:Dict[str,List[FullParagraphData]] = defaultdict(list)
-        for para in paragraphs:
-                for rank in para.paragraph_data.rankings:
-                    if rank.rank <= rank_cut_off:
-                        top_per_method[rank.method].append(para)
+        top_per_method = top_ranked_paragraphs(rank_cut_off, paragraphs)
 
         # computer query-wise exam scores for all methods
         for method, paragraphs in top_per_method.items():
             nexamScore = examCoverageScore(paragraphs, total_questions = total_correct)
-            # nexamCoverPerMethod[method].append(nexamScore) #
             resultsPerMethod[method].nExamCoverPerQuery[query_id] = nexamScore
 
             examScore = examCoverageScore(paragraphs, total_questions = total_questions)
-            # examCoverPerMethod[method].append(examScore) #
             resultsPerMethod[method].examCoverPerQuery[query_id] = examScore
 
     # aggregate query-wise exam scores into overall scores.
@@ -133,18 +125,28 @@ def computeExamCoverScores(exam_input_file:Path, out_jsonl_file:Path, rank_cut_o
             examEvals.examScoreStd = stdExam
             # print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
 
-    # nExamEval:Dict[str,float] = {method: examEvals.nExamScore for method,examEvals in resultsPerMethod.items()}
-    # examEval:Dict[str,float] = {method: examEvals.examScore for method,examEvals in resultsPerMethod.items()}    
-    # print()
+    return resultsPerMethod
 
-    # print(resultsPerMethod)
-    # print()
-    # print(examEval)
-    # print("\n".join( [str(x)  for x in create_leaderboard(examEval)]))
-    pass
+def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, rank_cut_off:int=20):
+    """which method covers most questions? """
+    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+    
+    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, rank_cut_off)
+    
+    write_exam_results(out_jsonl_file, resultsPerMethod)
+
+def write_exam_results(out_jsonl_file, resultsPerMethod):
     with gzip.open(out_jsonl_file, 'wt', encoding='utf-8') as file:
-        file.writelines([results.json() for results in resultsPerMethod.values()])
+        file.writelines([results.json()+'\n' for results in resultsPerMethod.values()])
         file.close()
+
+def top_ranked_paragraphs(rank_cut_off:int, paragraphs:List[FullParagraphData])-> Dict[str,List[FullParagraphData]] :
+    top_per_method:Dict[str,List[FullParagraphData]] = defaultdict(list)
+    for para in paragraphs:
+            for rank in para.paragraph_data.rankings:
+                if rank.rank <= rank_cut_off:
+                    top_per_method[rank.method].append(para)
+    return top_per_method
 
 
 
@@ -179,7 +181,7 @@ def main():
 
     # Parse the arguments
     args = parser.parse_args()    
-    computeExamCoverScores(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output)
+    compute_exam_cover_scores_file(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output)
 
 
 if __name__ == "__main__":

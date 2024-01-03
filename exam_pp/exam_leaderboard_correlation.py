@@ -78,7 +78,7 @@ def create_leaderboard(systemEval:Dict[str,float])->List[LeaderboardEntry]:
     return systemEvalRanked
 
 
-def print_leaderboard_eval(exam_result_file:Path):
+def print_leaderboard_eval_file(exam_result_file:Path):
     def read_result_file()->[ExamCoverEvals]:
         # Open the gzipped file
         with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
@@ -86,6 +86,13 @@ def print_leaderboard_eval(exam_result_file:Path):
 
     evals = read_result_file()
 
+    print_leaderboard_eval(evals)
+    pass
+
+def print_leaderboard_eval(evals:List[ExamCoverEvals]):
+    '''Print the Leaderboard in trec_eval evaluation output format.
+    Load necessary data with `read_exam_result_file()` or use the convenience method `print_leaderboard_eval_file`
+    '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
@@ -93,25 +100,30 @@ def print_leaderboard_eval(exam_result_file:Path):
                         for x in create_leaderboard(examEval)]))
     print("\n".join( ["\t".join([x.method, "n-exam", f'{x.eval_score:.4}' ]) 
                         for x in create_leaderboard(nExamEval)]))
-    pass
 
 
+def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
+    # Open the gzipped file
+    with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
+        return [ExamCoverEvals.parse_raw(line) for line in file]
 
-def leaderboard_correlation(exam_result_file:Path):
-    def read_result_file()->[ExamCoverEvals]:
-        # Open the gzipped file
-        with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
-            return [ExamCoverEvals.parse_raw(line) for line in file]
+def leaderboard_correlation_files(exam_result_file:Path):
+    evals = read_exam_result_file(exam_result_file)
 
-    evals = read_result_file()
+    nExamCorrelation, examCorrelation = leaderboard_correlation(evals)
+    print(f' nExam:{nExamCorrelation}')
+    print(f' exam:{examCorrelation}')
 
+def leaderboard_correlation(evals:List[ExamCoverEvals])->Tuple[CorrelationStats,CorrelationStats]:
+    '''Compute Leaderboard correlation. 
+    Load necessary data with `read_exam_result_file()` or use the convenience method `leaderboard_correlation_files`
+    '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
     nExamCorrelation = leaderboard_rank_correlation(nExamEval)
     examCorrelation = leaderboard_rank_correlation(examEval)
-    print(f' nExam:{nExamCorrelation}')
-    print(f' exam:{examCorrelation}')
+    return nExamCorrelation,examCorrelation
 
 
 
@@ -137,7 +149,7 @@ def main():
                         , help='json file with exam evaluation scores. The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    parser.add_argument('-e', '--eval', action='store_true', help='Print leaderbord evaluation data')
+    parser.add_argument('-l', '--leaderboard', action='store_true', help='Print leaderbord evaluation data')
     parser.add_argument('-c', '--rank-correlation', action='store_true', help='Print leaderbord rank correlation')
 
     # parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output JSONL.gz file name, where exam results will be written to', default='output.qrels')
@@ -145,9 +157,9 @@ def main():
     args = parser.parse_args()  
 
     if args.eval:
-        print_leaderboard_eval(exam_result_file=args.exam_result_file)
+        print_leaderboard_eval_file(exam_result_file=args.exam_result_file)
     if args.rank_correlation:
-        leaderboard_correlation(exam_result_file=args.exam_result_file)
+        leaderboard_correlation_files(exam_result_file=args.exam_result_file)
 
 
 if __name__ == "__main__":

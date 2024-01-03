@@ -129,15 +129,31 @@ def dontuse():
             print(f' method: {method}  exam: {globalExamRankMetric[method].printMeasures()}  manual: {globalManualRankMetric[method].printMeasures()} ')
 
 
-def confusionExamVsJudgedCorrelation(exam_file:Path, min_judgment_level:int, min_answers:int=1):
+def confusion_exam_vs_judged_correlation_file(exam_input_file:Path, min_judgment_level:int, min_answers:int=1):
     """Acc/P/R correlation between exam, judgments """
-    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_file)
+    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
+    globalExamVsJudged, perQueryStats = confusion_exam_vs_judged_correlation(query_paragraphs, min_judgment_level, min_answers)
+
+    print(perQueryStats)
+    print(f'all: examVsJudged {globalExamVsJudged.printMeasures()} , stats {globalExamVsJudged} ')#
+
+def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], min_judgment_level:int, min_answers:int)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
+    ''' workhorse to measure the per-paragraph correlation between manual judgments and exam labels.
+    Only binary correlations are considered: 
+        * `min_judgment_level` sets the judgment level (=>) to be considered relevant by manual judges
+        * `min_answers` sets the minimum correctly answered questions (=>) to be considered relevant by EXAM
+
+    The return value is a tuple of overall `ConfusionStats` and dictionary of per-query `ConfusionStats`
+    Load files with `parseQueryWithFullParagraphs` 
+    or use convenience function `confusion_exam_vs_judged_correlation_file`
+    Print output with `ConfusionStats.printMeasures`, more measures are provided in `ConfusionStats`.
+    '''
     globalExamVsJudged = ConfusionStats()
+    perQueryStats:Dict[str,ConfusionStats] = dict()
 
     
     for queryWithFullParagraphList in query_paragraphs:
-
         examVsJudged = ConfusionStats()
 
         query_id = queryWithFullParagraphList.queryId
@@ -159,8 +175,9 @@ def confusionExamVsJudgedCorrelation(exam_file:Path, min_judgment_level:int, min
             examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
         print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
-
-    print(f'all: examVsJudged {globalExamVsJudged.printMeasures()} , stats {globalExamVsJudged} ')#  ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
+        perQueryStats[query_id]=examVsJudged
+    return globalExamVsJudged,perQueryStats 
+    # ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
 
 
 
@@ -193,7 +210,7 @@ def main():
 
     # Parse the arguments
     args = parser.parse_args()    
-    confusionExamVsJudgedCorrelation(exam_file=args.exam_annotated_file
+    confusion_exam_vs_judged_correlation_file(exam_input_file=args.exam_annotated_file
                                      , min_judgment_level=args.judgment_level
                                      , min_answers=args.min_answers)
 
