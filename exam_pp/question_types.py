@@ -48,7 +48,7 @@ class QuestionPromptWithChoices():
         return prompt
 
     @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context, question, max_length):
+    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
 
         # Tokenize the question
         question_tokens = tokenizer.encode(question, add_special_tokens=False)
@@ -61,14 +61,18 @@ class QuestionPromptWithChoices():
         context_tokens = tokenizer.encode(context, add_special_tokens=False)
         truncated_context_tokens = context_tokens[:available_tokens_for_context]
 
+
         # Combine truncated context with the full question
         # combined_tokens = truncated_context_tokens + question_tokens
         # prompt = tokenizer.decode(combined_tokens)
 
         prompt = {
-            'question': f'{tokenizer.cls_token}{tokenizer.decode(question_tokens)}',  # '<cls>Where do I live?'
+            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
             'context': tokenizer.decode(truncated_context_tokens)
         }
+        if available_tokens_for_context < len(context_tokens):
+            print(f'truncating context of {len(context_tokens)} to {available_tokens_for_context} prompt:\n{prompt}')
+
         return prompt
 
 
@@ -89,7 +93,7 @@ class QuestionPromptWithChoices():
         prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {self.question}", max_length=max_token_len)
         return prompt
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {self.question}", max_length=max_token_len)
+        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {self.question}", max_length=max_token_len)
         return prompt
 
 

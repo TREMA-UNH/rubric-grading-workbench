@@ -2,7 +2,7 @@ import itertools
 import math
 import os
 from pathlib import Path
-from typing import Tuple, List, Dict, Callable, NewType, Optional
+from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 from question_types import QuestionPromptWithChoices
 
@@ -106,7 +106,7 @@ class McqaPipeline():
     #     return zip(qpcs, answers)
         
 
-    def batch_answer_multiple_choice_questions_QC(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:PromptGeneratorQC)->List[Tuple[QuestionPromptWithChoices, str]]:
+    def batch_answer_multiple_choice_questions_QC(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:PromptGeneratorQC)->Iterable[Tuple[QuestionPromptWithChoices, str]]:
         """Prepare a batch for question answering, tuple it up with the answers"""
         prompts = [promptGenerator(qpc) for qpc in qpcs]
         
