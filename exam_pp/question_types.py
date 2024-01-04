@@ -71,7 +71,7 @@ class QuestionPromptWithChoices():
             'context': tokenizer.decode(truncated_context_tokens)
         }
         if available_tokens_for_context < len(context_tokens):
-            print(f'truncating context of {len(context_tokens)} to {available_tokens_for_context} prompt:\n{prompt}')
+            print(f'truncating context of {len(context_tokens)} to {len(truncated_context_tokens)} prompt:\n{prompt}')
 
         return prompt
 
