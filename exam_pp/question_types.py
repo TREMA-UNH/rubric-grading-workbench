@@ -48,6 +48,30 @@ class QuestionPromptWithChoices():
 
         return prompt
 
+    @staticmethod
+    def truncate_context_question_prompt_QC(tokenizer, context, question, max_length):
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
+
+        # Tokenize and truncate the context
+        context_tokens = tokenizer.encode(context, add_special_tokens=False)
+        truncated_context_tokens:str = context_tokens[:available_tokens_for_context]
+
+        # Combine truncated context with the full question
+        # combined_tokens = truncated_context_tokens + question_tokens
+        # prompt = tokenizer.decode(combined_tokens)
+
+        prompt = {
+            'question': f'{tokenizer.cls_token}{tokenizer.decode(question_tokens)}',  # '<cls>Where do I live?'
+            'context': tokenizer.decode(truncated_context_tokens)
+        }
+        return prompt
+
 
 
     @staticmethod
@@ -64,6 +88,9 @@ class QuestionPromptWithChoices():
 
     def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
         prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {self.question}", max_length=max_token_len)
+        return prompt
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {self.question}", max_length=max_token_len)
         return prompt
 
 
