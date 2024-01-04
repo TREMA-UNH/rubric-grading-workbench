@@ -2,6 +2,7 @@
 from collections import defaultdict
 import statistics
 from question_types import *
+from question_types import FullParagraphData, QueryWithFullParagraphList
 from parse_qrels_runs_with_text import *
 from typing import Set, List, Tuple
 

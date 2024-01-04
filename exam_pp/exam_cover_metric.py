@@ -6,8 +6,10 @@ import math
 import statistics
 from question_types import *
 from parse_qrels_runs_with_text import *
-from typing import Set, List, Tuple
+from typing import Set, List, Tuple, Dict, Optional, Iterable, Path
 from collections import defaultdict
+from dataclasses import dataclass
+
 
 from pydantic import BaseModel
 import gzip
@@ -76,7 +78,7 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
     Write output file with `write_exam_results`
     or use convenience function `compute_exam_cover_scores_file`
     '''
-    resultsPerMethod:ExamCoverEvalsDict[str, ExamCoverEvals] = ExamCoverEvalsDict()
+    resultsPerMethod:ExamCoverEvalsDict = ExamCoverEvalsDict()
     
     for queryWithFullParagraphList in query_paragraphs:
 
@@ -86,10 +88,10 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
         total_correct = totalCorrectQuestions(paragraphs)
         total_questions = totalQuestions(paragraphs)
-        overallExam = examCoverageScore(paragraphs)
+        overallExamScore = examCoverageScore(paragraphs)
 
-        print(f'{query_id}, overall ratio {overallExam}')
-        resultsPerMethod[OVERALL_ENTRY].examCoverPerQuery[query_id]=overallExam
+        print(f'{query_id}, overall ratio {overallExamScore}')
+        resultsPerMethod[OVERALL_ENTRY].examCoverPerQuery[query_id]=overallExamScore
         resultsPerMethod[OVERALL_ENTRY].nExamCoverPerQuery[query_id]=1.0
 
         # collect top paragraphs per method

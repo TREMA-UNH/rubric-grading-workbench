@@ -1,6 +1,9 @@
 
-
+from dataclasses import dataclass
 from parse_qrels_runs_with_text import *
+from typing import Path, List
+from question_types import QuestionPromptWithChoices, parseQueryWithFullParagraphs, QueryWithFullParagraphList
+from question_types import *
 
 
 @dataclass

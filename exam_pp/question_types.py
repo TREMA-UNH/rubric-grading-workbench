@@ -3,12 +3,11 @@ from itertools import islice
 import json
 import torch
 from dataclasses import dataclass
+from typing import *
 
 from nltk.stem import PorterStemmer
 from fuzzywuzzy import fuzz
 
-
-from typing import Dict, List, Any
 
 
 @dataclass
@@ -60,7 +59,7 @@ class QuestionPromptWithChoices():
 
         # Tokenize and truncate the context
         context_tokens = tokenizer.encode(context, add_special_tokens=False)
-        truncated_context_tokens:str = context_tokens[:available_tokens_for_context]
+        truncated_context_tokens = context_tokens[:available_tokens_for_context]
 
         # Combine truncated context with the full question
         # combined_tokens = truncated_context_tokens + question_tokens
@@ -110,14 +109,14 @@ class QuestionPromptWithChoices():
         return QuestionPromptWithChoices.stemmer.stem(answer.lower())
 
     def check_answer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer, stemmed_gold):
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
                 return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = QuestionPromptWithChoices.normalize_answer(answer)
-        is_fuzzy_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
                                    for stemmed_gold in self.normalized_correct_answers)
 
-        return is_fuzzy_match
+        return is_match
 
 
 

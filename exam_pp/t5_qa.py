@@ -2,15 +2,21 @@ import itertools
 import math
 import os
 from pathlib import Path
-from typing import Tuple, List, Dict, Callable, NewType
+from typing import Tuple, List, Dict, Callable, NewType, Optional
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 from question_types import QuestionPromptWithChoices
 
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
-device = os.environ.get("GPU_DEVICE")
-if device is not None:
-    device = int(device)
+device:Optional[int] = None
+deviceStr = os.environ.get("GPU_DEVICE")
+if deviceStr is not None:
+    try:
+        device = int(deviceStr)
+    except ValueError:
+        print(f'Cant parse device number from \"{device}\"')
+        device = None
+
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1"))
 MAX_TOKEN_LEN = 512
 print(f'Device = {device}; BATCH_SIZE = {BATCH_SIZE}')
@@ -20,7 +26,7 @@ PromptGenerator = Callable[[QuestionPromptWithChoices],str]
 PromptGeneratorQC = Callable[[QuestionPromptWithChoices],Dict[str,str]]
 
 
-@staticmethod
+
 def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
     gpu_memory = 45634    # A40
     # Constants
@@ -79,7 +85,7 @@ class McqaPipeline():
         # self.promptGenerator = promptGenerator
 
         # Create a Hugging Face pipeline
-        self.t5_pipelineqa = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
+        self.t5_pipeline_qa = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
 
 
 
@@ -105,7 +111,7 @@ class McqaPipeline():
         prompts = [promptGenerator(qpc) for qpc in qpcs]
         
         outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-        answers = [output['answer'] for output in outputs]
+        answers:List[str] = [output['answer'] for output in outputs]
         return zip(qpcs, answers)
         
 

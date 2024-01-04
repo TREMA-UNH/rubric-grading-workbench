@@ -79,7 +79,7 @@ def parseQueryWithFullParagraphList(line:str) -> QueryWithFullParagraphList:
 
 
 # Path to the benchmarkY3test-qrels-with-text.jsonl.gz file
-def parseQueryWithFullParagraphs(file_path:Path) -> [QueryWithFullParagraphList] :
+def parseQueryWithFullParagraphs(file_path:Path) -> List[QueryWithFullParagraphList] :
     '''Load JSONL.GZ file with exam annotations in FullParagraph information'''
     # Open the gzipped file
     with gzip.open(file_path, 'rt', encoding='utf-8') as file:

@@ -1,10 +1,12 @@
 
 
 from question_types import *
+from question_types import QueryWithFullParagraphList, parseQueryWithFullParagraphs
 from parse_qrels_runs_with_text import *
-from typing import Set, List, Tuple
+from typing import Set, List, Tuple, Path
 
 from exam_cover_metric import *
+from exam_cover_metric import compute_exam_cover_scores
 import exam_to_qrels
 import exam_leaderboard_correlation
 import exam_judgment_correlation

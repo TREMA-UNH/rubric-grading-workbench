@@ -1,8 +1,10 @@
 import itertools
 import os
 from pathlib import Path
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Dict, Optional
+import json
 
+from question_types import QuestionPromptWithChoices
 from question_types import *
 
 use_debugging = False
@@ -27,7 +29,7 @@ def loadTQA(tqa_file:Path)-> List[Tuple[str, List[QuestionPromptWithChoices]]]:
             question:str = q['beingAsked']['processedText']
             choices:Dict[str,str] = {key: x['processedText'] for key,x in q['answerChoices'].items() }
             correctKey:str = q['correctAnswer']['processedText']
-            correct:str = choices.get(correctKey)
+            correct:Optional[str] = choices.get(correctKey)
 
             if correct is None:
                 print('bad question, because correct answer is not among the choices', 'key: ',correctKey, 'choices: ', choices)

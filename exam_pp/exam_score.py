@@ -1,10 +1,12 @@
 # exam_pp/exam_score.py
 
 
+from question_types import QuestionPromptWithChoices
 from question_types import *
 from t5_qa import *
 from parse_qrels_runs_with_text import *
 import tqa_loader
+from typing import *
 
 
 def fix_car_query_id(input:List[Tuple[str,List[QuestionPromptWithChoices]]]) -> List[Tuple[str,List[QuestionPromptWithChoices]]]:

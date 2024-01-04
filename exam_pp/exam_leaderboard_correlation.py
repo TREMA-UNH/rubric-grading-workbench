@@ -2,12 +2,14 @@ from collections import defaultdict
 import statistics
 from question_types import *
 from parse_qrels_runs_with_text import *
-from typing import Set, List, Tuple
+from typing import Set, List, Tuple, Dict, Path, Union
+from dataclasses import dataclass
 
 from exam_cover_metric import *
+from exam_cover_metric import CoverEvals
 
 
-manualLeaderboard = { "dangnt-nlp": 1
+manualLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
                     , "ReRnak3_BERT": 2
                     , "ReRnak2_BERT": 3
                     , "IRIT1" : 5
@@ -25,7 +27,7 @@ manualLeaderboard = { "dangnt-nlp": 1
                     , "ICT-DRMMTKS" : 16
 }
 
-origExamLeaderboard = { "ReRnak2_BERT": 1
+origExamLeaderboard:Dict[str,float]  = { "ReRnak2_BERT": 1
                       , "dangnt-nlp": 2
                       , "Bert-DRMMTKS": 3
                       , "IRIT2": 4
@@ -44,12 +46,12 @@ origExamLeaderboard = { "ReRnak2_BERT": 1
 }
 
 @dataclass
-class CorrelationStats:
+class CorrelationStats():
     spearman_correlation:float
     kendall_correlation:float
 
 def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
-    from scipy.stats import spearmanr, kendalltau, rankdata
+    from scipy.stats import spearmanr, kendalltau, rankdata, SignificanceResult
 
     methods = list(manualLeaderboard.keys())
     ranks1 = [manualLeaderboard[method] for method in methods]
@@ -61,8 +63,10 @@ def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
 
     
     # Calculate Spearman's Rank Correlation Coefficient
+    spearman_correlation:float
+    spearman_p_value:float
     spearman_correlation, spearman_p_value = spearmanr(ranks1, ranks2)
-    kendall_res = kendalltau(ranks1, ranks2)
+    kendall_res:SignificanceResult = kendalltau(ranks1, ranks2)
 
     return CorrelationStats(spearman_correlation=spearman_correlation, kendall_correlation=kendall_res.correlation)
 
@@ -74,12 +78,13 @@ class LeaderboardEntry:
 
 def create_leaderboard(systemEval:Dict[str,float])->List[LeaderboardEntry]:
     systemEvalSorted = sorted(list(systemEval.items()), key=lambda x: x[1], reverse=True)
-    systemEvalRanked = [LeaderboardEntry(method, score, rank) for rank, (method, score) in enumerate(systemEvalSorted, start=1)]
+    systemEvalRanked = [LeaderboardEntry(method=method, eval_score=score, rank=rank) for rank, (method, score) in enumerate(systemEvalSorted, start=1)]
     return systemEvalRanked
 
 
 def print_leaderboard_eval_file(exam_result_file:Path):
-    def read_result_file()->[ExamCoverEvals]:
+    import gzip
+    def read_result_file()->List[ExamCoverEvals]:
         # Open the gzipped file
         with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
             return [ExamCoverEvals.parse_raw(line) for line in file]
@@ -92,10 +97,13 @@ def print_leaderboard_eval_file(exam_result_file:Path):
 def leaderboard_table(evals:List[ExamCoverEvals]):
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
-    def f2s(x:float)->str:
-        return f'{x:.3f}'
-    def i2s(x:int)->str:
-        return f'{x}'
+    def f2s(x:Optional[float])->str:
+        if x is None:
+            return ' '
+        else:
+            return f'{x:.3f}'
+    # def i2s(x:Union[int,str])->str:
+    #     return f'{x}'
     
     header = '\t'.join(['method'
                         ,'exam','+/-','exam-std'
@@ -107,8 +115,8 @@ def leaderboard_table(evals:List[ExamCoverEvals]):
     lines = [ '\t'.join([e.method
                         ,f2s(e.examScore), '+/-', f2s(e.examScoreStd)
                         ,f2s(e.nExamScore), '+/-', f2s(e.nExamScoreStd)
-                        , i2s(manualLeaderboard.get(e.method,' '))
-                        , i2s(origExamLeaderboard.get(e.method,' '))
+                        , f2s(manualLeaderboard.get(e.method))
+                        , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
     print('\n'.join([header]+lines))
@@ -127,6 +135,7 @@ def print_leaderboard_eval(evals:List[ExamCoverEvals]):
 
 
 def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
+    import gzip
     # Open the gzipped file
     with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
         return [ExamCoverEvals.parse_raw(line) for line in file]

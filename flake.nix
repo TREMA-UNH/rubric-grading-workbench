@@ -14,6 +14,7 @@
             pydantic
             fuzzywuzzy
             nltk
+	    mypy
           ];
         };
       }
