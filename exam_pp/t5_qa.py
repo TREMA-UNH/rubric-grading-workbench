@@ -113,7 +113,7 @@ class McqaPipeline():
         
         outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
         answers:List[str] = [output['answer'] for output in outputs]
-        return zip(qpcs, answers)
+        return zip(qpcs, answers, strict=True)
         
 
 class BatchingPipeline():
