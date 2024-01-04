@@ -51,7 +51,7 @@ def main():
                                             , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
                                             , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
                                             , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                            , llm = qa.modelName
+                                            , llm = qa.exp_modelName()
                                             , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
                                     ) 
                     if para.exam_grades is None:

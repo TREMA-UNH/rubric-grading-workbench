@@ -87,7 +87,8 @@ class McqaPipeline():
         # Create a Hugging Face pipeline
         self.t5_pipeline_qa = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
 
-
+    def exp_modelName(self)->str:
+        return self.modelName
 
     # def answer_multiple_choice_question(self, qpc:QuestionPromptWithChoices, promptGenerator:PromptGenerator)->str:
     #     prompt = promptGenerator(qpc)
