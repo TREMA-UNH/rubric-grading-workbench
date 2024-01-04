@@ -167,8 +167,6 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
 
             hasAnsweredAny = len(exam_grade.correctAnswered)>=min_answers
             isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
-            # isInTop20 = rank is not None and rank.rank <20
-
 
             globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
@@ -194,8 +192,6 @@ def main():
              {FullParagraphData.schema_json(indent=2)}
              '''
     
-
-    # Create the parser
     parser = argparse.ArgumentParser(description="Analyze how well Exam grades correlated with manual judgments on the per-paragraph level."
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -203,12 +199,10 @@ def main():
                         , help='json file that annotates each paragraph with a number of anserable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    # Add an optional output file argument
     parser.add_argument('-j', '--judgment-level', type=int, metavar="LEVEL", help='Minimum judgment level to count as relevant (as >=), else non-relevant', default=1)
     parser.add_argument('-a', '--min-answers', type=int, metavar="NUM", help='Minimum number of correctly answered questions per paragraph to cound as relevant for exam (as >=), else non-relevant', default=1)
     # parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output QREL file name', default='output.qrels')
 
-    # Parse the arguments
     args = parser.parse_args()    
     confusion_exam_vs_judged_correlation_file(exam_input_file=args.exam_annotated_file
                                      , min_judgment_level=args.judgment_level

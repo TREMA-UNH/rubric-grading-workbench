@@ -89,6 +89,30 @@ def print_leaderboard_eval_file(exam_result_file:Path):
     print_leaderboard_eval(evals)
     pass
 
+def leaderboard_table(evals:List[ExamCoverEvals]):
+    evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
+
+    def f2s(x:float)->str:
+        return f'{x:.3f}'
+    def i2s(x:int)->str:
+        return f'{x}'
+    
+    header = '\t'.join(['method'
+                        ,'exam','+/-','exam-std'
+                        ,'n-exam','+/-','n-exam-std'
+                        ,'orig_TREC_leaderboard_rank'
+                        ,'orig_EXAM_leaderboard_rank'
+                        ])
+
+    lines = [ '\t'.join([e.method
+                        ,f2s(e.examScore), '+/-', f2s(e.examScoreStd)
+                        ,f2s(e.nExamScore), '+/-', f2s(e.nExamScoreStd)
+                        , i2s(manualLeaderboard.get(e.method,' '))
+                        , i2s(origExamLeaderboard.get(e.method,' '))
+                        ])
+                             for e in evals_]
+    print('\n'.join([header]+lines))
+
 def print_leaderboard_eval(evals:List[ExamCoverEvals]):
     '''Print the Leaderboard in trec_eval evaluation output format.
     Load necessary data with `read_exam_result_file()` or use the convenience method `print_leaderboard_eval_file`

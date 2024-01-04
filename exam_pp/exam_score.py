@@ -34,9 +34,10 @@ def main():
                 paragraph_id = para.paragraph_id
                 paragraph_txt = para.text
 
-                promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+                # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+                promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
                 # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-                answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGenerator)
+                answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGeneratorQC)
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
                 numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
                 numAll = len(answerTuples)
@@ -49,7 +50,7 @@ def main():
                                             , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
                                             , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                             , llm = qa.modelName
-                                            , llm_options={"prompt_template":"generate_prompt_with_context_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                            , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
                                     ) 
                     if para.exam_grades is None:
                         para.exam_grades = list()

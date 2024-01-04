@@ -15,31 +15,31 @@
     * low performance on paragraph level  (tau = 0.05)
 5. [ ] from exam annnotated paragraphs, export as exam.QRELS    
     * [x] code written,
-    * [ ] run to produce qrels file
+    * [x] run to produce qrels file
     * [ ] evaluate run files with `trec-eval` **TODO: evaluate runs with exam-qrels** 
 6. [x] from exam annotated rankings, produce an exam-coverage score for each system. Produce a leaderboard.
     * [x] code for exam-coverage score (norm and plain)
     * [x] produce leaderboard of systems 
-    * [ ] **TODO: write leaderboard as file**
-    * [ ] **NEEDS to be redone when new `exam-qrels-runs...jsonl.gz` is finished**
+    * [x] **TODO: write leaderboard as file**
+    * [x] **NEEDS to be redone when new `exam-qrels-runs...jsonl.gz` is finished**
 7. [x] determine rank-correlation with official TREC leaderboard
     * [x] code for computing rank-correlation with `scipy` (handling ties!)
     * [x] kendall and spearman
-    * [x] analysis: good correlation of spearman 0.84 and kendall 0.67 of plain exam and TREC
+    * [x] analysis: good correlation of spearman 0.91 and kendall 0.77 of n-exam and TREC
     * [ ] **todo: rank correlation of using exam-qrels file?**
-    * [ ] **NEEDS to be redone when new `exam-qrels-runs...jsonl.gz` is finished**
+    * [x] **NEEDS to be redone when new `exam-qrels-runs...jsonl.gz` is finished**
 8. [ ] on-the-fly exam score computation of given text.
     * [ ] needs slightly different format, break text into paragraphs (MD5-sum ids?), one file per system
     * [ ] run QA, and (optionally) directly evaluate EXAM
     * [ ] new output format. Per paragrah annotations of answerability. additional query and / system-level EXAM scores
-10. [ ] Break code into re-usable components with cmd parser
+10. [x] Break code into re-usable components with cmd parser
 11. [ ] evaluate exam of TQA gold article
 12. [ ] Use to evaluate GPT-generated content
     * [ ] use the recorded files with Davinci-003
     * [ ] use gpt 4.0
 15. [ ] need better QA system. Options:
-    * FLAN-T5-large finetunes on squad2
-    * Mixtral
+    * [.] FLAN-T5-large finetuned on squad2  (prepared code)
+    * [ ] Mixtral
 16. [ ] Integrate in other frameworks
     * [ ] DSPy
     * [ ] LLM360 
@@ -48,4 +48,4 @@
     * [ ] upload new runs, to produce new scores
     * [ ] add new exam questions, recompute all EXAM scores
 20. [ ] merge with Naghmeh's chatGPT generated questions
-30. [ ] different dataset?    
+30. [ ] different dataset?

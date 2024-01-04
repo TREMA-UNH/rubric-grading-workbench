@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from math import nan
+import math
 import statistics
 from question_types import *
 from parse_qrels_runs_with_text import *
@@ -28,7 +29,7 @@ def frac(num:int,den:int)->float:
 def totalQuestions(paras:List[FullParagraphData])->int:
     answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
                                 for para in paras 
-                                    for grade in para.exam_grades
+                                    for grade in para.exam_grades_iterable()
                                     ])
     return len(answered)
 
@@ -36,23 +37,16 @@ def totalQuestions(paras:List[FullParagraphData])->int:
 def totalCorrectQuestions(paras:List[FullParagraphData])->int:
     correct:Set[str] = set().union(*[set(grade.correctAnswered) 
                                 for para in paras 
-                                    for grade in para.exam_grades
+                                    for grade in para.exam_grades_iterable()
                                     ])
     return len(correct)
 
 def examCoverageScore(paras:List[FullParagraphData], total_questions:Optional[int]=None)->float:
     '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
-    correct:Set[str] = set().union(*[set(grade.correctAnswered) 
-                                            for para in paras 
-                                                for grade in para.exam_grades
-                                                ])
+    num_correct =totalCorrectQuestions(paras)
     if total_questions is None:
-        answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
-                                            for para in paras 
-                                                for grade in para.exam_grades
-                                                ])
-        total_questions = len(answered)
-    examCoverScore = frac(len(correct), total_questions)
+        total_questions = totalQuestions(paras)
+    examCoverScore = frac(num_correct, total_questions)
     return examCoverScore
 
 
@@ -109,21 +103,25 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
             examScore = examCoverageScore(paragraphs, total_questions = total_questions)
             resultsPerMethod[method].examCoverPerQuery[query_id] = examScore
 
+
+    def overallExam(examCoverPerQuery:List[float])->Tuple[float,float]:
+        if(len(examCoverPerQuery)>=1):
+            avgExam =   statistics.mean(examCoverPerQuery)
+            stdExam = 0.0
+            if(len(examCoverPerQuery)>=2):
+                stdDevExam =   statistics.stdev(examCoverPerQuery) if(len(examCoverPerQuery)>=2) else 0.0
+                stdExam = stdDevExam / math.sqrt(len(examCoverPerQuery))
+            return (avgExam, stdExam)
+        else:
+            return (0.0,0.0)
+
     # aggregate query-wise exam scores into overall scores.
     for  method,examEvals in resultsPerMethod.items():
-        if(len(examEvals.nExamCoverPerQuery)>=1):
-            avgExam =   statistics.mean(examEvals.nExamCoverPerQuery.values())
-            stdExam =   statistics.stdev(examEvals.nExamCoverPerQuery.values()) if(len(examEvals.nExamCoverPerQuery)>=2) else 0.0
-            examEvals.nExamScore = avgExam
-            examEvals.nExamScoreStd = stdExam
-            # print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
+        examEvals.nExamScore, examEvals.nExamScoreStd = overallExam(examEvals.nExamCoverPerQuery.values())
+        # print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
 
-        if(len(examEvals.examCoverPerQuery)>=1):
-            avgExam =   statistics.mean(examEvals.examCoverPerQuery.values())
-            stdExam =   statistics.stdev(examEvals.examCoverPerQuery.values()) if(len(examEvals.examCoverPerQuery)>=2) else 0.0
-            examEvals.examScore = avgExam
-            examEvals.examScoreStd = stdExam
-            # print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
+        examEvals.examScore, examEvals.examScoreStd = overallExam(examEvals.examCoverPerQuery.values())
+        # print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
 
     return resultsPerMethod
 

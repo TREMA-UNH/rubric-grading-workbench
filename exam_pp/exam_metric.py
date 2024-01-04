@@ -21,7 +21,8 @@ def run(exam_input_file:Path, qrel_out_file:Path):
 
     resultsPerMethod = compute_exam_cover_scores(query_paragraphs)
     # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
-    exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
+    # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
+    exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values())
 
     nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
     print(f' nExam:{nExamCorrelation}')
