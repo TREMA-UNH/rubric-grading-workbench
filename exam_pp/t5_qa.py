@@ -51,7 +51,7 @@ def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
 class QaPipeline():
     """QA Pipeline for squad question answering"""
 
-    def __init__(self):
+    def __init__(self, model_name:str):
         """promptGenerator for a particular question. 
            Example usages: 
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
@@ -60,7 +60,8 @@ class QaPipeline():
         self.question_batchSize = 100 # batchSize
     
         # Initialize the tokenizer and model
-        self.modelName = 'sjrhuschlee/flan-t5-large-squad2'
+        # self.modelName = 'sjrhuschlee/flan-t5-large-squad2'
+        self.modelName = model_name
         self.model = AutoModelForQuestionAnswering.from_pretrained(self.modelName)
         # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
@@ -105,7 +106,7 @@ class QaPipeline():
 class Text2TextPipeline():
     """QA Pipeline for text2text based question answering"""
 
-    def __init__(self):
+    def __init__(self, model_name:str):
         """promptGenerator for a particular question. 
            Example usages: 
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
@@ -114,7 +115,8 @@ class Text2TextPipeline():
         self.question_batchSize = 100 # batchSize
     
         # Initialize the tokenizer and model
-        self.modelName = 'google/flan-t5-large'
+        # self.modelName = 'google/flan-t5-large'
+        self.modelName = model_name
         self.model = T5ForConditionalGeneration.from_pretrained(self.modelName)
         # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
@@ -159,7 +161,7 @@ class Text2TextPipeline():
 class TextGenerationPipeline():
     """QA Pipeline for text-generation based question answering"""
 
-    def __init__(self):
+    def __init__(self, model_name:str):
         """promptGenerator for a particular question. 
            Example usages: 
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
@@ -170,7 +172,8 @@ class TextGenerationPipeline():
         # Initialize the tokenizer and model
         # self.modelName = 'mistralai/Mistral-7B-v0.1'
         # self.modelName = 'mistralai/Mixtral-8x7B-Instruct-v0.1'
-        self.modelName = 'gpt2-large'
+        # self.modelName = 'gpt2-large'
+        self.modelName = model_name
         self.model = AutoModelForCausalLM.from_pretrained(self.modelName)
         # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
@@ -215,11 +218,10 @@ class TextGenerationPipeline():
 
 def mainQA():
     import tqa_loader
-    """Entry point for the module."""
     lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
     
     
-    qa = QaPipeline()
+    qa = QaPipeline('sjrhuschlee/flan-t5-large-squad2')
 
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(context='', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
@@ -233,11 +235,10 @@ def mainQA():
 
 def mainT2T():
     import tqa_loader
-    """Entry point for the module."""
     lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
     
     
-    qa = Text2TextPipeline()
+    qa = Text2TextPipeline('google/flan-t5-large')
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
