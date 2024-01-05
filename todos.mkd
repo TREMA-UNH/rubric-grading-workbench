@@ -5,7 +5,6 @@
     * done in haskell
     * file patterns "qrels-runs-and-text.jsonl.gz" and "qrels-and-text.jsonl.gz"
     * on /mnt/cherries
-
 2. [x] FLAN-T5-large (out-of-the-box) QA system
     * using huggingface
 3. [x] load TQA questions, noodle through QA system to get exam grades for all CAR Y3 submitted paragraphs
@@ -39,6 +38,7 @@
     * [ ] use gpt 4.0
 15. [ ] need better QA system. Options:
     * [x] FLAN-T5-large finetuned on squad2  (prepared code)
+        * [x]  rerun analysis
     * [x] gpt2-large
     * [ ] Mixtral
 16. [ ] Integrate in other frameworks
