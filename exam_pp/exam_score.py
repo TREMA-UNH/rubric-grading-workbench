@@ -13,6 +13,20 @@ def fix_car_query_id(input:List[Tuple[str,List[QuestionPromptWithChoices]]]) -> 
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
 
 
+def runSquadQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
+    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+    promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
+    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
+    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt)
+    return answerTuples
+
+def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
+    promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
+    # promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
+    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
+    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
+    return answerTuples
+
 def main():
     """Score paragraphs by number of questions that are correctly answered."""
 
@@ -34,39 +48,46 @@ def main():
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
+    modelOpts = {'flan-t5-large': lambda:  Text2TextPipeline()
+                ,'flan-t5-large-squad2': lambda:  QaPipeline()
+                ,'gpt2-large': lambda: TextGenerationPipeline() 
+                }
+
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
     parser.add_argument('--max-paragraphs', type=int, metavar='INT', default=None, help='limit the number of paragraphs that will be processed (for debugging)')
+    parser.add_argument('--model', type=str, choices=modelOpts.keys(), required=True, metavar='MODEL', help='the huggingface model used to answer questions')
+
 
     # Parse the arguments
     args = parser.parse_args()  
 
-    lesson_questions:Dict[str,List[QuestionPromptWithChoices]] = dict(fix_car_query_id(tqa_loader.load_all_tqa_data()))
-    # print('question bank query ids', lesson_questions.keys())
-    batchPipe = BatchingPipeline(BATCH_SIZE)
+    qaPipeline = modelOpts[args.model]
 
-    with gzip.open(args.out_file, 'wt', encoding='utf-8') as out_file:
 
-        query_paragraphs = parseQueryWithFullParagraphs(args.paragraph_file)
-        qa = McqaPipeline()
 
-        for queryWithFullParagraphList in itertools.islice(query_paragraphs, args.max_queries):
+    noodle(qaPipeline=qaPipeline, paragraph_file= args.paragraph_file, out_file = args.out_file, max_queries = args.max_queries, max_paragraphs = args.max_paragraphs)
+
+def noodle(qaPipeline, paragraph_file, out_file, max_queries, max_paragraphs):
+    with gzip.open(out_file, 'wt', encoding='utf-8') as out_file:
+        lesson_questions:Dict[str,List[QuestionPromptWithChoices]] = dict(fix_car_query_id(tqa_loader.load_all_tqa_data()))
+        query_paragraphs = parseQueryWithFullParagraphs(paragraph_file)
+
+
+
+        for queryWithFullParagraphList in itertools.islice(query_paragraphs, max_queries):
             query_id = queryWithFullParagraphList.queryId
             questions = lesson_questions.get(query_id)
             if questions is None:
-                
                 print(f'No exam question for query Id {query_id} available. skipping.')
                 continue
 
             paragraphs = queryWithFullParagraphList.paragraphs
-            for para in itertools.islice(paragraphs, args.max_paragraphs):
+            for para in itertools.islice(paragraphs, max_paragraphs):
                 paragraph_id = para.paragraph_id
                 paragraph_txt = para.text
 
-                # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
-                promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
-                # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-                answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGeneratorQC)
+                answerTuples = qaPipeline.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
                 numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
                 numAll = len(answerTuples)
@@ -78,7 +99,7 @@ def main():
                                             , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
                                             , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
                                             , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                            , llm = qa.exp_modelName()
+                                            , llm = qaPipeline.exp_modelName()
                                             , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
                                     ) 
                     if para.exam_grades is None:

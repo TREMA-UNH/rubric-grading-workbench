@@ -48,26 +48,8 @@ def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
 
 
 
-class McqaPipeline():
-    """QA Pipeline for multi-choice question answering"""
-
-
-    # def __init__(self):
-    #     """promptGenerator for a particular question. 
-    #        Example usages: 
-    #           * `promptGenerator=lambda qpc: qpc.generate_prompt()`
-    #           * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
-    #        """
-    #     # Initialize the tokenizer and model
-    #     self.modelName = 'google/flan-t5-large'
-    #     self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
-    #     self.model = T5ForConditionalGeneration.from_pretrained(self.modelName)
-    #     print(f"T5 model config: { self.model.config}")
-    #     # self.promptGenerator = promptGenerator
-
-    #     # Create a Hugging Face pipeline
-    #     self.t5_pipeline = pipeline("text2text-generation", model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
-
+class QaPipeline():
+    """QA Pipeline for squad question answering"""
 
     def __init__(self):
         """promptGenerator for a particular question. 
@@ -75,106 +57,198 @@ class McqaPipeline():
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
               * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
            """
+        self.question_batchSize = 100 # batchSize
+    
         # Initialize the tokenizer and model
         self.modelName = 'sjrhuschlee/flan-t5-large-squad2'
         self.model = AutoModelForQuestionAnswering.from_pretrained(self.modelName)
         # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
-        print(f"T5 model config: { self.model.config}")
+        print(f"QaPipeline model config: { self.model.config}")
         # self.promptGenerator = promptGenerator
+        self.max_token_len = 512
 
         # Create a Hugging Face pipeline
-        self.t5_pipeline_qa = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE)
+        self.t5_pipeline_qa = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
 
     def exp_modelName(self)->str:
         return self.modelName
 
-    # def answer_multiple_choice_question(self, qpc:QuestionPromptWithChoices, promptGenerator:PromptGenerator)->str:
-    #     prompt = promptGenerator(qpc)
-
-    #     # print("prompt",prompt)
-    #     outputs = self.t5_pipeline(prompt, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-    #     return outputs[0]['generated_text']
-        
-
-    # def batch_answer_multiple_choice_questions(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:PromptGenerator)->List[Tuple[QuestionPromptWithChoices, str]]:
-    #     """Prepare a batch for question answering, tuple it up with the answers"""
-    #     prompts = [promptGenerator(qpc) for qpc in qpcs]
-        
-    #     outputs = self.t5_pipeline(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-    #     answers = [output['generated_text'] for output in outputs]
-    #     return zip(qpcs, answers)
-        
-
-    def batch_answer_multiple_choice_questions_QC(self, qpcs:List[QuestionPromptWithChoices], promptGenerator:PromptGeneratorQC)->Iterable[Tuple[QuestionPromptWithChoices, str]]:
-        """Prepare a batch for question answering, tuple it up with the answers"""
-        prompts = [promptGenerator(qpc) for qpc in qpcs]
-        
-        outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-        answers:List[str] = [output['answer'] for output in outputs]
-        return zip(qpcs, answers, strict=True)
-        
-
-class BatchingPipeline():
-    def __init__(self, batchSize:int):
-        self.batchSize = 100 # batchSize
-    
-
-    # def answerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGenerator):
-    #     for qpc in questions:
-    #         answer = pipeline.answer_multiple_choice_question(qpc,promptGenerator)
-    #         print("answer", answer)
-    #         print("correct?", qpc.check_answer(answer))
-
-
-    def batchAnswerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGeneratorQC)->List[Tuple[QuestionPromptWithChoices, str]]:
-        """runs question answering over a single batch, and tuples it up with answers"""
-        answerTuples = list(pipeline.batch_answer_multiple_choice_questions_QC(questions, promptGenerator))
-        # print('correct list?', [qpc.check_answer(answer) for qpc,answer in answerTuples])
-        return answerTuples
-
-    # def batchAnswerQuestions(self, questions: List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGenerator)->List[Tuple[QuestionPromptWithChoices, str]]:
-    #     """runs question answering over a single batch, and tuples it up with answers"""
-    #     answerTuples = list(pipeline.batch_answer_multiple_choice_questions(questions, promptGenerator))
-    #     # print('correct list?', [qpc.check_answer(answer) for qpc,answer in answerTuples])
-    #     return answerTuples
 
     def batchChunker(self, iterable):
         iterator = iter(iterable)
         while True:
-            batch = list(itertools.islice(iterator, self.batchSize))
+            batch = list(itertools.islice(iterator, self.question_batchSize))
             if not batch or len(batch)<1:
                 break
             yield batch
 
 
-    def chunkingBatchAnswerQuestions(self, questions:List[QuestionPromptWithChoices], pipeline:McqaPipeline, promptGenerator:PromptGeneratorQC)->List[Tuple[QuestionPromptWithChoices, str]]:
+    def chunkingBatchAnswerQuestions(self, questions:List[QuestionPromptWithChoices],  paragraph_txt:str)->List[Tuple[QuestionPromptWithChoices, str]]:
             """Run question answering over batches of questions, and tuples it up with the answers"""
+            promptGenerator=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+
+            def processBatch(qpcs:List[QuestionPromptWithChoices])->Iterable[Tuple[QuestionPromptWithChoices, str]]:
+                """Prepare a batch for question answering, tuple it up with the answers"""
+                prompts = [promptGenerator(qpc) for qpc in qpcs]
+                
+                outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+                answers:List[str] = [output['answer'] for output in outputs]
+                return zip(qpcs, answers, strict=True)
+
             return list(itertools.chain.from_iterable(
-                        (self.batchAnswerQuestions(batch, pipeline, promptGenerator) for batch in self.batchChunker(questions)) 
+                        (processBatch(batch) for batch in self.batchChunker(questions)) 
                         )) 
 
-def main():
+
+class Text2TextPipeline():
+    """QA Pipeline for text2text based question answering"""
+
+    def __init__(self):
+        """promptGenerator for a particular question. 
+           Example usages: 
+              * `promptGenerator=lambda qpc: qpc.generate_prompt()`
+              * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
+           """
+        self.question_batchSize = 100 # batchSize
+    
+        # Initialize the tokenizer and model
+        self.modelName = 'google/flan-t5-large'
+        self.model = T5ForConditionalGeneration.from_pretrained(self.modelName)
+        # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
+
+        print(f"Text2Text model config: { self.model.config}")
+        # self.promptGenerator = promptGenerator
+        self.max_token_len = 512
+
+        # Create a Hugging Face pipeline
+        self.t5_pipeline_qa = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
+
+    def exp_modelName(self)->str:
+        return self.modelName
+
+
+    def batchChunker(self, iterable):
+        iterator = iter(iterable)
+        while True:
+            batch = list(itertools.islice(iterator, self.question_batchSize))
+            if not batch or len(batch)<1:
+                break
+            yield batch
+
+
+    def chunkingBatchAnswerQuestions(self, questions:List[QuestionPromptWithChoices],  paragraph_txt:str)->List[Tuple[QuestionPromptWithChoices, str]]:
+            """Run question answering over batches of questions, and tuples it up with the answers"""
+            promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+
+            def processBatch(qpcs:List[QuestionPromptWithChoices])->Iterable[Tuple[QuestionPromptWithChoices, str]]:
+                """Prepare a batch for question answering, tuple it up with the answers"""
+                prompts = [promptGenerator(qpc) for qpc in qpcs]
+                
+                outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+                answers:List[str] = [output['generated_text']  for output in outputs]
+                return zip(qpcs, answers, strict=True)
+
+            return list(itertools.chain.from_iterable(
+                        (processBatch(batch) for batch in self.batchChunker(questions)) 
+                        )) 
+
+
+class TextGenerationPipeline():
+    """QA Pipeline for text-generation based question answering"""
+
+    def __init__(self):
+        """promptGenerator for a particular question. 
+           Example usages: 
+              * `promptGenerator=lambda qpc: qpc.generate_prompt()`
+              * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
+           """
+        self.question_batchSize = 100 # batchSize
+    
+        # Initialize the tokenizer and model
+        # self.modelName = 'mistralai/Mistral-7B-v0.1'
+        # self.modelName = 'mistralai/Mixtral-8x7B-Instruct-v0.1'
+        self.modelName = 'gpt2-large'
+        self.model = AutoModelForCausalLM.from_pretrained(self.modelName)
+        # self.tokenizer = T5TokenizerFast.from_pretrained(self.modelName)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
+
+        print(f"Text generation model config: { self.model.config}")
+        # self.promptGenerator = promptGenerator
+        self.max_token_len = 512
+
+        # Create a Hugging Face pipeline
+        self.t5_pipeline_qa = pipeline('text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
+
+    def exp_modelName(self)->str:
+        return self.modelName
+
+
+    def batchChunker(self, iterable):
+        iterator = iter(iterable)
+        while True:
+            batch = list(itertools.islice(iterator, self.question_batchSize))
+            if not batch or len(batch)<1:
+                break
+            yield batch
+
+
+    def chunkingBatchAnswerQuestions(self, questions:List[QuestionPromptWithChoices],  paragraph_txt:str)->List[Tuple[QuestionPromptWithChoices, str]]:
+            """Run question answering over batches of questions, and tuples it up with the answers"""
+            promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+
+            def processBatch(qpcs:List[QuestionPromptWithChoices])->Iterable[Tuple[QuestionPromptWithChoices, str]]:
+                """Prepare a batch for question answering, tuple it up with the answers"""
+                prompts = [promptGenerator(qpc) for qpc in qpcs]
+                
+                outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+                answers:List[str] = [output['generated_text']  for output in outputs]
+                return zip(qpcs, answers, strict=True)
+
+            return list(itertools.chain.from_iterable(
+                        (processBatch(batch) for batch in self.batchChunker(questions)) 
+                        )) 
+
+
+
+def mainQA():
     import tqa_loader
     """Entry point for the module."""
     lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
     
     
-    qa = McqaPipeline()
-    batchPipe = BatchingPipeline(BATCH_SIZE)
+    qa = QaPipeline()
 
-    promptGenerator=lambda qpc: qpc.generate_prompt(model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(context='', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
-        answerTuples = batchPipe.chunkingBatchAnswerQuestions(questions, qa, promptGenerator)
+        answerTuples = qa.chunkingBatchAnswerQuestions(questions, "")
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
         numAll = len(answerTuples)
         print(f"{query_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}.")
 
         
 
+def mainT2T():
+    import tqa_loader
+    """Entry point for the module."""
+    lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
+    
+    
+    qa = Text2TextPipeline()
+    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+
+    for query_id, questions in lesson_questions:
+        answerTuples = qa.chunkingBatchAnswerQuestions(questions, "")
+        numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
+        numAll = len(answerTuples)
+        print(f"{query_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}.")
+
+
+
 
 if __name__ == "__main__":
-    main()
+    mainT2T()
 
