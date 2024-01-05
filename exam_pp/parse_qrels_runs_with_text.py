@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Any, Optional, Dict, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+
 
 import gzip
 import json
@@ -45,14 +47,26 @@ class FullParagraphData(BaseModel):
     paragraph_data : ParagraphData
     exam_grades : Optional[List[ExamGrades]]
 
+    def retrieve_exam_grade(self, model_name:str) -> List[ExamGrades]:
+        if self.exam_grades is None:
+            return []
+        
+        found = next((g for g in self.exam_grades if g.llm==model_name), None)
+        if found is not None:
+            return [found]
+        else: 
+            return []
+        
+
+
     def exam_grades_iterable(self)-> List[ExamGrades]:
         return [] if self.exam_grades is None else self.exam_grades
 
-    def get_any_exam_grade(self)->Optional[ExamGrades]:
-        if self.exam_grades is None or len(self.exam_grades)<1: 
-            return None
-        else: 
-            return self.exam_grades[0]
+    # def get_any_exam_grade(self)->Optional[ExamGrades]:
+    #     if self.exam_grades is None or len(self.exam_grades)<1: 
+    #         return None
+    #     else: 
+    #         return self.exam_grades[0]
         
     def get_any_judgment(self)->Optional[Judgment]:
         if self.paragraph_data.judgments is None or len(self.paragraph_data.judgments)<1: 

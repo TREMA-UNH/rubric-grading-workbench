@@ -2,9 +2,12 @@
 from collections import defaultdict
 import statistics
 from question_types import *
-from question_types import FullParagraphData, QueryWithFullParagraphList
-from parse_qrels_runs_with_text import *
+# from question_types import 
+from parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, ExamGrades
 from typing import Set, List, Tuple
+from typing import *
+from pathlib import Path
+
 
 def frac(num:int,den:int)->float:
     return ((1.0 * num) / (1.0 * den)) if den>0 else 0.0
@@ -130,16 +133,16 @@ def dontuse():
             print(f' method: {method}  exam: {globalExamRankMetric[method].printMeasures()}  manual: {globalManualRankMetric[method].printMeasures()} ')
 
 
-def confusion_exam_vs_judged_correlation_file(exam_input_file:Path, min_judgment_level:int, min_answers:int=1):
+def confusion_exam_vs_judged_correlation_file(exam_input_file:Path, model_name:str, min_judgment_level:int, min_answers:int=1):
     """Acc/P/R correlation between exam, judgments """
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
-    globalExamVsJudged, perQueryStats = confusion_exam_vs_judged_correlation(query_paragraphs, min_judgment_level, min_answers)
+    globalExamVsJudged, perQueryStats = confusion_exam_vs_judged_correlation(query_paragraphs, model_name=model_name, min_judgment_level=min_judgment_level, min_answers=min_answers)
 
     print(perQueryStats)
     print(f'all: examVsJudged {globalExamVsJudged.printMeasures()} , stats {globalExamVsJudged} ')#
 
-def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], min_judgment_level:int, min_answers:int)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
+def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], model_name:str, min_judgment_level:int, min_answers:int)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
     ''' workhorse to measure the per-paragraph correlation between manual judgments and exam labels.
     Only binary correlations are considered: 
         * `min_judgment_level` sets the judgment level (=>) to be considered relevant by manual judges
@@ -160,20 +163,20 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            exam_grade = para.get_any_exam_grade()
-            judg = para.get_any_judgment()
-            
-            if exam_grade==None or judg ==None:
-                continue # don't have all the data
+            for exam_grade in para.retrieve_exam_grade(model_name=model_name): # there will be 1 or 0
+                judg = para.get_any_judgment()
+                
+                if judg ==None:
+                    continue # don't have all the data
 
-            hasAnsweredAny = len(exam_grade.correctAnswered)>=min_answers
-            isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
+                hasAnsweredAny = len(exam_grade.correctAnswered)>=min_answers
+                isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
 
-            globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+                globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
-            examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+                examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
-        print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
+        # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
         perQueryStats[query_id]=examVsJudged
     return globalExamVsJudged,perQueryStats 
     # ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
@@ -202,12 +205,14 @@ def main():
 
     parser.add_argument('-j', '--judgment-level', type=int, metavar="LEVEL", help='Minimum judgment level to count as relevant (as >=), else non-relevant', default=1)
     parser.add_argument('-a', '--min-answers', type=int, metavar="NUM", help='Minimum number of correctly answered questions per paragraph to cound as relevant for exam (as >=), else non-relevant', default=1)
+    parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     # parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output QREL file name', default='output.qrels')
 
     args = parser.parse_args()    
     confusion_exam_vs_judged_correlation_file(exam_input_file=args.exam_annotated_file
-                                     , min_judgment_level=args.judgment_level
-                                     , min_answers=args.min_answers)
+                                                , model_name=args.model
+                                                , min_judgment_level=args.judgment_level
+                                                , min_answers=args.min_answers)
 
 
 if __name__ == "__main__":

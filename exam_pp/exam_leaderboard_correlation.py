@@ -1,12 +1,19 @@
 from collections import defaultdict
 import statistics
+
+import scipy
+from scipy.stats import spearmanr, kendalltau, rankdata
+import scipy.stats
+
 from question_types import *
 from parse_qrels_runs_with_text import *
-from typing import Set, List, Tuple, Dict, Path, Union
+from typing import Set, List, Tuple, Dict, Union, Optional
 from dataclasses import dataclass
+from pathlib import Path
+
 
 from exam_cover_metric import *
-from exam_cover_metric import CoverEvals
+from exam_cover_metric import ExamCoverEvals
 
 
 manualLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
@@ -50,8 +57,23 @@ class CorrelationStats():
     spearman_correlation:float
     kendall_correlation:float
 
+def compatible_kendalltau(ranks1, ranks2)->Tuple[float,float]:
+    from packaging import version
+
+    if version.parse(scipy.__version__) >= version.parse('1.7.0'):    
+    # if scipy.__version__ >= '1.7.0':
+        # For scipy 1.7.0 and later
+        tau, p_value = kendalltau(ranks1, ranks2)
+        return tau, p_value
+    else:
+        # For older versions
+        from scipy.stats import SignificanceResult
+        result = kendalltau(ranks1, ranks2)
+        return result.correlation, result.pvalue
+
+
 def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
-    from scipy.stats import spearmanr, kendalltau, rankdata, SignificanceResult
+
 
     methods = list(manualLeaderboard.keys())
     ranks1 = [manualLeaderboard[method] for method in methods]
@@ -65,10 +87,12 @@ def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
     # Calculate Spearman's Rank Correlation Coefficient
     spearman_correlation:float
     spearman_p_value:float
+    kendall_correlation:float
+    kendall_p_value:float
     spearman_correlation, spearman_p_value = spearmanr(ranks1, ranks2)
-    kendall_res:SignificanceResult = kendalltau(ranks1, ranks2)
+    kendall_correlation, kendall_p_value = compatible_kendalltau(ranks1, ranks2)
 
-    return CorrelationStats(spearman_correlation=spearman_correlation, kendall_correlation=kendall_res.correlation)
+    return CorrelationStats(spearman_correlation=spearman_correlation, kendall_correlation=kendall_correlation)
 
 @dataclass
 class LeaderboardEntry:
@@ -82,7 +106,7 @@ def create_leaderboard(systemEval:Dict[str,float])->List[LeaderboardEntry]:
     return systemEvalRanked
 
 
-def print_leaderboard_eval_file(exam_result_file:Path):
+def print_leaderboard_eval_file(exam_result_file:Path, model_name:str):
     import gzip
     def read_result_file()->List[ExamCoverEvals]:
         # Open the gzipped file
@@ -91,10 +115,10 @@ def print_leaderboard_eval_file(exam_result_file:Path):
 
     evals = read_result_file()
 
-    print_leaderboard_eval(evals)
+    print_leaderboard_eval(evals, model_name=model_name)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals]):
+def leaderboard_table(evals:List[ExamCoverEvals], model_name:str):
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -119,15 +143,16 @@ def leaderboard_table(evals:List[ExamCoverEvals]):
                         , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
-    print('\n'.join([header]+lines))
+    print('\n'.join([f'EXAM scores produced with {model_name}', header]+lines))
 
-def print_leaderboard_eval(evals:List[ExamCoverEvals]):
+def print_leaderboard_eval(evals:List[ExamCoverEvals], model_name:str):
     '''Print the Leaderboard in trec_eval evaluation output format.
     Load necessary data with `read_exam_result_file()` or use the convenience method `print_leaderboard_eval_file`
     '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
+    print(f'EXAM scores produced with {model_name}')
     print("\n".join( ["\t".join([x.method, "exam", f'{x.eval_score:.4}']) 
                         for x in create_leaderboard(examEval)]))
     print("\n".join( ["\t".join([x.method, "n-exam", f'{x.eval_score:.4}' ]) 

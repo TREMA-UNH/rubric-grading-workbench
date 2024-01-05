@@ -38,7 +38,8 @@
     * [ ] use the recorded files with Davinci-003
     * [ ] use gpt 4.0
 15. [ ] need better QA system. Options:
-    * [.] FLAN-T5-large finetuned on squad2  (prepared code)
+    * [x] FLAN-T5-large finetuned on squad2  (prepared code)
+    * [x] gpt2-large
     * [ ] Mixtral
 16. [ ] Integrate in other frameworks
     * [ ] DSPy

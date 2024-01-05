@@ -6,21 +6,22 @@ import math
 import statistics
 from question_types import *
 from parse_qrels_runs_with_text import *
-from typing import Set, List, Tuple, Dict, Optional, Iterable, Path
+from typing import Set, List, Tuple, Dict, Optional, Iterable
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 
 
 from pydantic import BaseModel
 import gzip
 
-def plainExamCoverageScore(method_paras:List[FullParagraphData])->float:
+def plainExamCoverageScore(method_paras:List[FullParagraphData], model_name:str)->float:
     '''Plain EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`'''
-    return examCoverageScore(paras=method_paras)
+    return examCoverageScore(paras=method_paras, model_name=model_name)
 
-def nExamCoverageScore(method_paras:List[FullParagraphData], all_paras:List[FullParagraphData])-> float:
+def nExamCoverageScore(method_paras:List[FullParagraphData], all_paras:List[FullParagraphData], model_name:str)-> float:
     '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
-    return examCoverageScore(paras=method_paras, total_questions=totalCorrectQuestions(paras=all_paras))
+    return examCoverageScore(paras=method_paras, model_name=model_name, total_questions=totalCorrectQuestions(paras=all_paras))
 
 
 
@@ -28,26 +29,27 @@ def frac(num:int,den:int)->float:
     return ((1.0 * num) / (1.0 * den)) if den>0 else 0.0
 
 
-def totalQuestions(paras:List[FullParagraphData])->int:
+
+def totalQuestions(paras:List[FullParagraphData], model_name:str)->int:
     answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
                                 for para in paras 
-                                    for grade in para.exam_grades_iterable()
+                                    for grade in para.retrieve_exam_grade(model_name)
                                     ])
     return len(answered)
 
 
-def totalCorrectQuestions(paras:List[FullParagraphData])->int:
+def totalCorrectQuestions(paras:List[FullParagraphData], model_name:str)->int:
     correct:Set[str] = set().union(*[set(grade.correctAnswered) 
                                 for para in paras 
-                                    for grade in para.exam_grades_iterable()
+                                    for grade in para.retrieve_exam_grade(model_name)
                                     ])
     return len(correct)
 
-def examCoverageScore(paras:List[FullParagraphData], total_questions:Optional[int]=None)->float:
+def examCoverageScore(paras:List[FullParagraphData], model_name:str, total_questions:Optional[int]=None)->float:
     '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
-    num_correct =totalCorrectQuestions(paras)
+    num_correct =totalCorrectQuestions(paras, model_name=model_name)
     if total_questions is None:
-        total_questions = totalQuestions(paras)
+        total_questions = totalQuestions(paras, model_name=model_name)
     examCoverScore = frac(num_correct, total_questions)
     return examCoverScore
 
@@ -72,7 +74,7 @@ class ExamCoverEvalsDict(dict):
 
 OVERALL_ENTRY = "_overall_"
 
-def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
+def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], model_name:str, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
     '''Workhorse to compute exam cover scores from exam-annotated paragraphs.
     Load input file with `parseQueryWithFullParagraphs`
     Write output file with `write_exam_results`
@@ -86,9 +88,9 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
         paragraphs = queryWithFullParagraphList.paragraphs
 
 
-        total_correct = totalCorrectQuestions(paragraphs)
-        total_questions = totalQuestions(paragraphs)
-        overallExamScore = examCoverageScore(paragraphs)
+        total_correct = totalCorrectQuestions(paragraphs, model_name=model_name)
+        total_questions = totalQuestions(paragraphs, model_name=model_name)
+        overallExamScore = examCoverageScore(paragraphs, model_name=model_name)
 
         print(f'{query_id}, overall ratio {overallExamScore}')
         resultsPerMethod[OVERALL_ENTRY].examCoverPerQuery[query_id]=overallExamScore
@@ -99,10 +101,10 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
         # computer query-wise exam scores for all methods
         for method, paragraphs in top_per_method.items():
-            nexamScore = examCoverageScore(paragraphs, total_questions = total_correct)
+            nexamScore = examCoverageScore(paragraphs, total_questions = total_correct, model_name=model_name)
             resultsPerMethod[method].nExamCoverPerQuery[query_id] = nexamScore
 
-            examScore = examCoverageScore(paragraphs, total_questions = total_questions)
+            examScore = examCoverageScore(paragraphs, total_questions = total_questions, model_name=model_name)
             resultsPerMethod[method].examCoverPerQuery[query_id] = examScore
 
 
@@ -127,11 +129,11 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
     return resultsPerMethod
 
-def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, rank_cut_off:int=20):
+def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, model_name:str, rank_cut_off:int=20):
     """which method covers most questions? """
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
     
-    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, rank_cut_off)
+    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, model_name, rank_cut_off)
     
     write_exam_results(out_jsonl_file, resultsPerMethod)
 
@@ -179,9 +181,11 @@ def main():
     # Add an optional output file argument
     parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output JSONL.gz file name, where exam results will be written to', default='output.qrels')
 
+    parser.add_argument('-m', '--model', type=str, metavar="MODEL_NAME", help='name of huggingface model that created exam grades')
+
     # Parse the arguments
     args = parser.parse_args()    
-    compute_exam_cover_scores_file(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output)
+    compute_exam_cover_scores_file(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output, model_name=args.model)
 
 
 if __name__ == "__main__":
