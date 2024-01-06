@@ -21,7 +21,7 @@ def plainExamCoverageScore(method_paras:List[FullParagraphData], model_name:str)
 
 def nExamCoverageScore(method_paras:List[FullParagraphData], all_paras:List[FullParagraphData], model_name:str)-> float:
     '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
-    return examCoverageScore(paras=method_paras, model_name=model_name, total_questions=totalCorrectQuestions(paras=all_paras))
+    return examCoverageScore(paras=method_paras, model_name=model_name, total_questions=totalCorrectQuestions(paras=all_paras, model_name=model_name))
 
 
 
