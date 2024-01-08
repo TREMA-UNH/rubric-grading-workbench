@@ -49,7 +49,7 @@ def strip_enumeration(s: str) -> str:
 
 def generate_letter_choices() -> Set[str]:
     char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
-    option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]',f'{ch}']   for ch in char_options]) )
+    option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]', f'{ch}.',f'{ch}']   for ch in char_options]) )
     return option_non_answers
     
 
