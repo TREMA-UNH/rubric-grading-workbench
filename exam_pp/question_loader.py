@@ -16,6 +16,7 @@ import hashlib
 
 
 import gzip
+import re
 import json
 import itertools
 from pathlib import Path
@@ -36,6 +37,13 @@ def get_md5_hash(input_string: str) -> str:
 
     return hex_digest
 
+def strip_enumeration(s: str) -> str:
+    # Regex pattern to match enumeration at the start of the string
+    # This pattern matches one or more digits followed by a dot and a space
+    pattern = r'^\d+\.\s+'
+    # Substitute the matched pattern with an empty string
+    return re.sub(pattern, '', s)
+
 
 def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionPrompt]]]:
 
@@ -46,7 +54,8 @@ def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionP
         qpc_list = list()
         for facet_id, facet_data in data.items():
             query_text = f'{facet_data["title"]} / {facet_data["facet"]}'
-            for question_text in facet_data["questions"]:
+            for question_text_with_enumeration in facet_data["questions"]:
+                question_text = strip_enumeration(question_text_with_enumeration)
                 if len(question_text)>1:
                     question_hash = get_md5_hash(question_text)
                     qpc = QuestionAnswerablePromptWithChoices(question_id=f'{query_id}/{facet_id}/{question_hash}'
