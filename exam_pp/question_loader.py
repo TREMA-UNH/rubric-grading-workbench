@@ -65,10 +65,10 @@ def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionP
         qpc_list = list()
         for facet_id, facet_data in data.items():
             query_text = f'{facet_data["title"]} / {facet_data["facet"]}'
-            for question_text_with_enumeration in facet_data["questions"]:
-                question_text = strip_enumeration(question_text_with_enumeration)
+            for question_text_orig in facet_data["questions"]:
+                question_text = strip_enumeration(question_text_orig)
                 if len(question_text)>1:
-                    question_hash = get_md5_hash(question_text)
+                    question_hash = get_md5_hash(question_text_orig)
                     qpc = QuestionAnswerablePromptWithChoices(question_id=f'{query_id}/{facet_id}/{question_hash}'
                                                 , question= question_text
                                                 , query_id= query_id
