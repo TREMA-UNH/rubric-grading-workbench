@@ -8,25 +8,18 @@ import json
 from question_types import QuestionPromptWithChoices
 from question_types import *
 
-use_debugging = False
-def ITER(lst):
-    if use_debugging:
-        return islice(lst, 10)
-    else:
-        return lst
-
 
 def loadTQA(tqa_file:Path)-> List[Tuple[str, List[QuestionPromptWithChoices]]]:
 
     result:List[Tuple[str,List[QuestionPromptWithChoices]]] = list()
 
     file = open(tqa_file)
-    for lesson in ITER(json.load(file)):
+    for lesson in json.load(file):
         local_results:List[QuestionPromptWithChoices] = list()
         query_id = lesson['globalID']
         query_text = lesson['lessonName']
 
-        for qid, q in ITER(lesson['questions']['nonDiagramQuestions'].items()):
+        for qid, q in lesson['questions']['nonDiagramQuestions'].items():
             question:str = q['beingAsked']['processedText']
             choices:Dict[str,str] = {key: x['processedText'] for key,x in q['answerChoices'].items() }
             correctKey:str = q['correctAnswer']['processedText']
@@ -36,7 +29,7 @@ def loadTQA(tqa_file:Path)-> List[Tuple[str, List[QuestionPromptWithChoices]]]:
                 print('bad question, because correct answer is not among the choices', 'key: ',correctKey, 'choices: ', choices)
                 continue
            
-            qpc = QuestionPromptWithChoices(question_id=qid, question=question,choices=choices, correct=correct, correctKey = correctKey, query_id=query_id, query_text=query_text)
+            qpc = QuestionPromptWithChoices(question_id=qid, question=question,choices=choices, correct=correct, correctKey = correctKey, query_id=query_id, facet_id = None, query_text=query_text)
             # print('qpc', qpc)
             local_results.append(qpc)
         result.append((query_id, local_results))
@@ -44,11 +37,11 @@ def loadTQA(tqa_file:Path)-> List[Tuple[str, List[QuestionPromptWithChoices]]]:
     return result
             
 
-def load_all_tqa_data():
+def load_all_tqa_data(tqa_path:Path = "./tqa_train_val_test"):
     return list(itertools.chain(
-            loadTQA('tqa_train_val_test/train/tqa_v1_train.json')
-            , loadTQA('tqa_train_val_test/val/tqa_v1_val.json')     
-            , loadTQA('tqa_train_val_test/test/tqa_v2_test.json') 
+            loadTQA(f'{tqa_path}/train/tqa_v1_train.json')
+            , loadTQA(f'{tqa_path}/val/tqa_v1_val.json')     
+            , loadTQA(f'{tqa_path}/test/tqa_v2_test.json') 
             ))
     
 

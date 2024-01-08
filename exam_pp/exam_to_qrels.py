@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from parse_qrels_runs_with_text import *
 from typing import List
 from parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList
-from question_types import QuestionPromptWithChoices
+from question_types import QuestionPromptWithChoices,QuestionPrompt
 from pathlib import Path
 
 

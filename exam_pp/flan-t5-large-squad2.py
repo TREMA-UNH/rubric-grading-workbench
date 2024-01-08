@@ -25,8 +25,6 @@ print(f"T5 model config: { model.config}")
 # Create a Hugging Face pipeline
 t5_pipeline = pipeline('question-answering', model=model, tokenizer=tokenizer, device=device, batch_size=BATCH_SIZE)
 
-# def answer_multiple_choice_question(self, qpc:QuestionPromptWithChoices, promptGenerator:PromptGenerator)->str:
-#     prompt = promptGenerator(qpc)
 
 prompt1 = {
 'question': f'{tokenizer.cls_token}Earth science is the study of',  # '<cls>Where do I live?'
