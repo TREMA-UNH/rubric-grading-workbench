@@ -1,11 +1,11 @@
 import itertools
 import os
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, Optional
+from typing import Tuple, List, Any, Dict, Optional, Set
 import json
 
 
-from question_types import QuestionAnswerablePromptWithChoices
+from question_types import QuestionAnswerablePromptWithChoices, QuestionPrompt
 from question_types import *
 
 from pydantic import BaseModel
@@ -44,10 +44,21 @@ def strip_enumeration(s: str) -> str:
     # Substitute the matched pattern with an empty string
     return re.sub(pattern, '', s)
 
+# def int_key_to_str(i:int)->str:
+#     return f"chr(65+i)"
+
+def generate_letter_choices() -> Set[str]:
+    char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
+    option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]',f'{ch}']   for ch in char_options]) )
+    return option_non_answers
+    
 
 def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionPrompt]]]:
 
     result:List[Tuple[str,List[QuestionPrompt]]] = list()
+
+    option_non_answers = generate_letter_choices()
+    option_non_answers.add('unanswerable')
 
     content = json.load(open(question_file))
     for query_id, data in content.items():
@@ -63,7 +74,7 @@ def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionP
                                                 , query_id= query_id
                                                 , facet_id = facet_id
                                                 , query_text=query_text
-                                                , unanswerable_expressions={'unanswerable'}
+                                                , unanswerable_expressions=option_non_answers
                                                 )
 
                     qpc_list.append(qpc)

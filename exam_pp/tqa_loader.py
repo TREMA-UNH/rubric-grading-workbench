@@ -37,11 +37,11 @@ def loadTQA(tqa_file:Path)-> List[Tuple[str, List[QuestionPromptWithChoices]]]:
     return result
             
 
-def load_all_tqa_data(tqa_path:Path = "./tqa_train_val_test"):
+def load_all_tqa_data(tqa_path:Path = Path("./tqa_train_val_test")):
     return list(itertools.chain(
-            loadTQA(f'{tqa_path}/train/tqa_v1_train.json')
-            , loadTQA(f'{tqa_path}/val/tqa_v1_val.json')     
-            , loadTQA(f'{tqa_path}/test/tqa_v2_test.json') 
+            loadTQA(tqa_path.joinpath('train','tqa_v1_train.json'))
+            , loadTQA(tqa_path.joinpath('val','tqa_v1_val.json'))     
+            , loadTQA(tqa_path.joinpath('test','tqa_v2_test.json')) 
             ))
     
 
