@@ -154,16 +154,16 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
     stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_expressions = {"unanswerable"
-                                         ,"no"
-                                         ,"no answer",
-                                         "not enough information"
-                                         ,"unknown"
-                                         ,"it is not possible to tell"
-                                         ,"it does not say"
-                                         ,"no relevant information"
-                                         ,"[iv]","(iv)","[ii]"
-                                         }
+        self.unanswerable_expressions = self.unanswerable_expressions | {"unanswerable"
+                                                                        ,"no"
+                                                                        ,"no answer",
+                                                                        "not enough information"
+                                                                        ,"unknown"
+                                                                        ,"it is not possible to tell"
+                                                                        ,"it does not say"
+                                                                        ,"no relevant information"
+                                                                        # ,"[iv]","(iv)","[ii]"
+                                                                        }
         self.normalized_unanswerable_expressions = {QuestionPromptWithChoices.normalize_answer(zonk) for zonk in self.unanswerable_expressions}
 
     @staticmethod
