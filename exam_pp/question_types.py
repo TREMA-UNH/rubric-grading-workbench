@@ -251,6 +251,9 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
                 return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = QuestionPromptWithChoices.normalize_answer(answer)
+        if len(stemmed_answer)<1:
+            return False
+        
         is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
                                    for stemmed_gold in self.normalized_unanswerable_expressions)
 
