@@ -1,7 +1,7 @@
 
 
 import question_loader
-from question_types import QuestionPrompt
+from question_types import QuestionPrompt, get_prompt_classes
 from question_types import *
 from t5_qa import *
 from parse_qrels_runs_with_text import *
@@ -38,9 +38,10 @@ def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_
         for queryWithFullParagraphList in itertools.islice(query_paragraphs, max_queries):
             query_id = queryWithFullParagraphList.queryId
             questions = question_set.get(query_id)
-            if questions is None:
+            if questions is None or len(questions)==0:
                 print(f'No exam question for query Id {query_id} available. skipping.')
                 continue
+            anyQpc = questions[0]
 
             paragraphs = queryWithFullParagraphList.paragraphs
             for para in itertools.islice(paragraphs, max_paragraphs):
@@ -50,6 +51,15 @@ def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_
                 answerTuples = qaPipeline.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
                 # for q,a in answerTuples:
                     # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
+
+
+                ratedQs = [SelfRating(question_id=qpc.question_id
+                                    , self_rating=qpc.check_answer_rating(answer)) 
+                                    for qpc,answer in answerTuples
+                                    if qpc.has_rating()]
+                
+                if len(ratedQs)==0:
+                    ratedQs = None
 
 
                 correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
@@ -65,6 +75,8 @@ def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_
                                             , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                             , llm = qaPipeline.exp_modelName()
                                             , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                            , prompt_info = anyQpc.prompt_info()
+                                            , self_ratings = ratedQs
                                     ) 
                     if para.exam_grades is None:
                         para.exam_grades = list()
@@ -111,16 +123,18 @@ def main():
 
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
     parser.add_argument('--max-paragraphs', type=int, metavar='INT', default=None, help='limit the number of paragraphs that will be processed (for debugging)')
-    parser.add_argument('--model-pipeline', type=str, choices=modelPipelineOpts.keys(), required=True, metavar='MODEL', help='the huggingface pipeline used to answer questions. For example, \'sjrhuschlee/flan-t5-large-squad2\' is designed for the question-answering pipeline, where \'google/flan-t5-large\' is designed for the text2text-generation pipeline ')
+    parser.add_argument('--model-pipeline', type=str, choices=modelPipelineOpts.keys(), required=True, metavar='MODEL', help='the huggingface pipeline used to answer questions. For example, \'sjrhuschlee/flan-t5-large-squad2\' is designed for the question-answering pipeline, where \'google/flan-t5-large\' is designed for the text2text-generation pipeline. Choices: '+", ".join(modelPipelineOpts.keys()))
     parser.add_argument('--model-name', type=str, metavar='MODEL', help='the huggingface model used to answer questions')
 
+    parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
 
     # Parse the arguments
     args = parser.parse_args()  
 
     question_set:Dict[str,List[QuestionPrompt]]
     if args.question_type == "tqa":
-        question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(args.question_path)))
+        question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
     elif args.question_type == 'naghmeh':
         question_set = dict(question_loader.load_naghmehs_questions(args.question_path))
     else:

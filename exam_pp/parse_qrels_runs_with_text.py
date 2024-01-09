@@ -30,15 +30,20 @@ class ParagraphData(BaseModel):
 
 
 
+class SelfRating(BaseModel):
+    question_id:str
+    self_rating:int
 
 
 class ExamGrades(BaseModel):
-    correctAnswered: List[str]      # [question_id]
-    wrongAnswered: List[str]        # [question_id]
-    answers: List[Tuple[str, str]]  # [ [question_id, answer_text]] 
-    llm: str                        # huggingface model name
-    llm_options: Dict[str,Any]      # anything that seems relevant
-    exam_ratio: float               # correct / all questions
+    correctAnswered: List[str]               # [question_id]
+    wrongAnswered: List[str]                 # [question_id]
+    answers: List[Tuple[str, str]]           # [ [question_id, answer_text]] 
+    llm: str                                 # huggingface model name
+    llm_options: Dict[str,Any]               # anything that seems relevant
+    exam_ratio: float                        # correct / all questions
+    prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
+    self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
 
 class FullParagraphData(BaseModel):
     paragraph_id : str

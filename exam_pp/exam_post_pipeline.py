@@ -25,14 +25,14 @@ def run(exam_input_file:Path, qrel_out_file:Path, model_name:str):
     corrAll:ConfusionStats
     corrPerQuery:Dict[str, ConfusionStats]
 
-    # for min_answers in [1,2,5]:
-    #     for min_judgment_level in [1,2,3]:
-    #         print(f"\n min_judgment {min_judgment_level} / min_answers {min_answers}")
+    for min_answers in [1,2,5]:
+        for min_judgment_level in [1,2,3]:
+            print(f"\n min_judgment {min_judgment_level} / min_answers {min_answers}")
 
-    #         corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, model_name=model_name, min_judgment_level=min_judgment_level, min_answers=min_answers)
-    #         print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
+            corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, model_name=model_name, min_judgment_level=min_judgment_level, min_answers=min_answers)
+            print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
-    # print("\n")
+    print("\n")
 
     corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, model_name=model_name, min_judgment_level=1, min_answers=1)
     for query_id, corr in corrPerQuery.items():
