@@ -5,7 +5,7 @@ from typing import Tuple, List, Any, Dict, Optional, Set
 import json
 
 
-from question_types import QuestionAnswerablePromptWithChoices, QuestionPrompt
+from question_types import QuestionAnswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices
 from question_types import *
 
 from pydantic import BaseModel
@@ -53,7 +53,7 @@ def generate_letter_choices() -> Set[str]:
     return option_non_answers
     
 
-def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionPrompt]]]:
+def load_naghmehs_questions(question_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
 
     result:List[Tuple[str,List[QuestionPrompt]]] = list()
 
@@ -69,13 +69,36 @@ def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[QuestionP
                 question_text = strip_enumeration(question_text_orig)
                 if len(question_text)>1:
                     question_hash = get_md5_hash(question_text_orig)
-                    qpc = QuestionAnswerablePromptWithChoices(question_id=f'{query_id}/{facet_id}/{question_hash}'
-                                                , question= question_text
-                                                , query_id= query_id
-                                                , facet_id = facet_id
-                                                , query_text=query_text
-                                                , unanswerable_expressions=option_non_answers
-                                                )
+                    qid = f'{query_id}/{facet_id}/{question_hash}'
+
+                    qpc:QuestionPrompt
+                    if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
+                        qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = qid
+                                                                             , question = question_text
+                                                                             , query_id = query_id
+                                                                             , facet_id = facet_id
+                                                                             , query_text = query_text
+                                                                             , unanswerable_expressions = option_non_answers
+                                                                             )
+                    elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
+                        qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id=qid
+                                                    , question = question_text
+                                                    , query_id = query_id
+                                                    , facet_id = facet_id
+                                                    , query_text = query_text
+                                                    , unanswerable_expressions=option_non_answers
+                                                    )
+                    elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
+                        qpc = QuestionAnswerablePromptWithChoices(question_id = qid
+                                                    , question= question_text
+                                                    , query_id= query_id
+                                                    , facet_id = facet_id
+                                                    , query_text = query_text
+                                                    , unanswerable_expressions=option_non_answers
+                                                    )
+                    else:
+                        raise RuntimeError(f"Prompt class {prompt_class} not supported by naghmeh's question_loader.")\
+                
 
                     qpc_list.append(qpc)
         result.append((query_id, qpc_list))

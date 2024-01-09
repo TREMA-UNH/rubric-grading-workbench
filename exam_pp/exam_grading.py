@@ -136,7 +136,7 @@ def main():
     if args.question_type == "tqa":
         question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
     elif args.question_type == 'naghmeh':
-        question_set = dict(question_loader.load_naghmehs_questions(args.question_path))
+        question_set = dict(question_loader.load_naghmehs_questions(args.question_path, prompt_class=args.prompt_class))
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
