@@ -200,7 +200,7 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
 
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "question: How does this text answer this question:"
+                ,"prompt_style": "How does this text answer this question:"
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
@@ -320,7 +320,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
 
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context"
+                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
@@ -455,7 +455,7 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "context: question:"
+                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
                 , "context_first": False
                 , "check_unanswerable": False
                 , "check_answer_key": True
@@ -573,7 +573,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context"
+                ,"prompt_style": "Can the question be answered based on the available context? choose one:"
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
