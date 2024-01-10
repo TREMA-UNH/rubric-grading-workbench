@@ -14,7 +14,8 @@
             pydantic
             fuzzywuzzy
             nltk
-	    mypy
+            mypy
+            (ps.callPackage ./pylatex.nix {})
           ];
         };
       }

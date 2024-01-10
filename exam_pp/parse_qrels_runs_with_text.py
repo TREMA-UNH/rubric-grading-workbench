@@ -2,12 +2,77 @@ from pydantic import BaseModel
 from typing import List, Any, Optional, Dict, Tuple
 from dataclasses import dataclass
 from pathlib import Path
-
-
 import gzip
 import json
 import itertools
 from pathlib import Path
+
+from pyparsing import RecursiveGrammarException
+
+
+
+
+class SelfRating(BaseModel):
+    question_id:str
+    self_rating:int
+
+
+class ExamGrades(BaseModel):
+    correctAnswered: List[str]               # [question_id]
+    wrongAnswered: List[str]                 # [question_id]
+    answers: List[Tuple[str, str]]           # [ [question_id, answer_text]] 
+    llm: str                                 # huggingface model name
+    llm_options: Dict[str,Any]               # anything that seems relevant
+    exam_ratio: float                        # correct / all questions
+    prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
+    self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
+
+
+@dataclass
+class GradeFilter():
+    model_name: Optional[str]
+    prompt_class: Optional[str]
+    is_self_rated: Optional[bool]
+    min_self_rating: Optional[int]
+
+
+    def filter(self, grade:ExamGrades)-> bool:
+        # Note, the following code is based on inverse logic -- any grade that DOES NOT meet set filter requirements is skipped
+
+        # grades are marked as using this model
+        if self.model_name is not None:
+            if not grade.llm == self.model_name:
+                return False
+
+        # grade.prompt_info is marked as using this prompt_class
+        if self.prompt_class is not None:
+            if grade.prompt_info is not None:
+                grade_prompt_class = grade.prompt_info.get("prompt_class", None)
+                if grade_prompt_class is not None:
+                    if not grade_prompt_class == self.prompt_class:
+                        return False
+
+        # grade.prompt_info is marked as is_self_rated
+        if self.is_self_rated is not None:
+            if grade.prompt_info is not None:
+                grade_is_self_rated = grade.prompt_info.get("is_self_rated", None)
+                if grade_is_self_rated is not None:
+                    if not grade_is_self_rated == self.is_self_rated:
+                        return False
+
+        # for at least one question, the self_rating is at least self.min_self_rating
+        if self.min_self_rating is not None:
+            if grade.self_ratings is not None and len(grade.self_ratings)>0:  # grade has self_ratings
+                if not any( (rating.self_rating >= self.min_self_rating  for rating in grade.self_ratings) ):
+                    return False
+
+        return True
+
+    def get_min_grade_filter(self, min_self_rating:int):
+        return GradeFilter(model_name=self.model_name
+                           , prompt_class=self.prompt_class
+                           , is_self_rated=self.is_self_rated
+                           , min_self_rating=min_self_rating)
 
 class Judgment(BaseModel):
     paragraphId : str
@@ -29,22 +94,6 @@ class ParagraphData(BaseModel):
     rankings : List[ParagraphRankingEntry] 
 
 
-
-class SelfRating(BaseModel):
-    question_id:str
-    self_rating:int
-
-
-class ExamGrades(BaseModel):
-    correctAnswered: List[str]               # [question_id]
-    wrongAnswered: List[str]                 # [question_id]
-    answers: List[Tuple[str, str]]           # [ [question_id, answer_text]] 
-    llm: str                                 # huggingface model name
-    llm_options: Dict[str,Any]               # anything that seems relevant
-    exam_ratio: float                        # correct / all questions
-    prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
-    self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
-
 class FullParagraphData(BaseModel):
     paragraph_id : str
     text : str
@@ -52,11 +101,11 @@ class FullParagraphData(BaseModel):
     paragraph_data : ParagraphData
     exam_grades : Optional[List[ExamGrades]]
 
-    def retrieve_exam_grade(self, model_name:str) -> List[ExamGrades]:
+    def retrieve_exam_grade(self, grade_filter:GradeFilter) -> List[ExamGrades]:
         if self.exam_grades is None:
             return []
         
-        found = next((g for g in self.exam_grades if g.llm==model_name), None)
+        found = next((g for g in self.exam_grades if grade_filter.filter(g)), None)
         if found is not None:
             return [found]
         else: 

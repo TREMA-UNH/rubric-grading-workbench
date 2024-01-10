@@ -76,7 +76,7 @@ def main():
 
     # compute exam cover metric
 
-    overallExamScore = plainExamCoverageScore(paragraphs, model_name=model_name)
+    overallExamScore = plainExamCoverageScore(paragraphs, grade_filter=grade_filter)
     print(f'Exam Score = {overallExamScore}')
 
     

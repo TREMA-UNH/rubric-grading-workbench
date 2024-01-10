@@ -1,9 +1,11 @@
 
 from collections import defaultdict
+import heapq
+import math
 import statistics
 from question_types import *
 # from question_types import 
-from parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, ExamGrades
+from parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, ExamGrades,GradeFilter
 from typing import Set, List, Tuple
 from typing import *
 from pathlib import Path
@@ -79,70 +81,17 @@ class ConfusionStats:
             raise RuntimeError("ConfusionStats exhausted cases")
 
 
-def dontuse():
-    def confusionMatrixCorrelation():
-        """Acc/P/R correlation between exam, judgments, and rankings """
-        query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs("./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz")
 
-        globalExamVsJudged = ConfusionStats()
-
-        globalManualRankMetric:Dict[str, ConfusionStats] = defaultdict(ConfusionStats) 
-        globalExamRankMetric:Dict[str, ConfusionStats] = defaultdict(ConfusionStats)
-
-        
-        for queryWithFullParagraphList in query_paragraphs:
-
-            examVsJudged = ConfusionStats()
-            manualRankMetric = ConfusionStats()
-            examRankMetric = ConfusionStats()
-
-            query_id = queryWithFullParagraphList.queryId
-            paragraphs = queryWithFullParagraphList.paragraphs
-            for para in paragraphs:
-                paragraph_id = para.paragraph_id
-                paragraph_txt = para.text
-                exam_grade = para.get_any_exam_grade()
-                judg = para.get_any_judgment()
-                rank = para.get_any_ranking('ICT-DRMMTKS')
-
-                if exam_grade==None or judg ==None:
-                    continue # don't have all the data
-
-                hasAnsweredAny = len(exam_grade.correctAnswered)>0
-                isJudgedRelevant = any (j.relevance>0 for j in para.paragraph_data.judgments)
-                # isInTop20 = rank is not None and rank.rank <20
-
-
-                globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
-
-                for ranks in para.paragraph_data.rankings:
-                    isInTop20 = rank is not None and rank.rank <20
-                    globalManualRankMetric[ranks.method].add(predict=isInTop20, truth=isJudgedRelevant)
-                    globalExamRankMetric[ranks.method].add(predict=isInTop20, truth=hasAnsweredAny)
-
-
-
-                examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
-                # manualRankMetric.add(predict=isInTop20, truth=isJudgedRelevant)
-                # examRankMetric.add(predict=isInTop20, truth=hasAnsweredAny)
-
-            print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
-
-        print(f'all: examVsJudged {globalExamVsJudged.printMeasures()} ')#  ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
-        for method in globalExamRankMetric.keys():
-            print(f' method: {method}  exam: {globalExamRankMetric[method].printMeasures()}  manual: {globalManualRankMetric[method].printMeasures()} ')
-
-
-def confusion_exam_vs_judged_correlation_file(exam_input_file:Path, model_name:str, min_judgment_level:int, min_answers:int=1):
+def confusion_exam_vs_judged_correlation_file(exam_input_file:Path, grade_filter:GradeFilter, min_judgment_level:int, min_answers:int=1):
     """Acc/P/R correlation between exam, judgments """
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
-    globalExamVsJudged, perQueryStats = confusion_exam_vs_judged_correlation(query_paragraphs, model_name=model_name, min_judgment_level=min_judgment_level, min_answers=min_answers)
+    globalExamVsJudged, perQueryStats = confusion_exam_vs_judged_correlation(query_paragraphs, grade_filter=grade_filter, min_judgment_level=min_judgment_level, min_answers=min_answers)
 
     print(perQueryStats)
     print(f'all: examVsJudged {globalExamVsJudged.printMeasures()} , stats {globalExamVsJudged} ')#
 
-def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], model_name:str, min_judgment_level:int, min_answers:int)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
+def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter, min_judgment_level:int, min_answers:int, min_rating:Optional[int]=None)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
     ''' workhorse to measure the per-paragraph correlation between manual judgments and exam labels.
     Only binary correlations are considered: 
         * `min_judgment_level` sets the judgment level (=>) to be considered relevant by manual judges
@@ -163,18 +112,145 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            for exam_grade in para.retrieve_exam_grade(model_name=model_name): # there will be 1 or 0
+            for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
                     continue # don't have all the data
 
-                hasAnsweredAny = len(exam_grade.correctAnswered)>=min_answers
+                hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
+                if min_rating is not None:
+                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                    hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
                 isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
 
                 globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
                 examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+
+        # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
+        perQueryStats[query_id]=examVsJudged
+    return globalExamVsJudged,perQueryStats 
+    # ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
+
+
+def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter, exact_judgment_level:int, min_answers:int, exact_rating:Optional[int]=None, min_rating:Optional[int]=None)->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
+    ''' workhorse to measure the per-paragraph correlation between manual judgments and exam labels.
+    Only binary correlations are considered: 
+        * `min_judgment_level` sets the judgment level (=>) to be considered relevant by manual judges
+        * `min_answers` sets the minimum correctly answered questions (=>) to be considered relevant by EXAM
+
+    The return value is a tuple of overall `ConfusionStats` and dictionary of per-query `ConfusionStats`
+    Load files with `parseQueryWithFullParagraphs` 
+    or use convenience function `confusion_exam_vs_judged_correlation_file`
+    Print output with `ConfusionStats.printMeasures`, more measures are provided in `ConfusionStats`.
+    '''
+    globalExamVsJudged = ConfusionStats()
+    perQueryStats:Dict[str,ConfusionStats] = dict()
+
+    
+    for queryWithFullParagraphList in query_paragraphs:
+        examVsJudged = ConfusionStats()
+
+        query_id = queryWithFullParagraphList.queryId
+        paragraphs = queryWithFullParagraphList.paragraphs
+        for para in paragraphs:
+            for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                judg = para.get_any_judgment()
+                
+                if judg ==None:
+                    continue # don't have all the data
+
+                hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
+                if exact_rating is not None:
+                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating==exact_rating]
+                    hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
+                elif min_rating is not None:
+                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                    hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
+                isJudgedRelevant = any (j.relevance== exact_judgment_level for j in para.paragraph_data.judgments)
+
+                globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+
+                examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+
+        # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
+        perQueryStats[query_id]=examVsJudged
+    return globalExamVsJudged,perQueryStats 
+    # ; manualRankMetric {globalManualRankMetric.printMeasures()}  ; examRankMetric{globalExamRankMetric.printMeasures()}')
+
+
+
+def predict_labels_from_ratings(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
+    for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+        ratings = (rate.self_rating for rate in exam_grade.self_ratings)
+        best_rating:int
+        if min_answers > 1:
+            best_rating = min( heapq.nlargest(min_answers, ratings ))
+        else:   
+            best_rating = max(ratings)
+
+        
+
+        if best_rating == 5:
+            return 5
+        if best_rating == 4:
+            return 4
+        elif best_rating == 3:
+            return 3
+        elif best_rating == 2:
+            return 2
+        elif best_rating == 1:
+            return 1
+        else:
+            return 0
+
+        # if best_rating == 5:
+        #     return 2
+        # if best_rating == 4:
+        #     return 2
+        # elif best_rating == 3:
+        #     return 1
+        # elif best_rating == 2:
+        #     return 1
+        # elif best_rating == 1:
+        #     return 1
+        # else:
+        #     return 0
+        
+    return 0
+
+def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFullParagraphList]
+                                              , grade_filter:GradeFilter
+                                              , judgments:Set[int]
+                                              , prediction:Set[int]
+                                              , min_answers:int=1
+                                              )->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
+    ''' workhorse to measure the per-paragraph correlation between manual judgments and predicted labels (based on self-rated exam grades).
+    '''
+    globalExamVsJudged = ConfusionStats()
+    perQueryStats:Dict[str,ConfusionStats] = dict()
+
+    
+    for queryWithFullParagraphList in query_paragraphs:
+        examVsJudged = ConfusionStats()
+
+        query_id = queryWithFullParagraphList.queryId
+        paragraphs = queryWithFullParagraphList.paragraphs
+        for para in paragraphs:
+            judg = para.get_any_judgment()
+            
+            if judg ==None:
+                continue # don't have all the data
+            isJudgedRelevant = any (j.relevance in judgments for j in para.paragraph_data.judgments)
+
+
+            predicted_judgment = predict_labels_from_ratings(para=para, grade_filter=grade_filter, min_answers=min_answers)
+            predicted_relevant = (predicted_judgment in prediction)
+
+            globalExamVsJudged.add(predict=predicted_relevant, truth=isJudgedRelevant)
+
+            examVsJudged.add(predict=predicted_relevant, truth=isJudgedRelevant)
 
         # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
         perQueryStats[query_id]=examVsJudged

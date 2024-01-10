@@ -7,6 +7,7 @@ import scipy.stats
 
 from question_types import *
 from parse_qrels_runs_with_text import *
+from parse_qrels_runs_with_text import GradeFilter
 from typing import Set, List, Tuple, Dict, Union, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from exam_cover_metric import *
 from exam_cover_metric import ExamCoverEvals
+
 
 
 manualLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
@@ -106,7 +108,7 @@ def create_leaderboard(systemEval:Dict[str,float])->List[LeaderboardEntry]:
     return systemEvalRanked
 
 
-def print_leaderboard_eval_file(exam_result_file:Path, model_name:str):
+def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter):
     import gzip
     def read_result_file()->List[ExamCoverEvals]:
         # Open the gzipped file
@@ -115,10 +117,10 @@ def print_leaderboard_eval_file(exam_result_file:Path, model_name:str):
 
     evals = read_result_file()
 
-    print_leaderboard_eval(evals, model_name=model_name)
+    print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals], model_name:str):
+def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter):
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -143,16 +145,16 @@ def leaderboard_table(evals:List[ExamCoverEvals], model_name:str):
                         , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
-    print('\n'.join([f'EXAM scores produced with {model_name}', header]+lines))
+    print('\n'.join([f'EXAM scores produced with {grade_filter}', header]+lines))
 
-def print_leaderboard_eval(evals:List[ExamCoverEvals], model_name:str):
+def print_leaderboard_eval(evals:List[ExamCoverEvals], grade_filter:GradeFilter):
     '''Print the Leaderboard in trec_eval evaluation output format.
     Load necessary data with `read_exam_result_file()` or use the convenience method `print_leaderboard_eval_file`
     '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
-    print(f'EXAM scores produced with {model_name}')
+    print(f'EXAM scores produced with {grade_filter}')
     print("\n".join( ["\t".join([x.method, "exam", f'{x.eval_score:.4}']) 
                         for x in create_leaderboard(examEval)]))
     print("\n".join( ["\t".join([x.method, "n-exam", f'{x.eval_score:.4}' ]) 
