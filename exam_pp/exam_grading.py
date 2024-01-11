@@ -27,13 +27,73 @@ def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
     answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
     return answerTuples
 
+def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs:Optional[int]=None)->None:
+    '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
-def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_paragraphs):
+    query_id = queryWithFullParagraphList.queryId
+    anyQpc = questions[0]
+
+    paragraphs = queryWithFullParagraphList.paragraphs
+
+
+    for para in itertools.islice(paragraphs, max_paragraphs):
+        paragraph_id = para.paragraph_id
+        paragraph_txt = para.text
+
+        answerTuples = qaPipeline.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
+        # for q,a in answerTuples:
+            # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
+
+        ratedQs: Optional[List[SelfRating]]
+        ratedQs = [SelfRating(question_id=qpc.question_id
+                            , self_rating=qpc.check_answer_rating(answer)) 
+                            for qpc,answer in answerTuples
+                            if qpc.has_rating()]
+        
+        if len(ratedQs)==0:
+            ratedQs = None
+
+
+        correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
+        numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
+        numAll = len(answerTuples)
+        if numAll > 0: # can't provide exam when no questions are answered.
+            print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
+
+            # adding exam data to the JSON file
+            exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                                    , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                    , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
+                                    , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
+                                    , llm = qaPipeline.exp_modelName()
+                                    , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                    , prompt_info = anyQpc.prompt_info()
+                                    , self_ratings = ratedQs
+                            ) 
+            if para.exam_grades is None:
+                para.exam_grades = list()
+            para.exam_grades.append(exam_grades)
+
+        else:
+            print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
+    
+
+
+def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+            , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
+            ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as out_file:
 
         query_paragraphs = parseQueryWithFullParagraphs(paragraph_file)
 
-
+        # restart logic
+        restart_previous_query_paragraphs = None
+        take_previous_paragraphs = False
+        previousQueryWithFullParagraphList = None
+        if restart_previous_paragraph_file is not None:
+            restart_previous_query_paragraphs = parseQueryWithFullParagraphs(restart_previous_paragraph_file)
+            restart_previous_query_paragraphs_iter = itertools.islice(restart_previous_query_paragraphs, max_queries)
+            take_previous_paragraphs = True
 
         for queryWithFullParagraphList in itertools.islice(query_paragraphs, max_queries):
             query_id = queryWithFullParagraphList.queryId
@@ -41,49 +101,38 @@ def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_
             if questions is None or len(questions)==0:
                 print(f'No exam question for query Id {query_id} available. skipping.')
                 continue
-            anyQpc = questions[0]
-
-            paragraphs = queryWithFullParagraphList.paragraphs
-            for para in itertools.islice(paragraphs, max_paragraphs):
-                paragraph_id = para.paragraph_id
-                paragraph_txt = para.text
-
-                answerTuples = qaPipeline.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
-                # for q,a in answerTuples:
-                    # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
-
-                ratedQs: Optional[List[SelfRating]]
-                ratedQs = [SelfRating(question_id=qpc.question_id
-                                    , self_rating=qpc.check_answer_rating(answer)) 
-                                    for qpc,answer in answerTuples
-                                    if qpc.has_rating()]
-                
-                if len(ratedQs)==0:
-                    ratedQs = None
+            
+            # restart logic: check whether we are done copying
+            if query_id == restart_from_query:  
+                print(f"Restart Logic:  encountered restart query {query_id}. Stopping copying and starting exam grading")
+                take_previous_paragraphs = False
 
 
-                correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
-                numAll = len(answerTuples)
-                if numAll > 0: # can't provide exam when no questions are answered.
-                    print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
+            # restart logic: fetch previous
+            if take_previous_paragraphs and restart_previous_query_paragraphs is not None:
+                previousQueryWithFullParagraphList = next(restart_previous_query_paragraphs_iter, None)
+                if previousQueryWithFullParagraphList is None:
+                    if restart_from_query is not None:
+                        print(f"Restart Logic: restart_previous_query_paragraphs_iter exhausted before we reached restart_query={restart_from_query}), starting to run pipeline" )
+                    else:
+                        print(f"Restart Logic: restart_previous_query_paragraphs_iter exhausted, starting to run pipeline" )
+                    take_previous_paragraphs = False
+                elif not previousQueryWithFullParagraphList.queryId == query_id:
+                    raise RuntimeError(f"Restart Logic: Query ids out of sequence, obtained {previousQueryWithFullParagraphList.queryId}, but was expecting {query_id}")
 
-                    # adding exam data to the JSON file
-                    exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                                            , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                            , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
-                                            , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                            , llm = qaPipeline.exp_modelName()
-                                            , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
-                                            , prompt_info = anyQpc.prompt_info()
-                                            , self_ratings = ratedQs
-                                    ) 
-                    if para.exam_grades is None:
-                        para.exam_grades = list()
-                    para.exam_grades.append(exam_grades)
 
-                else:
-                    print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
+
+
+            if take_previous_paragraphs: # if restart
+                # copy paragraph
+                print(f"Restart Logic:  copy query {query_id}")
+                queryWithFullParagraphList = previousQueryWithFullParagraphList
+                pass
+            else:
+                # Regular path
+                noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs)
+            
+            
             out_file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             out_file.write('\n')
             out_file.flush()
@@ -129,6 +178,11 @@ def main():
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
 
+
+    parser.add_argument('--restart-paragraphs-file', type=str, metavar='exam-xxx.jsonl.gz', help='Restart logic: Input file name with partial exam grade annotations that we want to copy from. Copies while queries are defined (unless --restart-from-query is set)')
+    parser.add_argument('--restart-from-query', type=str, metavar='QUERY_ID', help='Restart logic: Once we encounter Query Id, we stop copying and start re-running the pipeline (Must also set --restart-paragraphs-file)')
+ 
+
     # Parse the arguments
     args = parser.parse_args()  
 
@@ -148,6 +202,8 @@ def main():
            , out_file = args.out_file
            , max_queries = args.max_queries
            , max_paragraphs = args.max_paragraphs
+           # Restart logic
+           , restart_previous_paragraph_file=args.restart_paragraphs_file, restart_from_query=args.restart_from_query
            )
 
 if __name__ == "__main__":
