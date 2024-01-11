@@ -43,6 +43,8 @@ class GradeFilter():
         if self.model_name is not None:
             if not grade.llm == self.model_name:
                 return False
+            elif not self.model_name == "google/flan-t5-large":
+                return False
 
         # grade.prompt_info is marked as using this prompt_class
         if self.prompt_class is not None:
@@ -51,6 +53,9 @@ class GradeFilter():
                 if grade_prompt_class is not None:
                     if not grade_prompt_class == self.prompt_class:
                         return False
+            elif not self.prompt_class == "QuestionPromptWithChoices":  # handle case before we tracked prompt info
+                return False
+
 
         # grade.prompt_info is marked as is_self_rated
         if self.is_self_rated is not None:

@@ -15,6 +15,7 @@
             fuzzywuzzy
             nltk
             mypy
+            jedi
             (ps.callPackage ./pylatex.nix {})
           ];
         };

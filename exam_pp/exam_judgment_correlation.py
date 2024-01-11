@@ -181,6 +181,15 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
 
 
 
+def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
+    for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+        if len(exam_grade.correctAnswered) > min_answers:
+            return 1
+        else:
+            return 0
+    return 0
+
+
 def predict_labels_from_ratings(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
     for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
         ratings = (rate.self_rating for rate in exam_grade.self_ratings)
@@ -224,6 +233,7 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
                                               , grade_filter:GradeFilter
                                               , judgments:Set[int]
                                               , prediction:Set[int]
+                                              , use_ratings:bool
                                               , min_answers:int=1
                                               )->Tuple[ConfusionStats, Dict[str, ConfusionStats]]:
     ''' workhorse to measure the per-paragraph correlation between manual judgments and predicted labels (based on self-rated exam grades).
@@ -245,7 +255,11 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
             isJudgedRelevant = any (j.relevance in judgments for j in para.paragraph_data.judgments)
 
 
-            predicted_judgment = predict_labels_from_ratings(para=para, grade_filter=grade_filter, min_answers=min_answers)
+            predicted_judgment:int
+            if use_ratings:
+                predicted_judgment = predict_labels_from_ratings(para=para, grade_filter=grade_filter, min_answers=min_answers)
+            else:
+                predicted_judgment = predict_labels_from_answers(para=para, grade_filter=grade_filter, min_answers=min_answers)
             predicted_relevant = (predicted_judgment in prediction)
 
             globalExamVsJudged.add(predict=predicted_relevant, truth=isJudgedRelevant)

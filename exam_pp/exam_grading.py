@@ -52,7 +52,7 @@ def noodle(qaPipeline, question_set, paragraph_file, out_file, max_queries, max_
                 # for q,a in answerTuples:
                     # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
 
-
+                ratedQs: Optional[List[SelfRating]]
                 ratedQs = [SelfRating(question_id=qpc.question_id
                                     , self_rating=qpc.check_answer_rating(answer)) 
                                     for qpc,answer in answerTuples

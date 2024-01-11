@@ -29,6 +29,7 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                       , predicted_label_list:List[Set[int]], judgment_list:List[Set[int]]
                                       , label_to_judgment_kappa:Dict[str,str]
                                       , judgment_title:Optional[str], label_title:Optional[str]
+                                      , use_ratings:bool
                                       , min_answers:int=1
                                       ):
 
@@ -44,7 +45,12 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
         for judgment in judgment_list:
             print(f"\n predicted_judgment {label} /  exact_judgment {judgment}")
 
-            corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs, grade_filter=grade_filter, judgments=judgment, prediction=label, min_answers=min_answers)
+            corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs
+                                                                                                        , grade_filter=grade_filter
+                                                                                                        , judgments=judgment
+                                                                                                        , prediction=label
+                                                                                                        , min_answers=min_answers
+                                                                                                        ,use_ratings=use_ratings)
             print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
             counts[fmt_labels(label)][fmt_judgments(judgment)]=corrAll.predictedRelevant
             if label_to_judgment_kappa[fmt_labels(label)] == fmt_judgments(judgment):
@@ -57,7 +63,7 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
         
 
 
-def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
+def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter, use_ratings:bool):
     exam_to_qrels.exam_to_qrels_files(exam_input_file=exam_input_file, qrel_out_file=qrel_out_file, grade_filter=grade_filter)
 
     # if needed to add more data to the `QueryWithFullParagraphList` objects, write with this function.
@@ -80,7 +86,91 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
     # self_rated_correlation_exact(grade_filter, query_paragraphs, write_stats=False)
 
 
+    if use_ratings:
+        selfRated_vs_judged_correlation(grade_filter, query_paragraphs)
+    else:
+        binary_vs_judged_correlation(grade_filter, query_paragraphs)
 
+    print("\n\n exam_vs_judged")
+
+    corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, grade_filter=grade_filter, min_judgment_level=1, min_answers=1)
+    for query_id, corr in corrPerQuery.items():
+        print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
+    print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
+
+
+    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter)
+    # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
+    # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
+    exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), grade_filter=grade_filter)
+
+    nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
+    print(f' nExam:{nExamCorrelation}')
+    print(f' exam:{examCorrelation}')
+
+def binary_vs_judged_correlation(grade_filter, query_paragraphs):
+    print("\n\n binary correlation")
+   
+    table_printer = print_correlation_table.TablePrinter()
+    table_printer.add_section("correlation tables")
+
+
+    def binaryCorrelation(min_answers:int):
+        print("\n\n binary correlation")
+    
+        predicted_label_list = [{1},{0}]
+        judgment_list = [{3,2,1},{0}]
+
+        label_to_judgment_kappa:Dict[str, str]
+        label_to_judgment_kappa = { fmt_labels(l): fmt_judgments(j) for l,j in zip( predicted_label_list, judgment_list)}
+
+        label_judgments_correlation_table(table_printer=table_printer
+                                        ,query_paragraphs=query_paragraphs, grade_filter=grade_filter
+                                        , predicted_label_list=predicted_label_list, judgment_list=judgment_list
+                                        , label_to_judgment_kappa=label_to_judgment_kappa
+                                        ,  judgment_title="Judgments",   label_title="BINARY"
+                                        , min_answers=min_answers, use_ratings=False)
+        
+        table_printer.add_new_paragraph()
+
+
+
+    def detailedCorrelation(min_answers:int):
+        print("\n\n detailed correlation")
+    
+        predicted_label_list = [{1},{0}]
+        judgment_list = [{3},{2},{1},{0}]
+        
+        label_to_judgment_kappa:Dict[str, str]={}
+        # label_to_judgment_kappa = { fmt_labels(j):fmt_judgments(j)  for j in judgment_list }
+        label_to_judgment_kappa[fmt_labels({1})]=fmt_judgments({2})
+        label_to_judgment_kappa[fmt_labels({0})]=fmt_judgments({0})
+
+
+        label_judgments_correlation_table(table_printer=table_printer
+                                        , query_paragraphs=query_paragraphs, grade_filter=grade_filter
+                                        , predicted_label_list=predicted_label_list, judgment_list=judgment_list
+                                        , label_to_judgment_kappa=label_to_judgment_kappa
+                                        ,  judgment_title="Judgments",   label_title="GRADED"
+                                        , min_answers=min_answers, use_ratings=False)
+        table_printer.add_new_paragraph()
+    
+    
+    table_printer.add_section(f"min answers 1")
+    binaryCorrelation(min_answers=1)
+    detailedCorrelation(min_answers=1)
+
+    table_printer.add_section(f"min answers 2")
+    binaryCorrelation(min_answers=2)
+    detailedCorrelation(min_answers=2)
+
+    table_printer.add_section(f"min answers 5")
+    binaryCorrelation(min_answers=5)
+    detailedCorrelation(min_answers=5)
+
+    table_printer.export(Path("./corelation_tables.tex"))
+
+def selfRated_vs_judged_correlation(grade_filter, query_paragraphs):
     print("\n\n binary correlation")
 
     table_printer = print_correlation_table.TablePrinter()
@@ -93,8 +183,8 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
             corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs, grade_filter=grade_filter, judgments=judgments, prediction=labels, min_answers=1)
             print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
-    def correlation_analysis(min_answers:int):
 
+    def correlation_analysis(min_answers:int):
         table_printer.add_section(f"Min Answers= {min_answers}")
         
         def detailedCorrelation():
@@ -115,7 +205,8 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
                                             , query_paragraphs=query_paragraphs, grade_filter=grade_filter
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
-                                            ,  judgment_title="Judgments",   label_title="GRADED", min_answers=min_answers)
+                                            ,  judgment_title="Judgments",   label_title="GRADED"
+                                            , min_answers=min_answers, use_ratings=True)
             table_printer.add_new_paragraph()
         detailedCorrelation()
 
@@ -134,11 +225,13 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
                                             , query_paragraphs=query_paragraphs, grade_filter=grade_filter
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
-                                            ,  judgment_title="Judgments",   label_title="MERGE", min_answers=min_answers)
+                                            ,  judgment_title="Judgments",   label_title="MERGE"
+                                            , min_answers=min_answers, use_ratings=True)
             table_printer.add_new_paragraph()
         mergedCorrelation()
 
-        def binaryCorrelation():
+
+        def binaryLenientCorrelation():
             print("\n\n binary correlation")
         
             predicted_label_list = [{3,4,5,1,2},{0}]
@@ -151,17 +244,19 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
                                             ,query_paragraphs=query_paragraphs, grade_filter=grade_filter
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
-                                            ,  judgment_title="Judgments",   label_title="LENIENT", min_answers=min_answers)
+                                            ,  judgment_title="Judgments",   label_title="LENIENT"
+                                            , min_answers=min_answers, use_ratings=True)
             
             table_printer.add_new_paragraph()
-        binaryCorrelation()
+        binaryLenientCorrelation()
 
 
 
-        def binaryLenientCorrelation():
+
+        def binaryStrictCorrelation():
             print("\n\n binary correlation")
         
-            predicted_label_list = [{3,4,5},{1,2,0}]
+            predicted_label_list = [{4,5},{3,1,2,0}]
             judgment_list = [{3,2,1},{0}]
             
             label_to_judgment_kappa:Dict[str, str]
@@ -171,33 +266,16 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
                                             ,query_paragraphs=query_paragraphs, grade_filter=grade_filter
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
-                                            ,  judgment_title="Judgments",   label_title="STRICT", min_answers=min_answers)
+                                            ,  judgment_title="Judgments",   label_title="STRICT"
+                                            , min_answers=min_answers, use_ratings=True)
             
             table_printer.add_new_paragraph()
-        binaryLenientCorrelation()
-
+        binaryStrictCorrelation()
     correlation_analysis(min_answers=1)
     correlation_analysis(min_answers=2)
     correlation_analysis(min_answers=5)
 
     table_printer.export(Path("./corelation_tables.tex"))
-
-    print("\n\n exam_vs_judged")
-
-    corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, grade_filter=grade_filter, min_judgment_level=1, min_answers=1)
-    for query_id, corr in corrPerQuery.items():
-        print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
-    print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
-
-
-    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter)
-    # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
-    # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
-    exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), grade_filter=grade_filter)
-
-    nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
-    print(f' nExam:{nExamCorrelation}')
-    print(f' exam:{examCorrelation}')
 
 
 
@@ -311,11 +389,12 @@ def main():
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
 
     # Parse the arguments
     args = parser.parse_args()    
-    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=True, min_self_rating=None)
-    run(exam_input_file=args.exam_annotated_file, qrel_out_file=args.qrel_out, grade_filter=grade_filter)
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None)
+    run(exam_input_file=args.exam_annotated_file, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_ratings=args.use_ratings)
 
 
 
