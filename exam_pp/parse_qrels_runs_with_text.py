@@ -146,6 +146,7 @@ class QueryWithFullParagraphList():
 
 def parseQueryWithFullParagraphList(line:str) -> QueryWithFullParagraphList:
     # Parse the JSON content of the line
+    print(line)
     data = json.loads(line)
     return QueryWithFullParagraphList(data[0], [FullParagraphData.parse_obj(paraInfo) for paraInfo in data[1]])
 
@@ -160,7 +161,7 @@ def parseQueryWithFullParagraphs(file_path:Path) -> List[QueryWithFullParagraphL
 
 def dumpQueryWithFullParagraphList(queryWithFullParagraph:QueryWithFullParagraphList)->str:
     '''Write `QueryWithFullParagraphList` to jsonl.gz'''
-    return  json.dumps ([queryWithFullParagraph.queryId,[p.dict() for p in queryWithFullParagraph.paragraphs]])
+    return  json.dumps ([queryWithFullParagraph.queryId,[p.dict() for p in queryWithFullParagraph.paragraphs]])+"\n"
 
 def writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList]) :
     # Open the gzipped file

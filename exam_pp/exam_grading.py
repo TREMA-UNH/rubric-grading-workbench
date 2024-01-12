@@ -134,7 +134,7 @@ def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_que
             
             
             out_file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
-            out_file.write('\n')
+            # out_file.write('\n')
             out_file.flush()
 
         out_file.close()
