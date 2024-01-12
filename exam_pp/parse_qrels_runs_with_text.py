@@ -7,7 +7,6 @@ import json
 import itertools
 from pathlib import Path
 
-from pyparsing import RecursiveGrammarException
 
 
 

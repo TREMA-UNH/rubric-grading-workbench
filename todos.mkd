@@ -10,8 +10,13 @@
 3. [x] load TQA questions, noodle through QA system to get exam grades for all CAR Y3 submitted paragraphs
     * file pattern "exam-qrels...json.gz"
     * on peanut @dietz home
+3. [X] refactoring and robust infrastructure    
+    * [X] refactored grading pipeline to support different prompts and answer checkers.
+    * [X] grading pipeline supports restarts 
 4. [x] from exam annotated paragraphs, perform kendall's tau with manual judgments
-    * low performance on paragraph level  (tau = 0.05)
+    * [x] low performance on paragraph level  (tau = 0.05)
+    * [x] better performance with self-rating prompt (tau = 0.3)
+    * [x] advanced correlation pipeline for ratings, judgments, and min_answers (produces latex tables)
 5. [ ] from exam annnotated paragraphs, export as exam.QRELS    
     * [x] code written,
     * [x] run to produce qrels file
@@ -33,14 +38,16 @@
     * [ ] new output format. Per paragrah annotations of answerability. additional query and / system-level EXAM scores
 10. [x] Break code into re-usable components with cmd parser
 11. [ ] evaluate exam of TQA gold article
-12. [ ] Use to evaluate GPT-generated content
-    * [ ] use the recorded files with Davinci-003
+12. [.] Use to evaluate GPT-generated content
+    * [X] use the recorded files with Davinci-003
     * [ ] use gpt 4.0
+    * [ ] evaluate
 15. [ ] need better QA system. Options:
     * [x] FLAN-T5-large finetuned on squad2  (prepared code)
         * [x]  rerun analysis
     * [x] gpt2-large
     * [ ] Mixtral
+    * [x] self-rated prompt on FLAN-T5-large
 16. [ ] Integrate in other frameworks
     * [ ] DSPy
     * [ ] LLM360 
@@ -48,5 +55,6 @@
     * [ ] keep track of system runs, present as EXAM table
     * [ ] upload new runs, to produce new scores
     * [ ] add new exam questions, recompute all EXAM scores
-20. [ ] merge with Naghmeh's chatGPT generated questions
+20. [x] merge with Naghmeh's chatGPT generated questions
+    * [.] annotate car-y3 with Naghmeh's questions and self-rated prompt
 30. [ ] different dataset?
