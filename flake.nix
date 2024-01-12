@@ -17,6 +17,7 @@
             mypy
             jedi
             (ps.callPackage ./pylatex.nix {})
+            (ps.callPackage ./trec-car-tools.nix {})
           ];
         };
       }
