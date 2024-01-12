@@ -78,18 +78,24 @@ def parse_davinci_response_file(file_path:Path) -> List[DavinciResponse]:
 
 # --------- load TQA information to get queryID info ---------------
 
-def parse_davinci_into_dict(section_file_path:Path, page_file_path) -> Dict[str, List[DavinciResponse]]:
-
-    davinci_sections = parse_davinci_response_file(file_path=section_file_path)
-    davinci_pages = parse_davinci_response_file(file_path=page_file_path)
+def parse_davinci_into_dict(page_file_path:Optional[Path], section_file_path:Optional[Path]) -> Dict[str, List[DavinciResponse]]:
 
     davinci_by_query_id = defaultdict(list)    
 
-    for resp in davinci_pages:
-        davinci_by_query_id[resp.queryId].append(resp)
+    if page_file_path is not None:
+        davinci_pages = parse_davinci_response_file(file_path=page_file_path)
+        for resp in davinci_pages:
+            davinci_by_query_id[resp.queryId].append(resp)
 
-    for resp in davinci_sections:
-        davinci_by_query_id[resp.queryId].append(resp)
+    if section_file_path is not None:
+        davinci_sections = parse_davinci_response_file(file_path=section_file_path)
+        for resp in davinci_sections:
+            davinci_by_query_id[resp.queryId].append(resp)
+
+
+    if len(davinci_by_query_id) == 0:
+        raise RuntimeError(f'No davinci responses collected from input files. Page: {page_file_path}, Section: {section_file_path}')
+
 
     return davinci_by_query_id
 
@@ -109,7 +115,7 @@ def davinci_response_to_full_paragraph(query_id:str, query_facet_id:Optional[str
     # turn each chunk into its own paragraph
     for index, page_para_text in enumerate(page_para_texts):
         # print(f'{query_id}/{query_facet_id} {len(page_para_text)} {page_para_text}')
-        print(f'{len(page_para_text)} {page_para_text}')
+        # print(f'{len(page_para_text)} {page_para_text}')
         
         page_para_id = f'davinci3:{get_md5_hash(page_para_text)}'
         rank = index+1
@@ -132,7 +138,7 @@ def davinci_response_to_full_paragraph(query_id:str, query_facet_id:Optional[str
     return result
 
 
-def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Path, page_davinci_path:Path, car_outlines_path:Path, max_queries:Optional[int]=None) -> List[QueryWithFullParagraphList]:
+def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Optional[Path], page_davinci_path:Optional[Path], car_outlines_path:Path, max_queries:Optional[int]=None) -> List[QueryWithFullParagraphList]:
     result:List[QueryWithFullParagraphList]=list()
     davinci_by_query_id = parse_davinci_into_dict(section_file_path=section_davinci_path, page_file_path=page_davinci_path)
 
@@ -164,10 +170,8 @@ def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Path, p
             
             #~ section text
 
-
         qp = QueryWithFullParagraphList(queryId=query_id, paragraphs=paragraphs)
 
-        print('qp',qp)
         result.append(qp)
 
     return result
@@ -217,10 +221,10 @@ def main():
     parser = argparse.ArgumentParser(description="Convert Davinci2 for EXAM scoring"
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-p','--davinci-page-file', type=str, metavar='DAVINCI_PAGE_FILE', required=True
+    parser.add_argument('-p','--davinci-page-file', type=str, metavar='DAVINCI_PAGE_FILE'
                         , help='Input jsonl file for page-level Davinci3 responses'
                         )
-    parser.add_argument('-s','--davinci-section-file', type=str, metavar='DAVINCI_SECTION_FILE', required=True
+    parser.add_argument('-s','--davinci-section-file', type=str, metavar='DAVINCI_SECTION_FILE'
                         , help='Input jsonl file for section-level Davinci3 responses'
                         )
     parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR', required=True
