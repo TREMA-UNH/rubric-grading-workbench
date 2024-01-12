@@ -9,7 +9,7 @@
     flake-utils.lib.eachDefaultSystem (system: 
       let pkgs = nixpkgs.legacyPackages.${system}; in {
         devShells.default = dspy-nix.lib.${system}.mkShell {
-          target = "rocm";
+          target = "cuda";
           packages = ps: with ps; [
             pydantic
             fuzzywuzzy
