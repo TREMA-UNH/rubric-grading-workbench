@@ -180,7 +180,7 @@ def selfRated_vs_judged_correlation(grade_filter, query_paragraphs):
         for judgments in [{0},{1,2,3}]:
             print(f"\n predicted_judgment {labels} /  exact_judgment {judgments}")
 
-            corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs, grade_filter=grade_filter, judgments=judgments, prediction=labels, min_answers=1)
+            corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs, grade_filter=grade_filter, judgments=judgments, prediction=labels, min_answers=1, use_ratings=True)
             print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
 
