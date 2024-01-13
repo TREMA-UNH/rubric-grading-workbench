@@ -142,6 +142,7 @@ def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Optiona
     result:List[QueryWithFullParagraphList]=list()
     davinci_by_query_id = parse_davinci_into_dict(section_file_path=section_davinci_path, page_file_path=page_davinci_path)
 
+
     page:trec_car.Page
     for page in itertools.islice(trec_car.iter_outlines(open(car_outlines_path, 'rb')), max_queries):
         query_id = page.page_id

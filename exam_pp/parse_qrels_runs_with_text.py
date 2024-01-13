@@ -146,7 +146,7 @@ class QueryWithFullParagraphList():
 
 def parseQueryWithFullParagraphList(line:str) -> QueryWithFullParagraphList:
     # Parse the JSON content of the line
-    print(line)
+    # print(line)
     data = json.loads(line)
     return QueryWithFullParagraphList(data[0], [FullParagraphData.parse_obj(paraInfo) for paraInfo in data[1]])
 
