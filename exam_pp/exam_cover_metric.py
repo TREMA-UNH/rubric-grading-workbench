@@ -22,8 +22,9 @@ import gzip
 def frac(num:int,den:int)->float:
     return ((1.0 * num) / (1.0 * den)) if den>0 else 0.0
 
+                                              
 class ExamCoverScorer():
-    '''Computes per-query EXAM and n-EXAM scores.'''
+    '''Computes per-query EXAM and n-EXAM scores. Please construct via ExamCoverScoreFactory'''
     def __init__(self, grade_filter:GradeFilter
                  , paragraphs_for_normalization:Optional[List[FullParagraphData]]=None
                  , totalCorrect: Optional[int]=None
@@ -33,7 +34,7 @@ class ExamCoverScorer():
         if totalQuestions is not None:
             self.totalQuestions = totalQuestions
         elif(paragraphs_for_normalization is not None):
-            self.totalQuestions = ExamCoverScorer.countTotalQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
+            self.totalQuestions = self.__countTotalQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
         else:
             raise RuntimeError("Must set either `totalQuestions` or `paragraphs_for_normalization`")
         
@@ -41,22 +42,20 @@ class ExamCoverScorer():
         if totalCorrect is not None:
             self.totalCorrect = totalCorrect
         elif(paragraphs_for_normalization is not None):
-            self.totalCorrect = ExamCoverScorer.countTotalCorrectQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
+            self.totalCorrect = self.__countTotalCorrectQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
         else:
             raise RuntimeError("Must set either `totalCorrect` or `paragraphs_for_normalization`")
 
         
 
-    @staticmethod
-    def countTotalCorrectQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
+    def __countTotalCorrectQuestions(self,paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
         correct:Set[str] = set().union(*[set(grade.correctAnswered) 
                                     for para in paras 
                                         for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
                                         ])
         return len(correct)
 
-    @staticmethod
-    def countTotalQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
+    def __countTotalQuestions(self,paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
         answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
                                     for para in paras 
                                         for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
@@ -67,7 +66,7 @@ class ExamCoverScorer():
 
     def _examCoverageScore(self, paras:List[FullParagraphData], normalizer:int)->float:
         '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
-        num_correct =ExamCoverScorer.countTotalCorrectQuestions(paras, grade_filter=self.grade_filter)
+        num_correct = self.__countTotalCorrectQuestions(paras, grade_filter=self.grade_filter)
         exam_score = frac(num_correct, normalizer)
         return exam_score
 
@@ -79,7 +78,21 @@ class ExamCoverScorer():
         '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
         return self._examCoverageScore(paras=method_paras, normalizer=self.totalCorrect)
 
+# ---------------------------------
+class ExamCoverScorerFactory():
+    '''Factory for initializing ExamCoverScorers'''
+    def __init__(self, grade_filter:GradeFilter):
+        self.grade_filter = grade_filter
 
+
+    def produce_from_paragraphs(self, paragraphs_for_normalization:Optional[List[FullParagraphData]]) -> ExamCoverScorer:
+        return ExamCoverScorer(grade_filter=self.grade_filter, paragraphs_for_normalization=paragraphs_for_normalization)
+    
+    def produce_from_counts(self,  totalCorrect: int, totalQuestions:int)->ExamCoverScorer:
+        return ExamCoverScorer(grade_filter=self.grade_filter, totalCorrect=totalCorrect, totalQuestions = totalQuestions)
+
+                                            
+    
 # -------------------------------
 
 # @dataclass
@@ -102,7 +115,7 @@ class ExamCoverEvalsDict(dict):
 
 OVERALL_ENTRY = "_overall_"
 
-def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
+def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
     '''Workhorse to compute exam cover scores from exam-annotated paragraphs.
     Load input file with `parseQueryWithFullParagraphs`
     Write output file with `write_exam_results`
@@ -115,7 +128,8 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
 
-        exam_cover_scorer = ExamCoverScorer(grade_filter=grade_filter, paragraphs_for_normalization=paragraphs)
+        # exam_cover_scorer = ExamCoverScorer(grade_filter=grade_filter, paragraphs_for_normalization=paragraphs)
+        exam_cover_scorer = exam_factory.produce_from_paragraphs(paragraphs_for_normalization=paragraphs)
 
         overallExamScore = exam_cover_scorer.plainExamCoverageScore(paragraphs)
 
@@ -135,6 +149,9 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
             resultsPerMethod[method].examCoverPerQuery[query_id] = examScore
 
 
+
+    # aggregate query-wise exam scores into overall scores.
+
     def overallExam(examCoverPerQuery:List[float])->Tuple[float,float]:
         if(len(examCoverPerQuery)>=1):
             avgExam =   statistics.mean(examCoverPerQuery)
@@ -146,7 +163,6 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
         else:
             return (0.0,0.0)
 
-    # aggregate query-wise exam scores into overall scores.
     for  method,examEvals in resultsPerMethod.items():
         examEvals.nExamScore, examEvals.nExamScoreStd = overallExam(examEvals.nExamCoverPerQuery.values())
         print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {examEvals.nExamScore:.2f} +/0 { examEvals.nExamScoreStd:.3f}')
@@ -156,11 +172,11 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
     return resultsPerMethod
 
-def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, grade_filter:GradeFilter, rank_cut_off:int=20):
+def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, exam_factory:ExamCoverScorerFactory, rank_cut_off:int=20):
     """export ExamCoverScores to a file:  which method covers most questions? """
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
     
-    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter, rank_cut_off=rank_cut_off)
+    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory, rank_cut_off=rank_cut_off)
     
     write_exam_results(out_jsonl_file, resultsPerMethod)
 
@@ -209,10 +225,21 @@ def main():
     parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output JSONL.gz file name, where exam results will be written to', default='output.qrels')
 
     parser.add_argument('-m', '--model', type=str, metavar="MODEL_NAME", help='name of huggingface model that created exam grades')
+    parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
+    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
     args = parser.parse_args()    
-    compute_exam_cover_scores_file(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output, model_name=args.model)
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set)
+
+
+    # Parse the arguments
+    args = parser.parse_args()    
+    exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter)
+
+    compute_exam_cover_scores_file(exam_input_file=args.exam_annotated_file, out_jsonl_file=args.output, model_name=args.model, exam_factory=exam_factory)
 
 
 if __name__ == "__main__":

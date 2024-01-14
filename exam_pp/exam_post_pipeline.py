@@ -102,8 +102,8 @@ def run_leaderboard(leaderboard_file:Path, grade_filter, query_paragraphs):
 
     with open(leaderboard_file, 'wt') as file:
 
-
-        resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter)
+        exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter)
+        resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
         # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
         # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
 
@@ -116,8 +116,6 @@ def run_leaderboard(leaderboard_file:Path, grade_filter, query_paragraphs):
         file.writelines(table + ["\n", f' nExam\t{nExamCorrelation}', f' exam\t{examCorrelation}','\n'])
 
         file.writelines(["\n","\n"])
-
-
 
         file.close()
 
