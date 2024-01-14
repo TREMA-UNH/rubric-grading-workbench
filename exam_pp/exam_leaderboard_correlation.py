@@ -120,7 +120,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter):
+def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter)->[str]:
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -146,6 +146,8 @@ def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter):
                         ])
                              for e in evals_]
     print('\n'.join([f'EXAM scores produced with {grade_filter}', header]+lines))
+    return [f'EXAM scores produced with {grade_filter}', header]+lines
+
 
 def print_leaderboard_eval(evals:List[ExamCoverEvals], grade_filter:GradeFilter):
     '''Print the Leaderboard in trec_eval evaluation output format.

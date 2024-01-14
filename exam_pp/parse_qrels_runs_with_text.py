@@ -33,6 +33,7 @@ class GradeFilter():
     prompt_class: Optional[str]
     is_self_rated: Optional[bool]
     min_self_rating: Optional[int]
+    question_set:Optional[str]
 
 
     def filter(self, grade:ExamGrades)-> bool:
@@ -70,13 +71,25 @@ class GradeFilter():
                 if not any( (rating.self_rating >= self.min_self_rating  for rating in grade.self_ratings) ):
                     return False
 
+        if self.question_set is not None:
+            if self.question_set == "tqa":
+                is_tqa_question = grade.answers[0][0].startswith("NDQ_")
+                if not is_tqa_question:
+                    return False
+                
+            if self.question_set == "naghmeh":
+                is_naghmeh_question = grade.answers[0][0].startswith("tqa2:")
+                if not is_naghmeh_question:
+                    return False
+
         return True
 
     def get_min_grade_filter(self, min_self_rating:int):
         return GradeFilter(model_name=self.model_name
                            , prompt_class=self.prompt_class
                            , is_self_rated=self.is_self_rated
-                           , min_self_rating=min_self_rating)
+                           , min_self_rating=min_self_rating
+                           , question_set=self.question_set)
 
 class Judgment(BaseModel):
     paragraphId : str

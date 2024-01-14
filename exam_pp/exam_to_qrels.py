@@ -5,6 +5,7 @@ from typing import List
 from parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
 from question_types import QuestionPromptWithChoices,QuestionPrompt
 
+
 from pathlib import Path
 
 
@@ -19,7 +20,7 @@ class QrelEntry:
 
 def exam_to_qrels_files(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
-    qrel_entries = exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
+    qrel_entries = conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
    
     write_qrel_file(qrel_out_file, qrel_entries)
 
@@ -29,7 +30,7 @@ def write_qrel_file(qrel_out_file, qrel_entries):
         file.writelines(entry.format_qrels() for entry in qrel_entries)
         file.close()
 
-def exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
     '''workhorse to convert exam-annotated paragraphs into qrel entries.
     load input file with `parseQueryWithFullParagraphs`
     write qrels file with `write_qrel_file`

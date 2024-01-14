@@ -16,44 +16,71 @@ from pathlib import Path
 from pydantic import BaseModel
 import gzip
 
-def plainExamCoverageScore(method_paras:List[FullParagraphData], grade_filter:GradeFilter)->float:
-    '''Plain EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`'''
-    return examCoverageScore(paras=method_paras, grade_filter=grade_filter)
-
-def nExamCoverageScore(method_paras:List[FullParagraphData], all_paras:List[FullParagraphData], grade_filter:GradeFilter)-> float:
-    '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
-    return examCoverageScore(paras=method_paras, grade_filter=grade_filter, total_questions=totalCorrectQuestions(paras=all_paras, grade_filter=grade_filter))
 
 
 
 def frac(num:int,den:int)->float:
     return ((1.0 * num) / (1.0 * den)) if den>0 else 0.0
 
+class ExamCoverScorer():
+    '''Computes per-query EXAM and n-EXAM scores.'''
+    def __init__(self, grade_filter:GradeFilter
+                 , paragraphs_for_normalization:Optional[List[FullParagraphData]]=None
+                 , totalCorrect: Optional[int]=None
+                 , totalQuestions:Optional[int]=None):
+        self.grade_filter = grade_filter
+
+        if totalQuestions is not None:
+            self.totalQuestions = totalQuestions
+        elif(paragraphs_for_normalization is not None):
+            self.totalQuestions = ExamCoverScorer.countTotalQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
+        else:
+            raise RuntimeError("Must set either `totalQuestions` or `paragraphs_for_normalization`")
+        
+
+        if totalCorrect is not None:
+            self.totalCorrect = totalCorrect
+        elif(paragraphs_for_normalization is not None):
+            self.totalCorrect = ExamCoverScorer.countTotalCorrectQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
+        else:
+            raise RuntimeError("Must set either `totalCorrect` or `paragraphs_for_normalization`")
+
+        
+
+    @staticmethod
+    def countTotalCorrectQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
+        correct:Set[str] = set().union(*[set(grade.correctAnswered) 
+                                    for para in paras 
+                                        for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
+                                        ])
+        return len(correct)
+
+    @staticmethod
+    def countTotalQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
+        answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
+                                    for para in paras 
+                                        for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
+                                        ])
+        return len(answered)
 
 
-def totalQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
-    answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
-                                for para in paras 
-                                    for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
-                                    ])
-    return len(answered)
+
+    def _examCoverageScore(self, paras:List[FullParagraphData], normalizer:int)->float:
+        '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
+        num_correct =ExamCoverScorer.countTotalCorrectQuestions(paras, grade_filter=self.grade_filter)
+        exam_score = frac(num_correct, normalizer)
+        return exam_score
+
+    def plainExamCoverageScore(self, method_paras:List[FullParagraphData])->float:
+        '''Plain EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`'''
+        return self._examCoverageScore(paras=method_paras,  normalizer=self.totalQuestions)
+
+    def nExamCoverageScore(self, method_paras:List[FullParagraphData])-> float:
+        '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
+        return self._examCoverageScore(paras=method_paras, normalizer=self.totalCorrect)
 
 
-def totalCorrectQuestions(paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
-    correct:Set[str] = set().union(*[set(grade.correctAnswered) 
-                                for para in paras 
-                                    for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
-                                    ])
-    return len(correct)
-
-def examCoverageScore(paras:List[FullParagraphData], grade_filter:GradeFilter, total_questions:Optional[int]=None)->float:
-    '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
-    num_correct =totalCorrectQuestions(paras, grade_filter=grade_filter)
-    if total_questions is None:
-        total_questions = totalQuestions(paras, grade_filter=grade_filter)
-    examCoverScore = frac(num_correct, total_questions)
-    return examCoverScore
-
+# -------------------------------
 
 # @dataclass
 class ExamCoverEvals(BaseModel):
@@ -88,10 +115,9 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
 
+        exam_cover_scorer = ExamCoverScorer(grade_filter=grade_filter, paragraphs_for_normalization=paragraphs)
 
-        total_correct = totalCorrectQuestions(paragraphs, grade_filter=grade_filter)
-        total_questions = totalQuestions(paragraphs, grade_filter=grade_filter)
-        overallExamScore = examCoverageScore(paragraphs, grade_filter=grade_filter)
+        overallExamScore = exam_cover_scorer.plainExamCoverageScore(paragraphs)
 
         print(f'{query_id}, overall ratio {overallExamScore}')
         resultsPerMethod[OVERALL_ENTRY].examCoverPerQuery[query_id]=overallExamScore
@@ -102,10 +128,10 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
         # computer query-wise exam scores for all methods
         for method, paragraphs in top_per_method.items():
-            nexamScore = examCoverageScore(paragraphs, total_questions = total_correct, grade_filter=grade_filter)
+            nexamScore = exam_cover_scorer.nExamCoverageScore(paragraphs)
             resultsPerMethod[method].nExamCoverPerQuery[query_id] = nexamScore
 
-            examScore = examCoverageScore(paragraphs, total_questions = total_questions, grade_filter=grade_filter)
+            examScore = exam_cover_scorer.plainExamCoverageScore(paragraphs)
             resultsPerMethod[method].examCoverPerQuery[query_id] = examScore
 
 
@@ -123,18 +149,18 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
     # aggregate query-wise exam scores into overall scores.
     for  method,examEvals in resultsPerMethod.items():
         examEvals.nExamScore, examEvals.nExamScoreStd = overallExam(examEvals.nExamCoverPerQuery.values())
-        # print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
+        print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {examEvals.nExamScore:.2f} +/0 { examEvals.nExamScoreStd:.3f}')
 
         examEvals.examScore, examEvals.examScoreStd = overallExam(examEvals.examCoverPerQuery.values())
-        # print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {avgExam:.2f} +/0 {stdExam:.3f}')
+        print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {examEvals.examScore:.2f} +/0 {examEvals.examScoreStd:.3f}')
 
     return resultsPerMethod
 
 def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, grade_filter:GradeFilter, rank_cut_off:int=20):
-    """which method covers most questions? """
+    """export ExamCoverScores to a file:  which method covers most questions? """
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
     
-    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, model_name, rank_cut_off)
+    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter, rank_cut_off=rank_cut_off)
     
     write_exam_results(out_jsonl_file, resultsPerMethod)
 

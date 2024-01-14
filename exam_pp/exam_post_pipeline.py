@@ -62,14 +62,14 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                         , label_to_judgment_kappa=label_to_judgment_kappa)
         
 
+def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter):
+    qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
+   
+    exam_to_qrels.write_qrel_file(qrel_out_file, qrel_entries)
 
-def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter, use_ratings:bool):
-    exam_to_qrels.exam_to_qrels_files(exam_input_file=exam_input_file, qrel_out_file=qrel_out_file, grade_filter=grade_filter)
 
-    # if needed to add more data to the `QueryWithFullParagraphList` objects, write with this function.
-    # exam_judgment_correlation.dumpQueryWithFullParagraphList()
 
-    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ratings, query_paragraphs):
     corrAll:ConfusionStats
     corrPerQuery:Dict[str, ConfusionStats]
 
@@ -87,9 +87,9 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter, use_
 
 
     if use_ratings:
-        selfRated_vs_judged_correlation(grade_filter, query_paragraphs)
+        selfRated_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs)
     else:
-        binary_vs_judged_correlation(grade_filter, query_paragraphs)
+        binary_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs)
 
     print("\n\n exam_vs_judged")
 
@@ -98,17 +98,30 @@ def run(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter, use_
         print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
     print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
+def run_leaderboard(leaderboard_file:Path, grade_filter, query_paragraphs):
 
-    resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter)
-    # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
-    # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
-    exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), grade_filter=grade_filter)
+    with open(leaderboard_file, 'wt') as file:
 
-    nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
-    print(f' nExam:{nExamCorrelation}')
-    print(f' exam:{examCorrelation}')
 
-def binary_vs_judged_correlation(grade_filter, query_paragraphs):
+        resultsPerMethod = compute_exam_cover_scores(query_paragraphs, grade_filter=grade_filter)
+        # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
+        # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
+
+        table = exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), grade_filter=grade_filter)
+        
+        nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
+        print(f' nExam:{nExamCorrelation}')
+        print(f' exam:{examCorrelation}')
+
+        file.writelines(table + ["\n", f' nExam\t{nExamCorrelation}', f' exam\t{examCorrelation}','\n'])
+
+        file.writelines(["\n","\n"])
+
+
+
+        file.close()
+
+def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs):
     print("\n\n binary correlation")
    
     table_printer = print_correlation_table.TablePrinter()
@@ -168,9 +181,9 @@ def binary_vs_judged_correlation(grade_filter, query_paragraphs):
     binaryCorrelation(min_answers=5)
     detailedCorrelation(min_answers=5)
 
-    table_printer.export(Path("./corelation_tables.tex"))
+    table_printer.export(Path(correlation_out_file))
 
-def selfRated_vs_judged_correlation(grade_filter, query_paragraphs):
+def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, query_paragraphs):
     print("\n\n binary correlation")
 
     table_printer = print_correlation_table.TablePrinter()
@@ -275,7 +288,7 @@ def selfRated_vs_judged_correlation(grade_filter, query_paragraphs):
     correlation_analysis(min_answers=2)
     correlation_analysis(min_answers=5)
 
-    table_printer.export(Path("./corelation_tables.tex"))
+    table_printer.export(correlation_out_file)
 
 
 
@@ -385,17 +398,34 @@ def main():
                         , help='json file that annotates each paragraph with a number of anserable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Output QREL file name', default='output.qrels')
+    parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
+    parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
+    parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Leaderboard to this file ', default=None)
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
+    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
     args = parser.parse_args()    
-    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None)
-    run(exam_input_file=args.exam_annotated_file, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_ratings=args.use_ratings)
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set)
 
+
+    exam_input_file=args.exam_annotated_file
+    use_ratings=args.use_ratings
+
+    query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+
+    if args.qrel_out is not None:
+        export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter)
+
+    if args.correlation_out is not None:
+        run_interannotator_agreement(correlation_out_file=args.correlation_out, grade_filter=grade_filter, use_ratings=use_ratings, query_paragraphs=query_paragraphs)
+
+
+    if args.leaderboard_out is not None:
+        run_leaderboard(leaderboard_file=args.leaderboard_out, grade_filter=grade_filter, query_paragraphs=query_paragraphs)
 
 
 
