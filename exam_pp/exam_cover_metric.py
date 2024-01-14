@@ -1,5 +1,5 @@
 
-
+import abc
 from collections import defaultdict
 from math import nan
 import math
@@ -22,53 +22,20 @@ import gzip
 def frac(num:int,den:int)->float:
     return ((1.0 * num) / (1.0 * den)) if den>0 else 0.0
 
-                                              
-class ExamCoverScorer():
+
+
+
+class ExamCoverScorer(abc.ABC):
     '''Computes per-query EXAM and n-EXAM scores. Please construct via ExamCoverScoreFactory'''
-    def __init__(self, grade_filter:GradeFilter
-                 , paragraphs_for_normalization:Optional[List[FullParagraphData]]=None
-                 , totalCorrect: Optional[int]=None
-                 , totalQuestions:Optional[int]=None):
-        self.grade_filter = grade_filter
+    
+    def __init__(self):
+        self.totalQuestions:int = 0
+        self.totalCorrect:int = 0
 
-        if totalQuestions is not None:
-            self.totalQuestions = totalQuestions
-        elif(paragraphs_for_normalization is not None):
-            self.totalQuestions = self.__countTotalQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
-        else:
-            raise RuntimeError("Must set either `totalQuestions` or `paragraphs_for_normalization`")
-        
-
-        if totalCorrect is not None:
-            self.totalCorrect = totalCorrect
-        elif(paragraphs_for_normalization is not None):
-            self.totalCorrect = self.__countTotalCorrectQuestions(paras=paragraphs_for_normalization, grade_filter=self.grade_filter)
-        else:
-            raise RuntimeError("Must set either `totalCorrect` or `paragraphs_for_normalization`")
-
-        
-
-    def __countTotalCorrectQuestions(self,paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
-        correct:Set[str] = set().union(*[set(grade.correctAnswered) 
-                                    for para in paras 
-                                        for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
-                                        ])
-        return len(correct)
-
-    def __countTotalQuestions(self,paras:List[FullParagraphData], grade_filter:GradeFilter)->int:
-        answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
-                                    for para in paras 
-                                        for grade in para.retrieve_exam_grade(grade_filter=grade_filter)
-                                        ])
-        return len(answered)
-
-
-
+    @abc.abstractmethod
     def _examCoverageScore(self, paras:List[FullParagraphData], normalizer:int)->float:
-        '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
-        num_correct = self.__countTotalCorrectQuestions(paras, grade_filter=self.grade_filter)
-        exam_score = frac(num_correct, normalizer)
-        return exam_score
+        pass
+
 
     def plainExamCoverageScore(self, method_paras:List[FullParagraphData])->float:
         '''Plain EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`'''
@@ -78,19 +45,145 @@ class ExamCoverScorer():
         '''Normalized EXAM cover score: fraction of all questions that could be correctly answered with the provided `method_paras`, normalized by the set of questions that were answerable with any available text (as given in `all_paras`)'''
         return self._examCoverageScore(paras=method_paras, normalizer=self.totalCorrect)
 
+
+class ExamCoverScorerCorrectAnswer(ExamCoverScorer):
+    def __init__(self, grade_filter:GradeFilter
+                 , paragraphs_for_normalization:Optional[List[FullParagraphData]]=None
+                 , totalCorrect: Optional[int]=None
+                 , totalQuestions:Optional[int]=None):
+        super().__init__()
+        self.grade_filter = grade_filter
+
+        if totalQuestions is not None:
+            self.totalQuestions = totalQuestions
+        elif(paragraphs_for_normalization is not None):
+            self.totalQuestions = self.__countTotalQuestions(paras=paragraphs_for_normalization)
+        else:
+            raise RuntimeError("Must set either `totalQuestions` or `paragraphs_for_normalization`")
+        
+
+        if totalCorrect is not None:
+            self.totalCorrect = totalCorrect
+        elif(paragraphs_for_normalization is not None):
+            self.totalCorrect = self.__countTotalCorrectQuestions(paras=paragraphs_for_normalization)
+        else:
+            raise RuntimeError("Must set either `totalCorrect` or `paragraphs_for_normalization`")
+
+        
+
+    def __countTotalCorrectQuestions(self,paras:List[FullParagraphData])->int:
+        correct:Set[str] = set().union(*[set(grade.correctAnswered) 
+                                    for para in paras 
+                                        for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                        ])
+        return len(correct)
+
+    def __countTotalQuestions(self,paras:List[FullParagraphData])->int:
+        answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
+                                    for para in paras 
+                                        for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                        ])
+        return len(answered)
+
+
+    def _examCoverageScore(self, paras:List[FullParagraphData], normalizer:int)->float:
+        '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
+        num_correct = self.__countTotalCorrectQuestions(paras)
+        exam_score = frac(num_correct, normalizer)
+        return exam_score
+
+
+
+class ExamCoverScorerSelfRatings(ExamCoverScorer):
+
+    def __init__(self, grade_filter:GradeFilter
+                 , min_self_rating:int
+                 , paragraphs_for_normalization:Optional[List[FullParagraphData]]=None
+                 , totalCorrect: Optional[int]=None
+                 , totalQuestions:Optional[int]=None):
+        super().__init__()
+        self.grade_filter = grade_filter
+        self.min_self_rating = min_self_rating
+
+        if totalQuestions is not None:
+            self.totalQuestions = totalQuestions
+        elif(paragraphs_for_normalization is not None):
+            self.totalQuestions = self.__countTotalQuestions(paras=paragraphs_for_normalization)
+        else:
+            raise RuntimeError("Must set either `totalQuestions` or `paragraphs_for_normalization`")
+        
+
+        if totalCorrect is not None:
+            self.totalCorrect = totalCorrect
+        elif(paragraphs_for_normalization is not None):
+            self.totalCorrect = self.__countTotalCorrectQuestions(paras=paragraphs_for_normalization)
+        else:
+            raise RuntimeError("Must set either `totalCorrect` or `paragraphs_for_normalization`")
+
+
+    def __countTotalCorrectQuestions(self,paras:List[FullParagraphData])->int:
+        correct:Set[str] = { rate.question_id
+                                            for para in paras 
+                                                for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                                        for rate in grade.self_ratings_as_iterable()
+                                                            if rate.self_rating >= self.min_self_rating
+                            }
+        return len(correct)
+
+    def __countTotalQuestions(self,paras:List[FullParagraphData])->int:
+        answered:Set[str] = { rate.question_id
+                                            for para in paras 
+                                                for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                                        for rate in grade.self_ratings_as_iterable()
+                            }
+        return len(answered)
+
+    def _examCoverageScore(self, paras:List[FullParagraphData], normalizer:int)->float:
+        '''Compute the exam coverage score for one query (and one method), based on a list of exam-graded `FullParagraphData`'''
+        num_correct = self.__countTotalCorrectQuestions(paras=paras)
+        exam_score = frac(num_correct, normalizer)
+        return exam_score
+
+
+
+
 # ---------------------------------
 class ExamCoverScorerFactory():
     '''Factory for initializing ExamCoverScorers'''
-    def __init__(self, grade_filter:GradeFilter):
+
+    def __init__(self, grade_filter:GradeFilter, min_self_rating:Optional[int]):
+        ''' if min_self_rating == None
+                will use `grade.correctAnswer`
+            if min_self_rating is set,
+                will use `grade.self_ratings` with the respective minimum rate.
+        '''
         self.grade_filter = grade_filter
+        self.min_self_rating = min_self_rating
 
 
     def produce_from_paragraphs(self, paragraphs_for_normalization:Optional[List[FullParagraphData]]) -> ExamCoverScorer:
-        return ExamCoverScorer(grade_filter=self.grade_filter, paragraphs_for_normalization=paragraphs_for_normalization)
-    
-    def produce_from_counts(self,  totalCorrect: int, totalQuestions:int)->ExamCoverScorer:
-        return ExamCoverScorer(grade_filter=self.grade_filter, totalCorrect=totalCorrect, totalQuestions = totalQuestions)
+        if self.min_self_rating is None:
+            return ExamCoverScorerCorrectAnswer(grade_filter=self.grade_filter
+                                                , paragraphs_for_normalization=paragraphs_for_normalization
+                                                )
+        else:
+            return ExamCoverScorerSelfRatings( grade_filter=self.grade_filter 
+                                              , min_self_rating=self.min_self_rating
+                                              , paragraphs_for_normalization=paragraphs_for_normalization
+                                              )
 
+    def produce_from_counts(self,  totalCorrect: int, totalQuestions:int)->ExamCoverScorer:
+        if self.min_self_rating is None:
+            return ExamCoverScorerCorrectAnswer(grade_filter=self.grade_filter
+                                                , totalCorrect=totalCorrect
+                                                , totalQuestions = totalQuestions
+                                                )
+        else:
+            return ExamCoverScorerSelfRatings(  grade_filter=self.grade_filter
+                                                , min_self_rating=self.min_self_rating
+                                                , totalCorrect=totalCorrect
+                                                , totalQuestions = totalQuestions
+                                                )
                                             
     
 # -------------------------------

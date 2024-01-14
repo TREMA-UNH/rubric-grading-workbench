@@ -98,24 +98,34 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
         print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
     print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
-def run_leaderboard(leaderboard_file:Path, grade_filter, query_paragraphs):
+def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,  min_self_rating = Optional[int]):
 
     with open(leaderboard_file, 'wt') as file:
 
-        exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter)
-        resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
-        # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
-        # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values())
+        min_rating:Optional[int]
 
-        table = exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), grade_filter=grade_filter)
+        for min_rating in ([min_self_rating] if min_self_rating is not None else ([1,2,3,4,5] if use_ratings else [None])):
+            exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter, min_self_rating=min_rating)
+            resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
+            # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
+            # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values(), grade_filter=grade_filter)
+
+            table = exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values())
+            
+            nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
+            print(f'min_rating={str(min_rating)} nExam:{nExamCorrelation}')
+            print(f'min_rating={str(min_rating)}  exam:{examCorrelation}')
+
         
-        nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
-        print(f' nExam:{nExamCorrelation}')
-        print(f' exam:{examCorrelation}')
+            file.writelines("\n".join(table))
+            file.writelines( ["\n"
+                            , f' EXAM scores produced with {grade_filter}\n'
+                            , f' min_rating\t{str(min_rating)}\n'
+                            , f' nExam\t{nExamCorrelation.pretty_print()}\n'
+                            , f' exam\t{examCorrelation.pretty_print()}\n'
+                            ,'\n'])
 
-        file.writelines(table + ["\n", f' nExam\t{nExamCorrelation}', f' exam\t{examCorrelation}','\n'])
-
-        file.writelines(["\n","\n"])
+            file.writelines(["\n","\n"])
 
         file.close()
 
@@ -403,6 +413,7 @@ def main():
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
+    parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
     parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
@@ -423,7 +434,7 @@ def main():
 
 
     if args.leaderboard_out is not None:
-        run_leaderboard(leaderboard_file=args.leaderboard_out, grade_filter=grade_filter, query_paragraphs=query_paragraphs)
+        run_leaderboard(leaderboard_file=args.leaderboard_out, grade_filter=grade_filter, query_paragraphs=query_paragraphs, use_ratings=use_ratings, min_self_rating=args.min_self_rating)
 
 
 

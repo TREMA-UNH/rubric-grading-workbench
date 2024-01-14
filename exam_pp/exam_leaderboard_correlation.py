@@ -59,6 +59,10 @@ class CorrelationStats():
     spearman_correlation:float
     kendall_correlation:float
 
+    def pretty_print(self)->str:
+        return f'spearman_correlation ={self.spearman_correlation:.2f}\tkendall_correlation = {self.kendall_correlation:.2f}'
+
+
 def compatible_kendalltau(ranks1, ranks2)->Tuple[float,float]:
     from packaging import version
 
@@ -120,7 +124,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter)->[str]:
+def leaderboard_table(evals:List[ExamCoverEvals])->[str]:
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -145,8 +149,8 @@ def leaderboard_table(evals:List[ExamCoverEvals], grade_filter:GradeFilter)->[st
                         , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
-    print('\n'.join([f'EXAM scores produced with {grade_filter}', header]+lines))
-    return [f'EXAM scores produced with {grade_filter}', header]+lines
+    # print('\n'.join([f'EXAM scores produced with {grade_filter}', header]+lines))
+    return [header]+lines
 
 
 def print_leaderboard_eval(evals:List[ExamCoverEvals], grade_filter:GradeFilter):

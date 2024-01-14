@@ -26,6 +26,11 @@ class ExamGrades(BaseModel):
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
 
+    def self_ratings_as_iterable(self):
+        if self.self_ratings is None:
+            return []
+        else:
+            return self.self_ratings
 
 @dataclass
 class GradeFilter():
