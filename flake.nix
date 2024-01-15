@@ -8,7 +8,9 @@
   outputs = inputs@{ self, nixpkgs, flake-utils, dspy-nix, ... }:
     flake-utils.lib.eachDefaultSystem (system: 
       let pkgs = nixpkgs.legacyPackages.${system}; in {
-        devShells.default = dspy-nix.lib.${system}.mkShell {
+        packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
+
+        devShells.default = (dspy-nix.lib.${system}.mkShell {
           target = "cuda";
           packages = ps: with ps; [
             pydantic
@@ -19,7 +21,9 @@
             (ps.callPackage ./pylatex.nix {})
             (ps.callPackage ./trec-car-tools.nix {})
           ];
-        };
+        }).overrideAttrs (oldAttrs: {
+          nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [self.outputs.packages.${system}.trec-eval];
+        });
       }
     );
 }
