@@ -16,6 +16,8 @@ import exam_leaderboard_correlation
 import exam_judgment_correlation
 from exam_judgment_correlation import ConfusionStats
 
+from exam_run_trec_eval import trec_eval_leaderboard
+
 # for correlation table formatting
 def fmt_judgments(js:Set[int])->str:
     return '+'.join([str(j) for j in js])
@@ -102,9 +104,7 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
     print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
 def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,  min_self_rating = Optional[int]):
-
     with open(leaderboard_file, 'wt') as file:
-
         min_rating:Optional[int]
 
         for min_rating in ([min_self_rating] if min_self_rating is not None else ([1,2,3,4,5] if use_ratings else [None])):
@@ -131,6 +131,27 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
             file.writelines(["\n","\n"])
 
         file.close()
+
+def run_qrel_leaderboard(qrels_file, run_dir:Path,  min_answers = Optional[int]):
+    # with open(leaderboard_file, 'wt') as file:
+
+        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_answers}')
+        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_answers=min_answers)
+
+        correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
+    
+        print(f' correlation\t{correlationStats.pretty_print()}\n')
+        # file.writelines("\n".join(table))
+        # file.writelines( ["\n"
+        #                 # , f' EXAM scores produced with {grade_filter}\n'
+        #                 # , f' min_rating\t{str(min_rating)}\n'
+        #                 , f' nExam\t{nExamCorrelation.pretty_print()}\n'
+        #                 , f' exam\t{examCorrelation.pretty_print()}\n'
+        #                 ,'\n'])
+
+        # file.writelines(["\n","\n"])
+
+    # file.close()
 
 def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs):
     print("\n\n binary correlation")
@@ -411,8 +432,12 @@ def main():
 
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
+    parser.add_argument('--run-dir', metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
+
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
+
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Leaderboard to this file ', default=None)
+
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
@@ -432,6 +457,10 @@ def main():
 
     if args.qrel_out is not None:
         export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_query_facets=args.qrel_query_facets)
+        print("qrel leaderboard")
+
+        if args.run_dir is not None:
+            run_qrel_leaderboard(qrels_file=args.qrel_out,run_dir=args.run_dir, min_answers=2)
 
     if args.correlation_out is not None:
         run_interannotator_agreement(correlation_out_file=args.correlation_out, grade_filter=grade_filter, use_ratings=use_ratings, query_paragraphs=query_paragraphs)
