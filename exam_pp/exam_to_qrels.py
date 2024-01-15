@@ -1,7 +1,9 @@
 
+from collections import defaultdict
 from dataclasses import dataclass
+import re
 from parse_qrels_runs_with_text import *
-from typing import List
+from typing import List, Dict, Optional
 from parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
 from question_types import QuestionPromptWithChoices,QuestionPrompt
 
@@ -49,6 +51,35 @@ def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grad
                     qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=numCorrect))
     return qrel_entries
 
+def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+    '''workhorse to convert exam-annotated paragraphs into qrel entries.
+    load input file with `parseQueryWithFullParagraphs`
+    write qrels file with `write_qrel_file`
+    or use convenience function `exam_to_qrels_file`
+    '''
+    qrel_entries:List[QrelEntry] = list()
+    beforeLastSlashpattern = r"^(.+)/"
+    
+    def count_by_facet(correctAnswered:List[str])->Dict[str,int]:
+        grouped:Dict[str,int] = defaultdict(int) # default: 0
+        for question_id in correctAnswered:
+            match = re.search(beforeLastSlashpattern, question_id)            
+            if match:
+                facet_id = match.group(1)
+                grouped[facet_id]+=1
+        return grouped
+    
+    for queryWithFullParagraphList in query_paragraphs:
+        query_id = queryWithFullParagraphList.queryId
+        paragraphs = queryWithFullParagraphList.paragraphs
+
+        for para in paragraphs:
+            if para.exam_grades:
+                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                    grouped:Dict[str,int] = count_by_facet(exam_grade.correctAnswered)
+                    for facet_id, count in grouped.items():
+                        qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=count))
+    return qrel_entries
 
 def main():
     import argparse

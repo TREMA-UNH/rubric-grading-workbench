@@ -62,9 +62,12 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                         , label_to_judgment_kappa=label_to_judgment_kappa)
         
 
-def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter):
-    qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
-   
+def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter, use_query_facets:bool = False):
+    if use_query_facets:
+        qrel_entries = exam_to_qrels.convert_exam_to_facet_qrels(query_paragraphs,grade_filter=grade_filter)
+    else:
+        qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
+
     exam_to_qrels.write_qrel_file(qrel_out_file, qrel_entries)
 
 
@@ -407,6 +410,7 @@ def main():
                         )
 
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
+    parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Leaderboard to this file ', default=None)
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
@@ -427,7 +431,7 @@ def main():
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
     if args.qrel_out is not None:
-        export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter)
+        export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_query_facets=args.qrel_query_facets)
 
     if args.correlation_out is not None:
         run_interannotator_agreement(correlation_out_file=args.correlation_out, grade_filter=grade_filter, use_ratings=use_ratings, query_paragraphs=query_paragraphs)
