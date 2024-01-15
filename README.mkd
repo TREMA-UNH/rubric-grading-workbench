@@ -21,6 +21,9 @@ If you are getting error message about unfree packages or experimental command, 
 1. Clone this repository and cd into it
 2. call `python setup.py install`
 
+## Alternative Installation
+
+Basic (untested) project definitions are available for `poetry`, `pipenv`, and `pip`. 
 
 ## Usage
 
@@ -43,20 +46,31 @@ Optionally, you can directly obtain EXAM Cover evaluation metric scores by loadi
 
 
 ```python
-exam_cover_metric.compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals]
+exam_cover_metric.compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> Dict[str, exam_cover_metric.ExamCoverEvals]
 ```
 
 
 Usage Example:  
 
 ```python
-from exam_cover_metric import compute_exam_cover_scores, write_exam_results 
-from parse_qrels_runs_with_text import parseQueryWithFullParagraphs
+from pathlib import Path
+from typing import Dict, List
+from exam_pp.exam_cover_metric import compute_exam_cover_scores, write_exam_results, ExamCoverScorerFactory
+from exam_pp.parse_qrels_runs_with_text import GradeFilter, QueryWithFullParagraphList, parseQueryWithFullParagraphs
 
-query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+# Read Graded Exam files, compute EXAM Cover Evaluation Metric
 
-resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory, rank_cut_off=rank_cut_off)
+exam_factory = ExamCoverScorerFactory(GradeFilter.noFilter(), min_self_rating=None)
 
-write_exam_results(out_jsonl_file, resultsPerMethod)
+query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(Path("exam-graded.jsonl.gz"))
+
+resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory, rank_cut_off=20)
+
+print(f'plain EXAM: {resultsPerMethod["my_method"].examScore}')
+print(f'normalized EXAM:  {resultsPerMethod["my_method"].nExamScore}')
+
+examEvaluationPerQuery:Dict[str,float] = resultsPerMethod['my_method'].examCoverPerQuery
+
+write_exam_results("exam-eval.jsonl.gz", resultsPerMethod)
 ```
 

@@ -40,6 +40,9 @@ class GradeFilter():
     min_self_rating: Optional[int]
     question_set:Optional[str]
 
+    @staticmethod
+    def noFilter():
+        return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None)
 
     def filter(self, grade:ExamGrades)-> bool:
         # Note, the following code is based on inverse logic -- any grade that DOES NOT meet set filter requirements is skipped
