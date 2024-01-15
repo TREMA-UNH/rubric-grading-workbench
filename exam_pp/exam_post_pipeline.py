@@ -132,11 +132,11 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
-def run_qrel_leaderboard(qrels_file, run_dir:Path,  min_answers = Optional[int]):
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_answers = Optional[int]):
     # with open(leaderboard_file, 'wt') as file:
 
         print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_answers}')
-        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_answers=min_answers)
+        methodScores = trec_eval_leaderboard(run_dir=run_dir.absolute, qrels=qrels_file.absolute, min_answers=min_answers)
 
         correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
     

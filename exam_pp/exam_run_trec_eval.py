@@ -12,10 +12,12 @@ def run_trec_eval(run_dir:Path, qrels:Path, min_answers:Optional[int]):
     # Run the command and capture the output
     result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=run_dir)
 
+    if result.stderr:
+        print(f"Received command errors: "+result.stderr.strip())
     # Extract stdout
     output = result.stdout.strip()
 
-    print(f"Command output: {output}")
+    # print(f"Command output: {output}")
     return output
 
 def mimic_trec_eval():
