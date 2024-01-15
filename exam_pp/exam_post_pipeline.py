@@ -137,12 +137,12 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_level = Optional[in
 
     for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
 
-        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_level_x}')
+        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level_x}')
         methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
 
         correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
     
-        print(f'min_answers\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
+        print(f'min_level\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
         # file.writelines("\n".join(table))
         # file.writelines( ["\n"
         #                 # , f' EXAM scores produced with {grade_filter}\n'

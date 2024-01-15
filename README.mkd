@@ -1,0 +1,62 @@
+# EXAM++  (exampp): EXAM Answerability Metric with generative LLMs
+
+
+##  Installation using NIX
+
+1. install `nix` <https://nix.dev/install-nix>
+2. Clone this repository and cd into it
+3. in a shell type:  `nix develop`
+
+
+If you are getting error message about unfree packages or experimental command, then run one of these longer commands instead
+
+* `nix --extra-experimental-features 'nix-command flakes' develop` od 
+* `NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure`
+
+
+## Installation via setup.py
+
+0. optional: Install `trec_eval`
+
+1. Clone this repository and cd into it
+2. call `python setup.py install`
+
+
+## Usage
+
+The code works in three phases
+
+1. **Input Preparation Phase**:  
+   1. Convert your input data into a list of `parse_qrels_runs_with_text.QueryWithFullParagraphList` objects (one per query). 
+   2. write those to file using `parse_qrels_runs_with_text.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])` -- common filepattern "xxx.json.gz"
+
+2. **Grading Phase**:
+   1. call `python exam_grading.py` and follow the help (`-h`) to obtain EXAM grades for all passages in your input file
+
+3. **Evaluation and Post Pocessing Phase**: (one of two options)
+   1. to obtain just the EXAM Cover evaluation score, call `python exam_cover_metric.py` and following the help (`-h`)
+   2. to run all kinds of post-hoc analysis (obtain leaderboards, qrels, and study correlation patterns) call `python exam_postpipeline.py` and follow the help (`-h`) 
+   this requires to have `trec_eval` to be available in your path.
+
+
+Optionally, you can directly obtain EXAM Cover evaluation metric scores by loading graded inputs via
+
+
+```python
+exam_cover_metric.compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals]
+```
+
+
+Usage Example:  
+
+```python
+from exam_cover_metric import compute_exam_cover_scores, write_exam_results 
+from parse_qrels_runs_with_text import parseQueryWithFullParagraphs
+
+query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+
+resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory, rank_cut_off=rank_cut_off)
+
+write_exam_results(out_jsonl_file, resultsPerMethod)
+```
+

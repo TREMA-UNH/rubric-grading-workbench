@@ -66,7 +66,7 @@ def parse_trec_eval(command_output:str)->Dict[str,float]:
             print(f"{method}\t{score}")
             return (method, score)
         else:
-            raise RuntimeError(f"Can't parse trec_eval output. Offending line: \"{line}\".\nFull command output:\n{command_output}")
+            e
 
     return dict([parse_line(line.strip()) 
                     for line in command_output.split("\n") 
