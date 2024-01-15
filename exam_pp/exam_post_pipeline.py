@@ -135,12 +135,14 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_level = Optional[int]):
     # with open(leaderboard_file, 'wt') as file:
 
-        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_level}')
-        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level)
+    for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
+
+        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_level_x}')
+        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
 
         correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
     
-        print(f' correlation\t{correlationStats.pretty_print()}\n')
+        print(f'min_answers\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
         # file.writelines("\n".join(table))
         # file.writelines( ["\n"
         #                 # , f' EXAM scores produced with {grade_filter}\n'
@@ -434,7 +436,7 @@ def main():
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
-    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval', default=1)
+    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried', default=None)
 
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
