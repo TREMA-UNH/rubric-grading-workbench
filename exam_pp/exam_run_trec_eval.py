@@ -3,14 +3,14 @@ import re
 import subprocess
 from typing import Dict, Optional, Tuple
 
-def run_trec_eval(run_dir:Path, qrels:Path, min_answers:Optional[int]):
+def run_trec_eval(run_dir:Path, qrels:Path, min_level:Optional[int]):
     # Define the command to be executed
-    l_arg = f" -l {min_answers} " if min_answers is not None else ""
-    command = f"for f in *.run; do  res=`trec_eval -m P.20 {l_arg} {qrels} $f`; echo \"$f $res\"; done"
+    l_arg = f" -l {min_level} " if min_level is not None else ""
+    command = f"for f in *.run; do  res=`trec_eval -m P.20 {l_arg} {qrels.resolve().as_posix()} $f`; echo \"$f $res\"; done"
     print(f'Running trec_eval command:\n{command}\nin directory: {run_dir}')
 
     # Run the command and capture the output
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=run_dir)
+    result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=run_dir.resolve().as_posix())
 
     if result.stderr:
         print(f"Received command errors: "+result.stderr.strip())
@@ -73,8 +73,8 @@ def parse_trec_eval(command_output:str)->Dict[str,float]:
                     if len(line.strip())>0
                 ])
 
-def trec_eval_leaderboard(run_dir:Path, qrels:Path, min_answers:Optional[int])-> Dict[str,float]:
+def trec_eval_leaderboard(run_dir:Path, qrels:Path, min_level:Optional[int])-> Dict[str,float]:
     '''Designed to interoperate with `leaderboard_rank_correlation` '''
-    output=run_trec_eval(run_dir=run_dir, qrels=qrels, min_answers=min_answers)
+    output=run_trec_eval(run_dir=run_dir, qrels=qrels, min_level=min_level)
     # output=mimic_trec_eval()
     return parse_trec_eval(output)

@@ -132,11 +132,11 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_answers = Optional[int]):
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_level = Optional[int]):
     # with open(leaderboard_file, 'wt') as file:
 
-        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_answers}')
-        methodScores = trec_eval_leaderboard(run_dir=run_dir.absolute, qrels=qrels_file.absolute, min_answers=min_answers)
+        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_answers={min_level}')
+        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level)
 
         correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
     
@@ -432,8 +432,9 @@ def main():
 
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
-    parser.add_argument('--run-dir', metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
+    parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
+    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval', default=1)
 
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
@@ -458,7 +459,7 @@ def main():
 
     if args.trec_eval_qrel_correlation is not None:
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=args.trec_eval_qrel_correlation,run_dir=args.run_dir, min_answers=2)
+            run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation),run_dir=Path(args.run_dir), min_level=args.min_trec_eval_level)
 
 
     if args.qrel_out is not None:
@@ -466,7 +467,7 @@ def main():
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=args.qrel_out,run_dir=args.run_dir, min_answers=2)
+            run_qrel_leaderboard(qrels_file=Path(args.qrel_out),run_dir=Path(args.run_dir), min_level=2)
 
     if args.correlation_out is not None:
         run_interannotator_agreement(correlation_out_file=args.correlation_out, grade_filter=grade_filter, use_ratings=use_ratings, query_paragraphs=query_paragraphs)
