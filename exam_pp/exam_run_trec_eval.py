@@ -7,6 +7,7 @@ def run_trec_eval(run_dir:Path, qrels:Path, min_answers:Optional[int]):
     # Define the command to be executed
     l_arg = f" -l {min_answers} " if min_answers is not None else ""
     command = f"for f in *.run; do  res=`trec_eval -m P.20 {l_arg} {qrels} $f`; echo \"$f $res\"; done"
+    print(f'Running trec_eval command:\n{command}\nin directory: {run_dir}')
 
     # Run the command and capture the output
     result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=run_dir)
@@ -14,7 +15,7 @@ def run_trec_eval(run_dir:Path, qrels:Path, min_answers:Optional[int]):
     # Extract stdout
     output = result.stdout.strip()
 
-    # print(f"Command output: {output}")
+    print(f"Command output: {output}")
     return output
 
 def mimic_trec_eval():

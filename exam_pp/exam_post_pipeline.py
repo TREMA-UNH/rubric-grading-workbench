@@ -433,6 +433,7 @@ def main():
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
     parser.add_argument('--run-dir', metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
+    parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
 
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
@@ -454,6 +455,11 @@ def main():
     use_ratings=args.use_ratings
 
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
+
+    if args.trec_eval_qrel_correlation is not None:
+        if args.run_dir is not None:
+            run_qrel_leaderboard(qrels_file=args.trec_eval_qrel_correlation,run_dir=args.run_dir, min_answers=2)
+
 
     if args.qrel_out is not None:
         export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_query_facets=args.qrel_query_facets)
