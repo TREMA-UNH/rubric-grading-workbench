@@ -6,7 +6,7 @@ from typing import Dict, Optional, Tuple
 def run_trec_eval(run_dir:Path, qrels:Path, min_answers:Optional[int]):
     # Define the command to be executed
     l_arg = f" -l {min_answers} " if min_answers is not None else ""
-    command = f"for f in *.run; do  res=`$trec_eval -m P.20 {l_arg} {qrels} $f`; echo \"$f $res\"; done"
+    command = f"for f in *.run; do  res=`trec_eval -m P.20 {l_arg} {qrels} $f`; echo \"$f $res\"; done"
 
     # Run the command and capture the output
     result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=run_dir)
