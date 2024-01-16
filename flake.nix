@@ -7,11 +7,10 @@
 
   outputs = inputs@{ self, nixpkgs, flake-utils, dspy-nix, ... }:
     flake-utils.lib.eachDefaultSystem (system: 
-      let pkgs = nixpkgs.legacyPackages.${system}; in {
-        packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
-
-        devShells.default = (dspy-nix.lib.${system}.mkShell {
-          target = "cuda";
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        mkShell = target: (dspy-nix.lib.${system}.mkShell {
+          inherit target;
           packages = ps: with ps; [
             pydantic
             fuzzywuzzy
@@ -24,6 +23,14 @@
         }).overrideAttrs (oldAttrs: {
           nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [self.outputs.packages.${system}.trec-eval];
         });
+
+      in {
+        packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
+
+        devShells.default = self.outputs.devShells.${system}.cpu;
+        devShells.cpu = mkTarget "cpu";
+        devShells.rocm = mkTarget "rocm";
+        devShells.cuda = mkTarget "cuda";
       }
     );
 }
