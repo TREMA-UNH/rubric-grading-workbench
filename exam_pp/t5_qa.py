@@ -68,6 +68,7 @@ class QaPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"QaPipeline model config: { self.model.config}")
+        print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -123,6 +124,7 @@ class Text2TextPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text2Text model config: { self.model.config}")
+        print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -180,6 +182,7 @@ class TextGenerationPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text generation model config: { self.model.config}")
+        print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 

@@ -170,8 +170,17 @@ def parseQueryWithFullParagraphList(line:str) -> QueryWithFullParagraphList:
 def parseQueryWithFullParagraphs(file_path:Path) -> List[QueryWithFullParagraphList] :
     '''Load JSONL.GZ file with exam annotations in FullParagraph information'''
     # Open the gzipped file
-    with gzip.open(file_path, 'rt', encoding='utf-8') as file:
-        return [parseQueryWithFullParagraphList(line) for line in file]
+
+    result:List[QueryWithFullParagraphList] = list()
+    try: 
+        with gzip.open(file_path, 'rt', encoding='utf-8') as file:
+            # return [parseQueryWithFullParagraphList(line) for line in file]
+            for line in file:
+                result.append(parseQueryWithFullParagraphList(line))
+    except  EOFError as e:
+        print("Warning: Gzip EOFError on {file_path}. Use truncated data....\nFull Error:\n{e}")
+    return result
+
 
 
 def dumpQueryWithFullParagraphList(queryWithFullParagraph:QueryWithFullParagraphList)->str:
