@@ -1,4 +1,4 @@
-{ lib, buildPythonPackage, fetchPypi, cbor, numpy }:
+{lib, buildPythonPackage, fetchPypi, cbor, numpy }:
 
 buildPythonPackage rec {
   pname = "trec-car-tools";
