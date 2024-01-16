@@ -30,15 +30,19 @@ Basic (untested) project definitions are available for `poetry`, `pipenv`, and `
 The code works in three phases
 
 1. **Input Preparation Phase**:  
-   1. Convert your input data into a list of `parse_qrels_runs_with_text.QueryWithFullParagraphList` objects (one per query). 
-   2. write those to file using `parse_qrels_runs_with_text.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])` -- common filepattern "xxx.json.gz"
+   1. Convert your input data into a list of `exam_pp.parse_qrels_runs_with_text.QueryWithFullParagraphList` objects (one per query). 
+   2. write those to file (common filepattern "xxx.json.gz") using this function
+   ```
+   exam_pp.parse_qrels_runs_with_text.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])
+   ``` 
+
 
 2. **Grading Phase**:
-   1. call `python exam_grading.py` and follow the help (`-h`) to obtain EXAM grades for all passages in your input file
+   1. call `python -m exam_pp.exam_grading` and follow the help (`-h`) to obtain EXAM grades for all passages in your input file
 
 3. **Evaluation and Post Pocessing Phase**: (one of two options)
-   1. to obtain just the EXAM Cover evaluation score, call `python exam_cover_metric.py` and following the help (`-h`)
-   2. to run all kinds of post-hoc analysis (obtain leaderboards, qrels, and study correlation patterns) call `python exam_postpipeline.py` and follow the help (`-h`) 
+   1. to obtain just the EXAM Cover evaluation score, call `python -m exam_pp.exam_cover_metric` and following the help (`-h`)
+   2. to run all kinds of post-hoc analysis (obtain leaderboards, qrels, and study correlation patterns) call `python -m exam_pp.exam_postpipeline` and follow the help (`-h`) 
    this requires to have `trec_eval` to be available in your path.
 
 
