@@ -28,9 +28,9 @@
         packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
 
         devShells.default = self.outputs.devShells.${system}.cpu;
-        devShells.cpu = mkTarget "cpu";
-        devShells.rocm = mkTarget "rocm";
-        devShells.cuda = mkTarget "cuda";
+        devShells.cpu = mkShell "cpu";
+        devShells.rocm = mkShell "rocm";
+        devShells.cuda = mkShell "cuda";
       }
     );
 }
