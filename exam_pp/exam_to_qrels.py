@@ -1,11 +1,11 @@
 
+from typing import List, Dict, Optional
 from collections import defaultdict
 from dataclasses import dataclass
 import re
-from parse_qrels_runs_with_text import *
-from typing import List, Dict, Optional
-from parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
-from question_types import QuestionPromptWithChoices,QuestionPrompt
+
+from .parse_qrels_runs_with_text import *
+from .parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
 
 
 from pathlib import Path

@@ -1,20 +1,19 @@
 from collections import defaultdict
-import statistics
-
-import scipy
-from scipy.stats import spearmanr, kendalltau, rankdata
-import scipy.stats
-
-from question_types import *
-from parse_qrels_runs_with_text import *
-from parse_qrels_runs_with_text import GradeFilter
 from typing import Set, List, Tuple, Dict, Union, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
+import statistics
+import scipy
+from scipy.stats import spearmanr, kendalltau, rankdata
+import scipy.stats
 
-from exam_cover_metric import *
-from exam_cover_metric import ExamCoverEvals
+
+from .question_types import *
+from .parse_qrels_runs_with_text import *
+from .parse_qrels_runs_with_text import GradeFilter
+from .exam_cover_metric import *
+from .exam_cover_metric import ExamCoverEvals
 
 
 

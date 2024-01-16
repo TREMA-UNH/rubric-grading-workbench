@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import gzip
 import json
-import itertools
 from pathlib import Path
 
 
@@ -141,12 +140,7 @@ class FullParagraphData(BaseModel):
     def exam_grades_iterable(self)-> List[ExamGrades]:
         return [] if self.exam_grades is None else self.exam_grades
 
-    # def get_any_exam_grade(self)->Optional[ExamGrades]:
-    #     if self.exam_grades is None or len(self.exam_grades)<1: 
-    #         return None
-    #     else: 
-    #         return self.exam_grades[0]
-        
+       
     def get_any_judgment(self)->Optional[Judgment]:
         if self.paragraph_data.judgments is None or len(self.paragraph_data.judgments)<1: 
             return None

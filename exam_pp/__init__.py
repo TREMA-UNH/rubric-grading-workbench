@@ -1,4 +1,4 @@
-# my_package/__init__.py
+# exam_pp/__init__.py
 
 # This file can be empty or may contain package-level initialization code.
 # When this file is present in a directory, Python treats the directory as a package.

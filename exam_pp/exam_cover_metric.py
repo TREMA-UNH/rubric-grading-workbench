@@ -4,17 +4,16 @@ from collections import defaultdict
 from math import nan
 import math
 import statistics
-from question_types import *
-from parse_qrels_runs_with_text import *
-from parse_qrels_runs_with_text import GradeFilter
-from typing import Set, List, Tuple, Dict, Optional, Iterable
-from collections import defaultdict
-from dataclasses import dataclass
-from pathlib import Path
-
-
 from pydantic import BaseModel
 import gzip
+from typing import Set, List, Tuple, Dict, Optional, Iterable
+from collections import defaultdict
+from pathlib import Path
+
+from .question_types import *
+from .parse_qrels_runs_with_text import *
+from .parse_qrels_runs_with_text import GradeFilter
+
 
 
 
@@ -289,6 +288,25 @@ def top_ranked_paragraphs(rank_cut_off:int, paragraphs:List[FullParagraphData])-
 
 
 def main():
+
+    # import abc
+    # from collections import defaultdict
+    # from math import nan
+    # import math
+    # import statistics
+    # # from question_types import x
+    # # from parse_qrels_runs_with_text import x
+    # from parse_qrels_runs_with_text import GradeFilter
+    # from exam_cover_metric import compute_exam_cover_scores_file, ExamCoverScorerFactory
+    # from typing import Set, List, Tuple, Dict, Optional, Iterable
+    # from collections import defaultdict
+    # from dataclasses import dataclass
+    # from pathlib import Path
+
+
+    # from pydantic import BaseModel
+    # import gzip
+
     import argparse
 
     desc = f'''Compute the  Exam-Cover evaluation scores from ranked paragraphs with exam annotations. \n

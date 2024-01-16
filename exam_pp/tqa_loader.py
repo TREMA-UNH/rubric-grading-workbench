@@ -5,8 +5,8 @@ from typing import Tuple, List, Any, Dict, Optional
 import json
 
 
-from question_types import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
-from question_types import *
+from .question_types import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
+from .question_types import *
 
 
 def loadTQA(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
@@ -59,9 +59,6 @@ def main():
     questions = load_all_tqa_data()
     print("num questions loaded: ", len(questions))
     print("q0",questions[0])
-    
-    # qa = McqaPipeline()
-    # answerQuestions(questions, qa)
 
 
 if __name__ == "__main__":

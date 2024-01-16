@@ -1,28 +1,18 @@
-from typing import List, Any, Optional, Dict, Tuple
 import itertools
-import os
 from pathlib import Path
-from typing import Tuple, List, Any, Dict, Optional, Set
-import json
-import gzip
+from typing import Tuple, List, Any, Dict, Optional
+import hashlib
+import re
+import itertools
+import re
 
 from collections import defaultdict
 from pydantic import BaseModel
-from dataclasses import dataclass
-
-import hashlib
-import gzip
-import re
-import json
-import itertools
-import re
-import parse_qrels_runs_with_text
 
 
-from question_types import QuestionAnswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices
-from question_types import *
-from parse_qrels_runs_with_text import *
 import trec_car.read_data as trec_car
+from .parse_qrels_runs_with_text import *
+from . import parse_qrels_runs_with_text
 
 
 

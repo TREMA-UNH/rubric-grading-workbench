@@ -27,7 +27,7 @@
       in {
         packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
 
-        devShells.default = self.outputs.devShells.${system}.cpu;
+        devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";
         devShells.rocm = mkShell "rocm";
         devShells.cuda = mkShell "cuda";

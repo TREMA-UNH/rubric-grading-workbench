@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
-from question_types import QuestionPromptWithChoices,QuestionPrompt
+
+from .question_types import QuestionPromptWithChoices,QuestionPrompt
 
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())

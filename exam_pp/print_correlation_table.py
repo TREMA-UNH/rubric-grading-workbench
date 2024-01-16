@@ -1,7 +1,8 @@
-from pylatex import Document, Tabu, MultiColumn, MultiRow, NoEscape, Command, Package, Tabular, Section
-from pylatex.utils import bold, italic
 from typing import List, Dict, Optional
 from pathlib import Path
+
+from pylatex import Document, Tabu, MultiColumn, MultiRow, NoEscape, Command, Package, Tabular, Section
+from pylatex.utils import bold, italic
 
 class TablePrinter():
     def __init__(self):

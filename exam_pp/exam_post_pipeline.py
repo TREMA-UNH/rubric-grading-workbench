@@ -6,17 +6,16 @@ from pathlib import Path
 from collections import defaultdict
 import print_correlation_table
 
-from question_types import *
-from parse_qrels_runs_with_text import QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
-from parse_qrels_runs_with_text import *
-from exam_cover_metric import *
-from exam_cover_metric import compute_exam_cover_scores
-import exam_to_qrels
-import exam_leaderboard_correlation
-import exam_judgment_correlation
-from exam_judgment_correlation import ConfusionStats
-
-from exam_run_trec_eval import trec_eval_leaderboard
+from .question_types import *
+from .parse_qrels_runs_with_text import QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
+from .parse_qrels_runs_with_text import *
+from .exam_cover_metric import *
+from .exam_cover_metric import compute_exam_cover_scores
+from . import exam_to_qrels
+from . import exam_leaderboard_correlation
+from . import exam_judgment_correlation
+from .exam_judgment_correlation import ConfusionStats
+from .exam_run_trec_eval import trec_eval_leaderboard
 
 # for correlation table formatting
 def fmt_judgments(js:Set[int])->str:

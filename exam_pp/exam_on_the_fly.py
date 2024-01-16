@@ -1,11 +1,12 @@
-from exam_grading import *
-from question_types import QuestionPromptWithChoices
-from question_types import *
-from t5_qa import *
-from parse_qrels_runs_with_text import *
-import tqa_loader
 from typing import *
-from exam_cover_metric import *
+
+from .exam_grading import *
+from .question_types import QuestionPromptWithChoices
+from .question_types import *
+from .t5_qa import *
+from .parse_qrels_runs_with_text import *
+from . import tqa_loader
+from .exam_cover_metric import *
 
 def main():
     # load QA pipeline
@@ -76,7 +77,8 @@ def main():
 
     # compute exam cover metric
 
-    overallExamScore = plainExamCoverageScore(paragraphs, grade_filter=grade_filter)
+    examScorer = ExamCoverScorerFactory.produce_from_paragraphs(paragraphs_for_normalization=paragraphs)
+    overallExamScore = examScorer.plainExamCoverageScore(method_paras=paragraphs)
     print(f'Exam Score = {overallExamScore}')
 
     

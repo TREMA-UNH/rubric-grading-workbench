@@ -1,14 +1,11 @@
 
-from collections import defaultdict
-import heapq
-import math
-import statistics
-from question_types import *
-# from question_types import 
-from parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, ExamGrades,GradeFilter
 from typing import Set, List, Tuple
 from typing import *
 from pathlib import Path
+import heapq
+
+from .question_types import *
+from .parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 
 
 def frac(num:int,den:int)->float:

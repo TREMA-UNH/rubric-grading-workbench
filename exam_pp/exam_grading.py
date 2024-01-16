@@ -1,12 +1,12 @@
-
-
-import question_loader
-from question_types import QuestionPrompt, get_prompt_classes
-from question_types import *
-from t5_qa import *
-from parse_qrels_runs_with_text import *
-import tqa_loader
 from typing import *
+
+
+from . import question_loader
+from .question_types import QuestionPrompt, get_prompt_classes
+from .question_types import *
+from .t5_qa import *
+from .parse_qrels_runs_with_text import *
+from . import tqa_loader
 
 
 def fix_car_query_id(input:List[Tuple[str,List[QuestionPrompt]]]) -> List[Tuple[str,List[QuestionPrompt]]]:
