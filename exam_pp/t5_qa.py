@@ -239,7 +239,8 @@ def mainT2T():
     lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
     
     
-    qa = Text2TextPipeline('google/flan-t5-large')
+    # qa = Text2TextPipeline('google/flan-t5-large')
+    qa = Text2TextPipeline('google/flan-t5-small')
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:

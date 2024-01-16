@@ -34,6 +34,8 @@ def loadTQA(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[
                 qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id=qid, question=question, query_id=query_id, facet_id = None, query_text=query_text, unanswerable_expressions=set())
             elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
                 qpc = QuestionCompleteConcisePromptWithAnswerKey(question_id=qid, question=question,choices=choices, correct=correct, correctKey = correctKey, query_id=query_id, facet_id = None, query_text=query_text)
+            elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
+                qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id=qid, question=question, query_id=query_id, facet_id = None, query_text=query_text, unanswerable_expressions=set())
             elif(prompt_class == "QuestionPromptWithChoices"):
                 qpc = QuestionPromptWithChoices(question_id=qid, question=question,choices=choices, correct=correct, correctKey = correctKey, query_id=query_id, facet_id = None, query_text=query_text)
             else:
