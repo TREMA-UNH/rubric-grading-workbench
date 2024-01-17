@@ -38,7 +38,15 @@ The code works in three phases
 
 
 2. **Grading Phase**:
-   1. call `python -m exam_pp.exam_grading` and follow the help (`-h`) to obtain EXAM grades for all passages in your input file
+
+   1. Set environment variables to enable GPU processing
+   ```bash
+   export GPU_DEVICE=0  # use GPU 0 or 1, check with `nvidia-smi` what is available
+   export BATCH_SIZE=10    # for A40: use 10 for flan-t5-large,  18 for flan-t5-base, 60 for flan-t5-small 
+   ```
+   the CPU will be used if the `GPU_DEVICE` variable is not set.
+
+   2. call `python -m exam_pp.exam_grading` and follow the help (`-h`) to obtain EXAM grades for all passages in your input file
 
 3. **Evaluation and Post Pocessing Phase**: (one of two options)
    1. to obtain just the EXAM Cover evaluation score, call `python -m exam_pp.exam_cover_metric` and following the help (`-h`)
