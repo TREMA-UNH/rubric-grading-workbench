@@ -4,7 +4,6 @@ import csv
 from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
-import print_correlation_table
 
 from .question_types import *
 from .parse_qrels_runs_with_text import QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
@@ -16,6 +15,7 @@ from . import exam_leaderboard_correlation
 from . import exam_judgment_correlation
 from .exam_judgment_correlation import ConfusionStats
 from .exam_run_trec_eval import trec_eval_leaderboard
+from . import print_correlation_table
 
 # for correlation table formatting
 def fmt_judgments(js:Set[int])->str:
@@ -63,9 +63,12 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                         , label_to_judgment_kappa=label_to_judgment_kappa)
         
 
-def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter, use_query_facets:bool = False):
+def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter, use_query_facets:bool = False, use_ratings:bool = False):
     if use_query_facets:
-        qrel_entries = exam_to_qrels.convert_exam_to_facet_qrels(query_paragraphs,grade_filter=grade_filter)
+        if use_ratings:
+            qrel_entries = exam_to_qrels.convert_exam_to_rated_facet_qrels(query_paragraphs,grade_filter=grade_filter)
+        else:
+            qrel_entries = exam_to_qrels.convert_exam_to_facet_qrels(query_paragraphs,grade_filter=grade_filter)
     else:
         qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
 
@@ -460,22 +463,42 @@ def main():
 
     if args.trec_eval_qrel_correlation is not None:
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation),run_dir=Path(args.run_dir), min_level=args.min_trec_eval_level)
+            run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
+                                 ,run_dir=Path(args.run_dir)
+                                 , min_level=args.min_trec_eval_level
+                                 )
 
 
     if args.qrel_out is not None:
-        export_qrels(query_paragraphs=query_paragraphs, qrel_out_file=args.qrel_out, grade_filter=grade_filter, use_query_facets=args.qrel_query_facets)
+        export_qrels(query_paragraphs=query_paragraphs
+                     , qrel_out_file=args.qrel_out
+                     , grade_filter=grade_filter
+                     , use_query_facets=args.qrel_query_facets
+                     , use_ratings=args.use_ratings
+                     )
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=Path(args.qrel_out),run_dir=Path(args.run_dir), min_level=2)
+            run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+                                 ,run_dir=Path(args.run_dir)
+                                 , min_level=args.min_trec_eval_level
+                                 )
 
     if args.correlation_out is not None:
-        run_interannotator_agreement(correlation_out_file=args.correlation_out, grade_filter=grade_filter, use_ratings=use_ratings, query_paragraphs=query_paragraphs)
+        run_interannotator_agreement(correlation_out_file=args.correlation_out
+                                     , grade_filter=grade_filter
+                                     , use_ratings=use_ratings
+                                     , query_paragraphs=query_paragraphs
+                                     )
 
 
     if args.leaderboard_out is not None:
-        run_leaderboard(leaderboard_file=args.leaderboard_out, grade_filter=grade_filter, query_paragraphs=query_paragraphs, use_ratings=use_ratings, min_self_rating=args.min_self_rating)
+        run_leaderboard(leaderboard_file=args.leaderboard_out
+                        , grade_filter=grade_filter
+                        , query_paragraphs=query_paragraphs
+                        , use_ratings=use_ratings
+                        , min_self_rating=args.min_self_rating
+                        )
 
 
 

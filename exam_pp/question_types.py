@@ -34,7 +34,6 @@ class QuestionPrompt():
     def check_answer(self,answer:str)->bool:
         pass
 
-    @abstractmethod
     def check_answer_rating(self,answer:str)->int:
         if self.check_answer(answer=answer):
             return 1
@@ -130,6 +129,9 @@ class QuestionPromptWithChoices(QuestionPrompt):
         }
         return prompt
 
+    def check_answer_rating(self, answer: str) -> int:
+        return super().check_answer_rating(answer)
+    
 
 
     @staticmethod
@@ -194,6 +196,9 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
                                                                         }
         self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
 
+    def check_answer_rating(self, answer: str) -> int:
+        return super().check_answer_rating(answer)
+    
 
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -315,6 +320,9 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
 
 
+    def check_answer_rating(self, answer: str) -> int:
+        return super().check_answer_rating(answer)
+    
     def prompt_info(self)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"prompt_style": "provide a complete and concise answer to the question based on the context."
