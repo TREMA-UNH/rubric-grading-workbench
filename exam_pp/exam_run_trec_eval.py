@@ -14,6 +14,11 @@ def run_trec_eval(run_dir:Path, qrels:Path, min_level:Optional[int]):
 
     if result.stderr:
         print(f"Received command errors: "+result.stderr.strip())
+        if result.stderr.startswith ('trec_eval: No queries with both results and relevance info'):
+            raise RuntimeError(f'''trec_eval:  Queries in qrels file are different from queries in the run file.\n
+                qrels file: {qrels}\n
+                run files: {run_dir}/*run
+                    ''')
     # Extract stdout
     output = result.stdout.strip()
 

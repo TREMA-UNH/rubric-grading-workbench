@@ -105,19 +105,19 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
         print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
     print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
 
-def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,  min_self_rating = Optional[int]):
+def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   manualLeaderboard:Dict[str,int], min_self_rating = Optional[int]):
     with open(leaderboard_file, 'wt') as file:
         min_rating:Optional[int]
 
         for min_rating in ([min_self_rating] if min_self_rating is not None else ([1,2,3,4,5] if use_ratings else [None])):
             exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter, min_self_rating=min_rating)
-            resultsPerMethod = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
+            resultsPerMethod:Dict[str, ExamCoverEvals] = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
             # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
             # exam_leaderboard_correlation.print_leaderboard_eval(resultsPerMethod.values(), grade_filter=grade_filter)
 
-            table = exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values())
+            table = exam_leaderboard_correlation.leaderboard_table(resultsPerMethod.values(), manualLeaderboard=manualLeaderboard)
             
-            nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values())
+            nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values(), manualLeaderboard=manualLeaderboard)
             print(f'min_rating={str(min_rating)} nExam:{nExamCorrelation}')
             print(f'min_rating={str(min_rating)}  exam:{examCorrelation}')
 
@@ -134,7 +134,7 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_level = Optional[int]):
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  manualLeaderboard:Dict[str,int], min_level = Optional[int]):
     # with open(leaderboard_file, 'wt') as file:
 
     for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
@@ -142,7 +142,7 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  min_level = Optional[in
         print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level_x}')
         methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
 
-        correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores)
+        correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, manualLeaderboard=manualLeaderboard)
     
         print(f'min_level\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
         # file.writelines("\n".join(table))
@@ -414,9 +414,10 @@ def self_rated_correlation_min(grade_filter, query_paragraphs, write_stats=False
             print("\n")
 
 
-def qmain(args=None):
+def main(args=None):
     import argparse
 
+    print("EXAM Post Pipeline")
     desc = f'''EXAM Post Pipeline \n
               The input file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
               \n  
@@ -433,10 +434,9 @@ def qmain(args=None):
     parser.add_argument('exam_annotated_file', type=str, metavar='exam-xxx.jsonl.gz'
                         , help='json file that annotates each paragraph with a number of anserable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
-
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
-    parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
+    parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
     parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried', default=None)
 
@@ -450,6 +450,7 @@ def qmain(args=None):
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
     parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
     args = parser.parse_args(args)    
@@ -461,11 +462,19 @@ def qmain(args=None):
 
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
+
+    manualLeaderboard:Dict[str,int]
+    if args.testset == "cary3":
+        manualLeaderboard = exam_leaderboard_correlation.manualCarLeaderboard 
+    elif args.testset == "dl19":
+        manualLeaderboard = exam_leaderboard_correlation.manualDL19Leaderboard
+
     if args.trec_eval_qrel_correlation is not None:
         if args.run_dir is not None:
             run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level
+                                 , manualLeaderboard=manualLeaderboard
                                  )
 
 
@@ -482,6 +491,7 @@ def qmain(args=None):
             run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level
+                                 , manualLeaderboard=manualLeaderboard
                                  )
 
     if args.correlation_out is not None:
@@ -498,6 +508,7 @@ def qmain(args=None):
                         , query_paragraphs=query_paragraphs
                         , use_ratings=use_ratings
                         , min_self_rating=args.min_self_rating
+                        , manualLeaderboard=manualLeaderboard
                         )
 
 

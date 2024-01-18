@@ -207,7 +207,7 @@ class ExamCoverEvalsDict(dict):
 
 OVERALL_ENTRY = "_overall_"
 
-def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> ExamCoverEvalsDict[str, ExamCoverEvals] :
+def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> Dict[str, ExamCoverEvals] :
     '''Workhorse to compute exam cover scores from exam-annotated paragraphs.
     Load input file with `parseQueryWithFullParagraphs`
     Write output file with `write_exam_results`

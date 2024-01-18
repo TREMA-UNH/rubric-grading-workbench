@@ -17,7 +17,11 @@ from .exam_cover_metric import ExamCoverEvals
 
 
 
-manualLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
+# Todo update!
+manualDL19Leaderboard:Dict[str,float] = { "input.UNH_bm25": 1
+                        }
+
+manualCarLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
                     , "ReRnak3_BERT": 2
                     , "ReRnak2_BERT": 3
                     , "IRIT1" : 5
@@ -77,9 +81,7 @@ def compatible_kendalltau(ranks1, ranks2)->Tuple[float,float]:
         return result.correlation, result.pvalue
 
 
-def leaderboard_rank_correlation(systemEval:Dict[str,float])->CorrelationStats:
-
-
+def leaderboard_rank_correlation(systemEval:Dict[str,float], manualLeaderboard:Dict[str,int])->CorrelationStats:
     methods = list(manualLeaderboard.keys())
     ranks1 = [manualLeaderboard[method] for method in methods]
 
@@ -123,7 +125,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals])->[str]:
+def leaderboard_table(evals:List[ExamCoverEvals], manualLeaderboard:Dict[str,int])->[str]:
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -172,22 +174,22 @@ def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
     with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
         return [ExamCoverEvals.parse_raw(line) for line in file]
 
-def leaderboard_correlation_files(exam_result_file:Path):
+def leaderboard_correlation_files(exam_result_file:Path, manualLeaderboard:Dict[str,int]):
     evals = read_exam_result_file(exam_result_file)
 
-    nExamCorrelation, examCorrelation = leaderboard_correlation(evals)
+    nExamCorrelation, examCorrelation = leaderboard_correlation(evals, manualLeaderboard=manualLeaderboard)
     print(f' nExam:{nExamCorrelation}')
     print(f' exam:{examCorrelation}')
 
-def leaderboard_correlation(evals:List[ExamCoverEvals])->Tuple[CorrelationStats,CorrelationStats]:
+def leaderboard_correlation(evals:Iterable[ExamCoverEvals], manualLeaderboard:Dict[str,int])->Tuple[CorrelationStats,CorrelationStats]:
     '''Compute Leaderboard correlation. 
     Load necessary data with `read_exam_result_file()` or use the convenience method `leaderboard_correlation_files`
     '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
-    nExamCorrelation = leaderboard_rank_correlation(nExamEval)
-    examCorrelation = leaderboard_rank_correlation(examEval)
+    nExamCorrelation = leaderboard_rank_correlation(nExamEval, manualLeaderboard=manualLeaderboard)
+    examCorrelation = leaderboard_rank_correlation(examEval, manualLeaderboard=manualLeaderboard)
     return nExamCorrelation,examCorrelation
 
 
@@ -218,13 +220,22 @@ def main():
     parser.add_argument('-c', '--rank-correlation', action='store_true', help='Print leaderbord rank correlation')
 
     # parser.add_argument('-o', '--output', type=str, metavar="FILE", help='Output JSONL.gz file name, where exam results will be written to', default='output.qrels')
+    parser.add_argument('--testset', type=str, choices=["cary3","dl19"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
-    args = parser.parse_args()  
+    # Parse the arguments
+    args = parser.parse_args(args)    
+    
+    manualLeaderboard:Dict[str,int]
+    if args.testset == "cary3":
+        manualLeaderboard = exam_leaderboard_correlation.manualCarLeaderboard 
+    elif args.testset == "dl19":
+        manualLeaderboard = exam_leaderboard_correlation.manualDL19Leaderboard
+
 
     if args.eval:
         print_leaderboard_eval_file(exam_result_file=args.exam_result_file)
     if args.rank_correlation:
-        leaderboard_correlation_files(exam_result_file=args.exam_result_file)
+        leaderboard_correlation_files(exam_result_file=args.exam_result_file, manualLeaderboard=manualLeaderboard)
 
 
 if __name__ == "__main__":
