@@ -106,12 +106,12 @@ def main():
                       )
 
 
-    writeQuestionBank("newfile.json.gz", [queryBank, queryBank])
+    writeQuestionBank("newfile.jsonl.gz", [queryBank, queryBank])
 
-    bank_again = parseQuestionBank("newfile.json.gz")
+    bank_again = parseQuestionBank("newfile.jsonl.gz")
     print(bank_again[0])
 
-    qpcs = load_exam_question_bank("newfile.json.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    qpcs = load_exam_question_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     print(qpcs[0])
 
 if __name__ == "__main__":
