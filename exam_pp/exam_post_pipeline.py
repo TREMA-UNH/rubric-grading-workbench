@@ -414,7 +414,7 @@ def self_rated_correlation_min(grade_filter, query_paragraphs, write_stats=False
             print("\n")
 
 
-def main():
+def qmain(args=None):
     import argparse
 
     desc = f'''EXAM Post Pipeline \n
@@ -449,10 +449,10 @@ def main():
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
-    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
-    args = parser.parse_args()    
+    args = parser.parse_args(args)    
     grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set)
 
 

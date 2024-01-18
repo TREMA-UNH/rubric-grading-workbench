@@ -1,7 +1,7 @@
 {
   description = "ExamPP";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/ffb2e65e054b989c55a83f79af0ed4b912e22e14";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.dspy-nix.url = "git+https://git.smart-cactus.org/ben/dspy-nix";
 
@@ -34,3 +34,13 @@
       }
     );
 }
+
+
+        # checks.default = pkgs.stdenv.mkDerivation {
+        #   name = "check-exampp";
+        #   src = ./.;
+        #   nativeBuildInputs =
+        #     let py = dspy-nix.outputs.packages.${system}.python-cuda.withPackages (ps: [ (ps.callPackage ./exampp.nix {}) ]);
+        #     in [py];
+        #   buildPhase = '' python scripts/minimal_tests.py '';
+        # };

@@ -42,8 +42,12 @@ def writeQuestionBank(file_path:Path, queryQuestionBanks:List[QueryQuestionBank]
     # Open the gzipped file
     with gzip.open(file_path, 'wt', encoding='utf-8') as file:
         # Iterate over each line in the file
-        file.writelines([(questionBank.json()+'\n') for questionBank in queryQuestionBanks])
+        # if pydantic vs 2
+        for questionBank in queryQuestionBanks:
+            file.write(questionBank.model_dump_json()+'\n')
 
+        for questionBank in queryQuestionBanks:
+            file.write(questionBank.json()+'\n')
 ## -------------------------------------------
         
 

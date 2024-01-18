@@ -141,7 +141,7 @@ def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_que
 
         out_file.close()
 
-def main():
+def main(args=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
     import argparse
@@ -157,7 +157,8 @@ def main():
     
     parser = argparse.ArgumentParser(description="EXAM grading"
                                    , epilog=desc
-                                   , formatter_class=argparse.RawDescriptionHelpFormatter)
+                                   , formatter_class=argparse.RawDescriptionHelpFormatter
+                                   )
     parser.add_argument('paragraph_file', type=str, metavar='xxx.jsonl.gz'
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
@@ -186,7 +187,7 @@ def main():
  
 
     # Parse the arguments
-    args = parser.parse_args()  
+    args = parser.parse_args(args = args)  
 
     question_set:Dict[str,List[QuestionPrompt]]
     if args.question_type == "tqa":

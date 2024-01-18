@@ -339,7 +339,7 @@ def main():
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
-    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
 
     # Parse the arguments
     args = parser.parse_args()    

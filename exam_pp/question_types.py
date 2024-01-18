@@ -1,8 +1,7 @@
 import abc
 from typing import *
 import re
-from pyparsing import abstractmethod
-import torch
+from abc import abstractmethod
 from dataclasses import dataclass
 
 from nltk.stem import PorterStemmer
