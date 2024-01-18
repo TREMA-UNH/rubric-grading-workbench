@@ -1,3 +1,4 @@
+import abc
 from typing import *
 import re
 from pyparsing import abstractmethod
@@ -17,7 +18,7 @@ def get_prompt_classes()->List[str]:
             ]
 
 @dataclass
-class QuestionPrompt():
+class QuestionPrompt(abc.ABC):
     @abstractmethod
     def prompt_info(self)-> Dict[str, Any]:
         pass
