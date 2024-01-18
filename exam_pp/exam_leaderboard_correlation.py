@@ -17,9 +17,45 @@ from .exam_cover_metric import ExamCoverEvals
 
 
 
-# Todo update!
-manualDL19Leaderboard:Dict[str,float] = { "input.UNH_bm25": 1
-                        }
+
+manualDL19Leaderboard:Dict[str,float] = {
+    "idst_bert_p1": 1,
+    "idst_bert_p2": 2,
+    "idst_bert_p3": 3,
+    "p_exp_rm3_bert": 4,
+    "p_bert": 5,
+    "ids_bert_pr2": 6,
+    "ids_bert_pr1": 7,
+    "p_exp_bert": 8,
+    "test1": 9,
+    "TUA1-1": 10,
+    "runid4": 11,
+    "runid3": 12,
+    "TUW19-p3-f": 13,
+    "TUW19-p1-f": 14,
+    "TUW19-p3-re": 15,
+    "TUW19-p1-re": 16,
+    "TUW19-p2-f": 17,
+    "ICT-BERT2": 18,
+    "srchvrs_ps_run2": 19,
+    "TUW19-p2-re": 20,
+    "ICT-CKNRM_B": 21,
+    "ms_duet_passage": 22,
+    "ICT-CKNRM_B50": 23,
+    "srchvrs_ps_run3": 24,
+    "bm25tuned_prf_p": 25,
+    "bm25base_ax_p": 26,
+    "bm25tuned_ax_p": 27,
+    "bm25base_prf_p": 28,
+    "runid2": 29,
+    "runid5": 30,
+    "bm25tuned_rm3_p": 31,
+    "bm25base_rm3_p": 32,
+    "bm25base_p": 33,
+    "srchvrs_ps_run1": 34,
+    "bm25tuned_p": 35,
+    "UNH_bm25": 36
+}
 
 manualCarLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
                     , "ReRnak3_BERT": 2
