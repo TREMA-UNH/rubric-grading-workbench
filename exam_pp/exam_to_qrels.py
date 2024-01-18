@@ -117,6 +117,41 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
                         qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=rating))
     return qrel_entries
 
+def convert_exam_to_rated_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+    '''workhorse to convert exam-annotated paragraphs into qrel entries.
+    load input file with `parseQueryWithFullParagraphs`
+    write qrels file with `write_qrel_file`
+    or use convenience function `exam_to_qrels_file`
+    '''
+    qrel_entries:List[QrelEntry] = list()
+    beforeLastSlashpattern = r"^(.+)/"
+    
+    def best_rating_by_query(self_ratings:List[SelfRating])->int:
+        # grouped:Dict[str,Set[int]] = defaultdict(set) # default: 0
+        # for self_rating in self_ratings:
+        #     question_id = self_rating.question_id
+        #     rating = self_rating.self_rating
+        #     match = re.search(beforeLastSlashpattern, question_id)            
+        #     if match:
+        #         query_id = match.group(1)
+        #         grouped[facet_id].add(rating)
+        # best_rating = {query_id:max(ratings)  for query_id, ratings in grouped.items()}
+        best_rating = max([rating.self_rating for rating in self_ratings])
+        return best_rating
+    
+    for queryWithFullParagraphList in query_paragraphs:
+        query_id = queryWithFullParagraphList.queryId
+        paragraphs = queryWithFullParagraphList.paragraphs
+
+        for para in paragraphs:
+            if para.exam_grades:
+                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                    if exam_grade.self_ratings is None:
+                        raise RuntimeError(f"Qrels from self-ratings asked on exam grades without self-ratings.\ngrade_filter {grade_filter}\nOffending grade {exam_grade}")
+                    best_rating:int = best_rating_by_query(exam_grade.self_ratings)
+                    qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=best_rating))
+    return qrel_entries
+
 def main():
     import argparse
 
