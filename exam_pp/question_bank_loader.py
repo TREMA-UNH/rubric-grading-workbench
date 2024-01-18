@@ -1,10 +1,14 @@
+from collections import defaultdict
+import itertools
 import typing
 from pydantic import BaseModel
 import json
-from typing import List, Any, Optional, Dict, Tuple
+from typing import List, Any, Optional, Dict, Set, Tuple
 from dataclasses import dataclass
 import gzip
 from pathlib import Path
+
+from .question_types import QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 
 
 class ExamQuestion(BaseModel):
@@ -40,7 +44,57 @@ def writeQuestionBank(file_path:Path, queryQuestionBanks:List[QueryQuestionBank]
         # Iterate over each line in the file
         file.writelines([(questionBank.json()+'\n') for questionBank in queryQuestionBanks])
 
+## -------------------------------------------
+        
 
+def load_exam_question_bank(question_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
+    def generate_letter_choices() -> Set[str]:
+        char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
+        option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]', f'{ch}.',f'{ch}']   for ch in char_options]) )
+        return option_non_answers
+        
+    option_non_answers = generate_letter_choices()
+    option_non_answers.add('unanswerable')
+    content = parseQuestionBank(question_file)
+    qpc_dict = defaultdict(list)
+    for queryQuestions in content:
+        query_id = queryQuestions.query_id
+        for question in queryQuestions.questions:
+            if not question.query_id == query_id:
+                    raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
+            qpc:QuestionPrompt
+            if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
+                qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
+                                                                    , question = question.question_text
+                                                                    , query_id = question.query_id
+                                                                    , facet_id = question.facet_id
+                                                                    , query_text = queryQuestions.query_text
+                                                                    , unanswerable_expressions = option_non_answers
+                                                                    )
+            elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
+                qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
+                                                                    , question = question.question_text
+                                                                    , query_id = question.query_id
+                                                                    , facet_id = question.facet_id
+                                                                    , query_text = queryQuestions.query_text
+                                                                    , unanswerable_expressions = option_non_answers
+                                                                    )
+            elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
+                qpc = QuestionAnswerablePromptWithChoices(question_id = question.question_id
+                                                                    , question = question.question_text
+                                                                    , query_id = question.query_id
+                                                                    , facet_id = question.facet_id
+                                                                    , query_text = queryQuestions.query_text
+                                                                    , unanswerable_expressions = option_non_answers
+                                                                    )
+            else:
+                raise RuntimeError(f"Prompt class {prompt_class} not supported by naghmeh's question_loader.")\
+        
+
+            qpc_dict[query_id].append(qpc)
+    return list(qpc_dict.items())
+
+## -------------------------------------------        
 
 def main():
     question1 = ExamQuestion(question_id="12897q981", query_id="Q1", question_text="What was my question, again?", facet_id=None, info=None)
@@ -57,6 +111,8 @@ def main():
     bank_again = parseQuestionBank("newfile.json.gz")
     print(bank_again[0])
 
+    qpcs = load_exam_question_bank("newfile.json.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    print(qpcs[0])
 
 if __name__ == "__main__":
     main()
