@@ -101,12 +101,12 @@ def main():
     question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info=None)
 
     print(question1.json())
-    bank = QueryQuestionBank(query_id="Q1", facet_id=None, test_collection="dummy", query_text="everything", info=None
+    queryBank = QueryQuestionBank(query_id="Q1", facet_id=None, test_collection="dummy", query_text="everything", info=None
                       , questions= [question1, question2]
                       )
 
 
-    writeQuestionBank("newfile.json.gz", [bank])
+    writeQuestionBank("newfile.json.gz", [queryBank, queryBank])
 
     bank_again = parseQuestionBank("newfile.json.gz")
     print(bank_again[0])
