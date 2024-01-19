@@ -127,15 +127,6 @@ def convert_exam_to_rated_qrels(query_paragraphs:List[QueryWithFullParagraphList
     beforeLastSlashpattern = r"^(.+)/"
     
     def best_rating_by_query(self_ratings:List[SelfRating])->int:
-        # grouped:Dict[str,Set[int]] = defaultdict(set) # default: 0
-        # for self_rating in self_ratings:
-        #     question_id = self_rating.question_id
-        #     rating = self_rating.self_rating
-        #     match = re.search(beforeLastSlashpattern, question_id)            
-        #     if match:
-        #         query_id = match.group(1)
-        #         grouped[facet_id].add(rating)
-        # best_rating = {query_id:max(ratings)  for query_id, ratings in grouped.items()}
         best_rating = max([rating.self_rating for rating in self_ratings])
         return best_rating
     

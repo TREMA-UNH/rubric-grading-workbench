@@ -10,10 +10,11 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 
+
 import trec_car.read_data as trec_car
 from .parse_qrels_runs_with_text import *
 from . import parse_qrels_runs_with_text
-
+from .pydantic_helper import pydantic_dump
 
 
 def get_md5_hash(input_string: str) -> str:

@@ -36,7 +36,7 @@ class TablePrinter():
 
     def add_table(self,  counts:Dict[str,Dict[str,int]], kappa:Dict[str,float]
                   , judgments_header:List[str], label_header:List[str]
-                  , judgment_title:str="Assessors", label_title:str="GRADED"
+                  , judgment_title:Optional[str]="Assessors", label_title:Optional[str]="GRADED"
                   , label_to_judgment_kappa:Optional[Dict[str,str]]=None):
         # Find the maximum values for each column
         max_col_values = {judgment: max(counts[label][judgment] for label in label_header) for judgment in judgments_header}

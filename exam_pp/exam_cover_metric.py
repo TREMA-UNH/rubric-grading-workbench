@@ -13,7 +13,7 @@ from pathlib import Path
 from .question_types import *
 from .parse_qrels_runs_with_text import *
 from .parse_qrels_runs_with_text import GradeFilter
-
+from .pydantic_helper import pydantic_dump
 
 
 
@@ -274,7 +274,7 @@ def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, ex
 
 def write_exam_results(out_jsonl_file, resultsPerMethod):
     with gzip.open(out_jsonl_file, 'wt', encoding='utf-8') as file:
-        file.writelines([results.json()+'\n' for results in resultsPerMethod.values()])
+        file.writelines([pydantic_dump(results)+'\n' for results in resultsPerMethod.values()])
         file.close()
 
 def top_ranked_paragraphs(rank_cut_off:int, paragraphs:List[FullParagraphData])-> Dict[str,List[FullParagraphData]] :
@@ -288,25 +288,6 @@ def top_ranked_paragraphs(rank_cut_off:int, paragraphs:List[FullParagraphData])-
 
 
 def main():
-
-    # import abc
-    # from collections import defaultdict
-    # from math import nan
-    # import math
-    # import statistics
-    # # from question_types import x
-    # # from parse_qrels_runs_with_text import x
-    # from parse_qrels_runs_with_text import GradeFilter
-    # from exam_cover_metric import compute_exam_cover_scores_file, ExamCoverScorerFactory
-    # from typing import Set, List, Tuple, Dict, Optional, Iterable
-    # from collections import defaultdict
-    # from dataclasses import dataclass
-    # from pathlib import Path
-
-
-    # from pydantic import BaseModel
-    # import gzip
-
     import argparse
 
     desc = f'''Compute the  Exam-Cover evaluation scores from ranked paragraphs with exam annotations. \n

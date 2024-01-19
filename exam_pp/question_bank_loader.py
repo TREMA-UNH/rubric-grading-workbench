@@ -9,7 +9,7 @@ import gzip
 from pathlib import Path
 
 from .question_types import QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
-
+from .pydantic_helper import pydantic_dump
 
 class ExamQuestion(BaseModel):
     question_id: str
@@ -42,12 +42,9 @@ def writeQuestionBank(file_path:Path, queryQuestionBanks:List[QueryQuestionBank]
     # Open the gzipped file
     with gzip.open(file_path, 'wt', encoding='utf-8') as file:
         # Iterate over each line in the file
-        # if pydantic vs 2
         for questionBank in queryQuestionBanks:
-            file.write(questionBank.model_dump_json()+'\n')
+            file.write(pydantic_dump(questionBank)+'\n')
 
-        for questionBank in queryQuestionBanks:
-            file.write(questionBank.json()+'\n')
 ## -------------------------------------------
         
 
@@ -104,7 +101,7 @@ def main():
     question1 = ExamQuestion(question_id="12897q981", query_id="Q1", question_text="What was my question, again?", facet_id=None, info=None)
     question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info=None)
 
-    print(question1.json())
+    print(pydantic_dump(question1))
     queryBank = QueryQuestionBank(query_id="Q1", facet_id=None, test_collection="dummy", query_text="everything", info=None
                       , questions= [question1, question2]
                       )

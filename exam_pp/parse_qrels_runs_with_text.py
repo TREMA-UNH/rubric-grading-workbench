@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 
-
+from .pydantic_helper import pydantic_dump
 
 class SelfRating(BaseModel):
     question_id:str

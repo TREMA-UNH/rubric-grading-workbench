@@ -14,65 +14,69 @@ from .parse_qrels_runs_with_text import *
 from .parse_qrels_runs_with_text import GradeFilter
 from .exam_cover_metric import *
 from .exam_cover_metric import ExamCoverEvals
+from . import exam_leaderboard_correlation
 
 
 
+def load_leaderboard(file_path:Path)->Dict[str,float]:
+    with open(file_path, 'r') as file:
+        return json.load(file)
 
-manualDL19Leaderboard:Dict[str,float] = {
-    "idst_bert_p1": 1,
-    "idst_bert_p2": 2,
-    "idst_bert_p3": 3,
-    "p_exp_rm3_bert": 4,
-    "p_bert": 5,
-    "ids_bert_pr2": 6,
-    "ids_bert_pr1": 7,
-    "p_exp_bert": 8,
-    "test1": 9,
-    "TUA1-1": 10,
-    "runid4": 11,
-    "runid3": 12,
-    "TUW19-p3-f": 13,
-    "TUW19-p1-f": 14,
-    "TUW19-p3-re": 15,
-    "TUW19-p1-re": 16,
-    "TUW19-p2-f": 17,
-    "ICT-BERT2": 18,
-    "srchvrs_ps_run2": 19,
-    "TUW19-p2-re": 20,
-    "ICT-CKNRM_B": 21,
-    "ms_duet_passage": 22,
-    "ICT-CKNRM_B50": 23,
-    "srchvrs_ps_run3": 24,
-    "bm25tuned_prf_p": 25,
-    "bm25base_ax_p": 26,
-    "bm25tuned_ax_p": 27,
-    "bm25base_prf_p": 28,
-    "runid2": 29,
-    "runid5": 30,
-    "bm25tuned_rm3_p": 31,
-    "bm25base_rm3_p": 32,
-    "bm25base_p": 33,
-    "srchvrs_ps_run1": 34,
-    "bm25tuned_p": 35,
-    "UNH_bm25": 36
-}
+official_DL19_leaderboard:Dict[str,float] = {
+                        "idst_bert_p1": 1,
+                        "idst_bert_p2": 2,
+                        "idst_bert_p3": 3,
+                        "p_exp_rm3_bert": 4,
+                        "p_bert": 5,
+                        "ids_bert_pr2": 6,
+                        "ids_bert_pr1": 7,
+                        "p_exp_bert": 8,
+                        "test1": 9,
+                        "TUA1-1": 10,
+                        "runid4": 11,
+                        "runid3": 12,
+                        "TUW19-p3-f": 13,
+                        "TUW19-p1-f": 14,
+                        "TUW19-p3-re": 15,
+                        "TUW19-p1-re": 16,
+                        "TUW19-p2-f": 17,
+                        "ICT-BERT2": 18,
+                        "srchvrs_ps_run2": 19,
+                        "TUW19-p2-re": 20,
+                        "ICT-CKNRM_B": 21,
+                        "ms_duet_passage": 22,
+                        "ICT-CKNRM_B50": 23,
+                        "srchvrs_ps_run3": 24,
+                        "bm25tuned_prf_p": 25,
+                        "bm25base_ax_p": 26,
+                        "bm25tuned_ax_p": 27,
+                        "bm25base_prf_p": 28,
+                        "runid2": 29,
+                        "runid5": 30,
+                        "bm25tuned_rm3_p": 31,
+                        "bm25base_rm3_p": 32,
+                        "bm25base_p": 33,
+                        "srchvrs_ps_run1": 34,
+                        "bm25tuned_p": 35,
+                        "UNH_bm25": 36
+                    }
 
-manualCarLeaderboard:Dict[str,float] = { "dangnt-nlp": 1
-                    , "ReRnak3_BERT": 2
-                    , "ReRnak2_BERT": 3
-                    , "IRIT1" : 5
-                    , "IRIT2" : 5
-                    , "IRIT3" : 5
-                    , "ECNU_BM25_1" : 7.5
-                    , "ECNU_ReRank1" : 7.5
-                    , "Bert-ConvKNRM-50" : 9
-                    , "bm25-populated" : 10
-                    , "UNH-bm25-ecmpsg" : 11
-                    , "Bert-DRMMTKS" : 12
-                    , "UvABM25RM3" : 13
-                    , "UvABottomUpChangeOrder" : 14
-                    , "UvABottomUp2" : 15
-                    , "ICT-DRMMTKS" : 16
+official_CarY3_leaderboard:Dict[str,float] = { "dangnt-nlp": 1
+                                            , "ReRnak3_BERT": 2
+                                            , "ReRnak2_BERT": 3
+                                            , "IRIT1" : 5
+                                            , "IRIT2" : 5
+                                            , "IRIT3" : 5
+                                            , "ECNU_BM25_1" : 7.5
+                                            , "ECNU_ReRank1" : 7.5
+                                            , "Bert-ConvKNRM-50" : 9
+                                            , "bm25-populated" : 10
+                                            , "UNH-bm25-ecmpsg" : 11
+                                            , "Bert-DRMMTKS" : 12
+                                            , "UvABM25RM3" : 13
+                                            , "UvABottomUpChangeOrder" : 14
+                                            , "UvABottomUp2" : 15
+                                            , "ICT-DRMMTKS" : 16
 }
 
 origExamLeaderboard:Dict[str,float]  = { "ReRnak2_BERT": 1
@@ -117,9 +121,13 @@ def compatible_kendalltau(ranks1, ranks2)->Tuple[float,float]:
         return result.correlation, result.pvalue
 
 
-def leaderboard_rank_correlation(systemEval:Dict[str,float], manualLeaderboard:Dict[str,int])->CorrelationStats:
-    methods = list(manualLeaderboard.keys())
-    ranks1 = [manualLeaderboard[method] for method in methods]
+def leaderboard_rank_correlation(systemEval:Dict[str,float], official_leaderboard:Dict[str,int])->CorrelationStats:
+    methods = list(official_leaderboard.keys())
+    ranks1 = [official_leaderboard[method] for method in methods]
+
+    for method in methods:
+        if not method in systemEval:
+            raise RuntimeError(f'official leaderboard contains method {method}, but predicted leaderboard does not.  \nMethods in predicted leaderboard:{systemEval.keys()} \nMethods in official leaderboard {methods}')
 
     # Extract scores for the methods
     scores = [systemEval[method] for method in methods]
@@ -161,7 +169,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals], manualLeaderboard:Dict[str,int])->[str]:
+def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,int])->[str]:
     evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
@@ -182,7 +190,7 @@ def leaderboard_table(evals:List[ExamCoverEvals], manualLeaderboard:Dict[str,int
     lines = [ '\t'.join([e.method
                         ,f2s(e.examScore), '+/-', f2s(e.examScoreStd)
                         ,f2s(e.nExamScore), '+/-', f2s(e.nExamScoreStd)
-                        , f2s(manualLeaderboard.get(e.method))
+                        , f2s(official_leaderboard.get(e.method))
                         , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
@@ -210,22 +218,22 @@ def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
     with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
         return [ExamCoverEvals.parse_raw(line) for line in file]
 
-def leaderboard_correlation_files(exam_result_file:Path, manualLeaderboard:Dict[str,int]):
+def leaderboard_correlation_files(exam_result_file:Path, official_leaderboard:Dict[str,int]):
     evals = read_exam_result_file(exam_result_file)
 
-    nExamCorrelation, examCorrelation = leaderboard_correlation(evals, manualLeaderboard=manualLeaderboard)
+    nExamCorrelation, examCorrelation = leaderboard_correlation(evals, official_leaderboard=official_leaderboard)
     print(f' nExam:{nExamCorrelation}')
     print(f' exam:{examCorrelation}')
 
-def leaderboard_correlation(evals:Iterable[ExamCoverEvals], manualLeaderboard:Dict[str,int])->Tuple[CorrelationStats,CorrelationStats]:
+def leaderboard_correlation(evals:Iterable[ExamCoverEvals], official_leaderboard:Dict[str,int])->Tuple[CorrelationStats,CorrelationStats]:
     '''Compute Leaderboard correlation. 
     Load necessary data with `read_exam_result_file()` or use the convenience method `leaderboard_correlation_files`
     '''
     nExamEval = {eval.method: eval.nExamScore for eval in evals}
     examEval = {eval.method: eval.examScore for eval in evals}
 
-    nExamCorrelation = leaderboard_rank_correlation(nExamEval, manualLeaderboard=manualLeaderboard)
-    examCorrelation = leaderboard_rank_correlation(examEval, manualLeaderboard=manualLeaderboard)
+    nExamCorrelation = leaderboard_rank_correlation(nExamEval, official_leaderboard=official_leaderboard)
+    examCorrelation = leaderboard_rank_correlation(examEval, official_leaderboard=official_leaderboard)
     return nExamCorrelation,examCorrelation
 
 
@@ -261,17 +269,17 @@ def main():
     # Parse the arguments
     args = parser.parse_args(args)    
     
-    manualLeaderboard:Dict[str,int]
+    official_leaderboard:Dict[str,int]
     if args.testset == "cary3":
-        manualLeaderboard = exam_leaderboard_correlation.manualCarLeaderboard 
+        official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
-        manualLeaderboard = exam_leaderboard_correlation.manualDL19Leaderboard
+        official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
 
 
     if args.eval:
         print_leaderboard_eval_file(exam_result_file=args.exam_result_file)
     if args.rank_correlation:
-        leaderboard_correlation_files(exam_result_file=args.exam_result_file, manualLeaderboard=manualLeaderboard)
+        leaderboard_correlation_files(exam_result_file=args.exam_result_file, official_leaderboard=official_leaderboard)
 
 
 if __name__ == "__main__":
