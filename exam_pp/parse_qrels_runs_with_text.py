@@ -48,10 +48,14 @@ class GradeFilter():
 
         # grades are marked as using this model
         if self.model_name is not None:
-            if not grade.llm == self.model_name:
-                return False
-            elif not self.model_name == "google/flan-t5-large":
-                return False
+            if grade.llm is None:  # old run, where we did not expose this was a flan-t5-large run
+                if self.model_name == "google/flan-t5-large":
+                    pass # this is acceptable
+                else:
+                    return False  # we are asking for a different model
+
+            if not grade.llm == self.model_name:  # grade.llm is set, so lets see whether it matches
+                return False    # sad trombone, did not match
 
         # grade.prompt_info is marked as using this prompt_class
         if self.prompt_class is not None:
