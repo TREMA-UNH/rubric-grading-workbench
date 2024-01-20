@@ -78,14 +78,24 @@ def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter
 
 
 
-def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ratings, query_paragraphs):
+def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ratings, query_paragraphs
+                                 , relevant_grades:Optional[Set[int]]=None,  non_relevant_grades:Optional[Set[int]]=None):
     corrAll:ConfusionStats
     corrPerQuery:Dict[str, ConfusionStats]
 
     print("ignoring rating levels")
 
+    non_relevant_grade_set = {0}
+    relevant_grade_set = {1,2,3}
+
+    if non_relevant_grades is not None:
+        non_relevant_grade_set = non_relevant_grades
+    if relevant_grades is not None:
+        relevant_grade_set = relevant_grades
+
+
     for min_answers in [1,2,5]:
-        for min_judgment_level in [1,2,3]:
+        for min_judgment_level in relevant_grade_set:
             print(f"\n min_judgment {min_judgment_level} / min_answers {min_answers}")
 
             corrAll, corrPerQuery = exam_judgment_correlation.confusion_exam_vs_judged_correlation(query_paragraphs, grade_filter=grade_filter, min_judgment_level=min_judgment_level, min_answers=min_answers)
@@ -96,9 +106,9 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
 
 
     if use_ratings:
-        selfRated_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs)
+        selfRated_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set)
     else:
-        binary_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs)
+        binary_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set)
 
     print("\n\n exam_vs_judged")
 
@@ -159,7 +169,8 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Di
 
     # file.close()
 
-def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs):
+def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs
+                                 , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int]):
     print("\n\n binary correlation")
    
     table_printer = print_correlation_table.TablePrinter()
@@ -170,7 +181,7 @@ def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFi
         print("\n\n binary correlation")
     
         predicted_label_list = [{1},{0}]
-        judgment_list = [{3,2,1},{0}]
+        judgment_list = [relevant_grade_set, non_relevant_grade_set]
 
         label_to_judgment_kappa:Dict[str, str]
         label_to_judgment_kappa = { fmt_labels(l): fmt_judgments(j) for l,j in zip( predicted_label_list, judgment_list)}
@@ -221,14 +232,15 @@ def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFi
 
     table_printer.export(Path(correlation_out_file))
 
-def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, query_paragraphs):
+def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, query_paragraphs
+                                    , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int]):
     print("\n\n binary correlation")
 
     table_printer = print_correlation_table.TablePrinter()
     table_printer.add_section("correlation tables")
         
     for labels in [{0},{1,2,3,4,5}]:
-        for judgments in [{0},{1,2,3}]:
+        for judgments in [non_relevant_grade_set,relevant_grade_set]:
             print(f"\n predicted_judgment {labels} /  exact_judgment {judgments}")
 
             corrAll, corrPerQuery = exam_judgment_correlation.confusion_predicted_judgments_correlation(query_paragraphs, grade_filter=grade_filter, judgments=judgments, prediction=labels, min_answers=1, use_ratings=True)
@@ -251,6 +263,12 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
             label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({1})
             label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({1})
 
+            if 1 in non_relevant_grade_set: 
+                label_to_judgment_kappa[fmt_labels({5})]=fmt_judgments({3})
+                label_to_judgment_kappa[fmt_labels({4})]=fmt_judgments({3})
+                label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({2})
+                label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({2})                
+                label_to_judgment_kappa[fmt_labels({1})]=fmt_judgments({2})                
 
             label_judgments_correlation_table(table_printer=table_printer
                                             , query_paragraphs=query_paragraphs, grade_filter=grade_filter
@@ -267,6 +285,9 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
         
             predicted_label_list = [{5,4}, {3,2,1},{0}]
             judgment_list = [{3,2},{1},{0}]
+            if 1 in non_relevant_grade_set:
+                judgment_list = [{3},{2},non_relevant_grade_set]
+
             
             label_to_judgment_kappa:Dict[str, str]
             label_to_judgment_kappa = { fmt_labels(l): fmt_judgments(j) for l,j in zip( predicted_label_list, judgment_list)}
@@ -286,7 +307,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
             print("\n\n binary correlation")
         
             predicted_label_list = [{3,4,5,1,2},{0}]
-            judgment_list = [{3,2,1},{0}]
+            judgment_list = [relevant_grade_set, non_relevant_grade_set]
 
             label_to_judgment_kappa:Dict[str, str]
             label_to_judgment_kappa = { fmt_labels(l): fmt_judgments(j) for l,j in zip( predicted_label_list, judgment_list)}
@@ -308,7 +329,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
             print("\n\n binary correlation")
         
             predicted_label_list = [{4,5},{3,1,2,0}]
-            judgment_list = [{3,2,1},{0}]
+            judgment_list = [relevant_grade_set, non_relevant_grade_set]
             
             label_to_judgment_kappa:Dict[str, str]
             label_to_judgment_kappa = { fmt_labels(l): fmt_judgments(j) for l,j in zip( predicted_label_list, judgment_list)}
@@ -468,12 +489,16 @@ def main(cmdargs=None):
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
 
 
+
     official_leaderboard:Dict[str,float]
+    non_relevant_grades = None
+    relevant_grades = None
     if args.testset == "cary3":
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
         official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
-
+        non_relevant_grades = {0,1}
+        relevant_grades = {2,3}
     if args.official_leaderboard is not None:
         official_leaderboard = exam_leaderboard_correlation.load_leaderboard(args.official_leaderboard)
 
@@ -508,6 +533,8 @@ def main(cmdargs=None):
                                      , grade_filter=grade_filter
                                      , use_ratings=use_ratings
                                      , query_paragraphs=query_paragraphs
+                                     , non_relevant_grades=non_relevant_grades
+                                     , relevant_grades = relevant_grades
                                      )
 
 
