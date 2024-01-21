@@ -84,7 +84,7 @@ def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_para
 def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
-    with gzip.open(out_file, 'wt', encoding='utf-8') as out_file:
+    with gzip.open(out_file, 'wt', encoding='utf-8') as file:
 
         query_paragraphs = parseQueryWithFullParagraphs(paragraph_file)
 
@@ -125,7 +125,7 @@ def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_que
 
 
 
-            if take_previous_paragraphs: # if restart
+            if take_previous_paragraphs and previousQueryWithFullParagraphList is not None: # if restart
                 # copy paragraph
                 print(f"Restart Logic:  copy query {query_id}")
                 queryWithFullParagraphList = previousQueryWithFullParagraphList
@@ -135,13 +135,13 @@ def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_que
                 noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs)
             
             
-            out_file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
+            file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             # out_file.write('\n')
-            out_file.flush()
+            file.flush()
 
-        out_file.close()
+        file.close()
 
-def main(args=None):
+def main(cmdargs=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
     import argparse
@@ -187,7 +187,7 @@ def main(args=None):
  
 
     # Parse the arguments
-    args = parser.parse_args(args = args)  
+    args = parser.parse_args(args = cmdargs)  
 
     question_set:Dict[str,List[QuestionPrompt]]
     if args.question_type == "tqa":

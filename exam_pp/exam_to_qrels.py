@@ -46,7 +46,7 @@ def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grad
 
         for para in paragraphs:
             if para.exam_grades:
-                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                     numCorrect = len(exam_grade.correctAnswered)
                     qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=numCorrect))
     return qrel_entries
@@ -75,7 +75,7 @@ def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList
 
         for para in paragraphs:
             if para.exam_grades:
-                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                     grouped:Dict[str,int] = count_by_facet(exam_grade.correctAnswered)
                     for facet_id, count in grouped.items():
                         qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=count))
@@ -109,7 +109,7 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
 
         for para in paragraphs:
             if para.exam_grades:
-                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                     if exam_grade.self_ratings is None:
                         raise RuntimeError(f"Qrels from self-ratings asked on exam grades without self-ratings.\ngrade_filter {grade_filter}\nOffending grade {exam_grade}")
                     best_rating:Dict[str,int] = best_rating_by_facet(exam_grade.self_ratings)
@@ -136,7 +136,7 @@ def convert_exam_to_rated_qrels(query_paragraphs:List[QueryWithFullParagraphList
 
         for para in paragraphs:
             if para.exam_grades:
-                for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                     if exam_grade.self_ratings is None:
                         raise RuntimeError(f"Qrels from self-ratings asked on exam grades without self-ratings.\ngrade_filter {grade_filter}\nOffending grade {exam_grade}")
                     best_rating:int = best_rating_by_query(exam_grade.self_ratings)

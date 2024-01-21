@@ -1,6 +1,7 @@
 
 
 import csv
+import sys
 from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
@@ -439,6 +440,9 @@ def self_rated_correlation_min(grade_filter, query_paragraphs, write_stats=False
 
 def main(cmdargs=None):
     import argparse
+
+    sys.stdout.reconfigure(line_buffering=True)
+
 
     print("EXAM Post Pipeline")
     desc = f'''EXAM Post Pipeline \n
