@@ -76,7 +76,7 @@ def main_rating():
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            if len(para.retrieve_exam_grade(grade_filter=grade_filter))>1:
+            if len(para.retrieve_exam_grade_any(grade_filter=grade_filter))>1:
                    raise RuntimeError('there should only be 0 or 1')
             
             # for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter.get_min_grade_filter(4)): # there will be 1 or 0

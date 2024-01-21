@@ -129,7 +129,7 @@ class FullParagraphData(BaseModel):
     paragraph_data : ParagraphData
     exam_grades : Optional[List[ExamGrades]]
 
-    def retrieve_exam_grade(self, grade_filter:GradeFilter) -> List[ExamGrades]:
+    def retrieve_exam_grade_any(self, grade_filter:GradeFilter) -> List[ExamGrades]:
         if self.exam_grades is None:
             return []
         
@@ -138,6 +138,15 @@ class FullParagraphData(BaseModel):
             return [found]
         else: 
             return []
+        
+
+    def retrieve_exam_grade_all(self, grade_filter:GradeFilter) -> List[ExamGrades]:
+        if self.exam_grades is None:
+            return []
+        
+        # result = list(g for g in self.exam_grades if grade_filter.filter(g))
+        # return result
+        return [g for g in self.exam_grades if grade_filter.filter(g)]
         
 
 

@@ -109,7 +109,7 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+            for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
@@ -117,6 +117,8 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
 
                 hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
                 if min_rating is not None:
+                    if exam_grade.self_ratings is None: 
+                        raise RuntimeError("These grades don't have self-ratings.")
                     filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
                     hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
                 isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
@@ -152,7 +154,7 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+            for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
@@ -179,7 +181,7 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
 
 
 def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
-    for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+    for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
         if len(exam_grade.correctAnswered) > min_answers:
             return 1
         else:
@@ -188,7 +190,7 @@ def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter
 
 
 def predict_labels_from_ratings(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
-    for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter): # there will be 1 or 0
+    for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
         ratings = (rate.self_rating for rate in exam_grade.self_ratings)
         best_rating:int
         if min_answers > 1:

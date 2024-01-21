@@ -73,14 +73,14 @@ class ExamCoverScorerCorrectAnswer(ExamCoverScorer):
     def __countTotalCorrectQuestions(self,paras:List[FullParagraphData])->int:
         correct:Set[str] = set().union(*[set(grade.correctAnswered) 
                                     for para in paras 
-                                        for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                        for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                         ])
         return len(correct)
 
     def __countTotalQuestions(self,paras:List[FullParagraphData])->int:
         answered:Set[str] = set().union(*[set(grade.correctAnswered + grade.wrongAnswered) 
                                     for para in paras 
-                                        for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                        for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                         ])
         return len(answered)
 
@@ -123,7 +123,7 @@ class ExamCoverScorerSelfRatings(ExamCoverScorer):
     def __countTotalCorrectQuestions(self,paras:List[FullParagraphData])->int:
         correct:Set[str] = { rate.question_id
                                             for para in paras 
-                                                for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                                for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                                         for rate in grade.self_ratings_as_iterable()
                                                             if rate.self_rating >= self.min_self_rating
                             }
@@ -132,7 +132,7 @@ class ExamCoverScorerSelfRatings(ExamCoverScorer):
     def __countTotalQuestions(self,paras:List[FullParagraphData])->int:
         answered:Set[str] = { rate.question_id
                                             for para in paras 
-                                                for grade in para.retrieve_exam_grade(grade_filter=self.grade_filter)
+                                                for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                                         for rate in grade.self_ratings_as_iterable()
                             }
         return len(answered)
