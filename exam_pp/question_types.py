@@ -9,6 +9,12 @@ from nltk.stem import PorterStemmer
 import nltk
 from fuzzywuzzy import fuzz
 
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+
+nltk.download('stopwords')
+nltk.download('punkt')  
 
 def get_prompt_classes()->List[str]:
     return ['QuestionPromptWithChoices'
@@ -559,12 +565,6 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
         return is_match
 
 
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import PorterStemmer
-
-nltk.download('stopwords')
-nltk.download('punkt')  
 
 @dataclass
 class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):

@@ -159,6 +159,8 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
                 
                 if judg ==None:
                     continue # don't have all the data
+                if exam_grade.self_ratings is None:
+                    raise RuntimeError(f"{query_id} paragraphId: {para.paragraph_id}:  Exam grades have no self ratings!  {exam_grade}")
 
                 hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
                 if exact_rating is not None:
@@ -191,6 +193,9 @@ def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter
 
 def predict_labels_from_ratings(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
     for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
+        if exam_grade.self_ratings is None:
+            raise RuntimeError(f"paragraphId: {para.paragraph_id}:  Exam grades have no self ratings!  {exam_grade}")
+
         ratings = (rate.self_rating for rate in exam_grade.self_ratings)
         best_rating:int
         if min_answers > 1:
