@@ -27,7 +27,7 @@ class QuestionPrompt(abc.ABC):
     question_id:str
 
     @abstractmethod
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         pass
 
     @abstractmethod
@@ -51,6 +51,9 @@ class QuestionPrompt(abc.ABC):
     @abstractmethod
     def has_rating(self):
         return False
+    
+    def answer_match_info(self):
+        return ""
 
 def normalize_answer(answer:str)->str:
     # Lowercase, Perform other normalization like removing punctuation, if necessary
@@ -84,7 +87,7 @@ class QuestionPromptWithChoices(QuestionPrompt):
         self.normalized_correct_answers = {normalize_answer(gold) for gold in correct_answers}
         self.correct_answers = correct_answers
 
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"prompt_style": "context: question:"
                 , "context_first": True
@@ -209,7 +212,7 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         return super().check_answer_rating(answer)
     
 
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"prompt_style": "How does this text answer this question:"
                 , "context_first": False
@@ -332,7 +335,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     def check_answer_rating(self, answer: str) -> int:
         return super().check_answer_rating(answer)
     
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"prompt_style": "provide a complete and concise answer to the question based on the context."
                 , "context_first": False
@@ -467,7 +470,7 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
             
         self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
 
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"prompt_style": "provide a complete and concise answer to the question based on the context."
                 , "context_first": False
@@ -824,7 +827,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
 
 
-    def prompt_info(self)-> Dict[str, Any]:
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"orig_prompt_class": "unknown"
                 ,"prompt_style": "N/A  (this prompt re-verifies answers produced by \"orig_prompt_class\")"

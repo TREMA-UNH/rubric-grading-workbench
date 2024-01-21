@@ -459,7 +459,7 @@ def main(cmdargs=None):
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('exam_annotated_file', type=str, metavar='exam-xxx.jsonl.gz'
-                        , help='json file that annotates each paragraph with a number of anserable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
+                        , help='json file that annotates each paragraph with a number of answerable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
