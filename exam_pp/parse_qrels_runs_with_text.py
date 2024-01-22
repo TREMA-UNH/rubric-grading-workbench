@@ -31,6 +31,23 @@ class ExamGrades(BaseModel):
         else:
             return self.self_ratings
 
+
+class Grades(BaseModel):
+    correctAnswered: bool               # true if relevant,  false otherwise
+    answer: str                        #  llm_response_text
+    llm: str                                 # huggingface model name  google/flan-t5-large
+    llm_options: Dict[str,Any]               # anything that seems relevant
+    prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
+        # must have fields:
+        #  prompt_info["prompt_class"]="FagB"
+            # info =  {
+            #       "prompt_class":  FagB  # or self.__class__.__name__
+            #     , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
+            #     , "is_self_rated": false # false if not self-rated, otherwise true
+            #     }
+    self_ratings: Optional[int]         #  if availabel: self-rating (e.g. 0-5)
+
+
 @dataclass
 class GradeFilter():
     model_name: Optional[str]
@@ -128,6 +145,7 @@ class FullParagraphData(BaseModel):
     paragraph : Any
     paragraph_data : ParagraphData
     exam_grades : Optional[List[ExamGrades]]
+    grades: Optional[List[Grades]]
 
     def retrieve_exam_grade_any(self, grade_filter:GradeFilter) -> List[ExamGrades]:
         if self.exam_grades is None:
