@@ -24,6 +24,7 @@ def get_prompt_classes()->List[str]:
             , 'QuestionCompleteConcisePromptWithAnswerKey2'
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
             , 'QuestionSelfRatedExplainPrompt'
+            , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
             ]
 
 
@@ -564,6 +565,60 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
         return is_match
 
+
+@dataclass
+class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
+    '''This is an answer-verifier to be used to regrade any QA prompt with explicit answers.'''
+    question_id:str
+    question:str
+    choices:Dict[str,str]
+    correct:str
+    correctKey:Optional[str]
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+
+
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        def old_prompt(key, default):
+            if old_prompt_info is None:
+                return default
+            return old_prompt_info.get(key, default)
+        
+        info =  {"prompt_class": self.__class__.__name__
+                , "orig_prompt_class": old_prompt("prompt_class", "")
+                , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
+                , "context_first": old_prompt("context_first", False)
+                , "check_unanswerable": False
+                , "check_answer_key": True
+                , "is_self_rated":self.has_rating()
+                }
+        return info
+
+    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+        return ""
+
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        return {}
+
+
+    def check_answer(self,answer:str)->bool:
+        return False
+
+    def check_answer_rating(self,answer:str)->int:
+        if self.check_answer(answer=answer):
+            return 1
+        else:
+            return 0
+
+    def has_rating(self):
+        return False
+    
+    def answer_match_info(self):
+        return "Using FLAN-T5-Large with this prompt: For the question \"{question}\" the correct answer is \"{correct_answer}\". Is \"{answer}\" an equally correct response to this question? Answer yes or no."
+    
 
 
 @dataclass

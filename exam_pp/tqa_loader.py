@@ -115,6 +115,18 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                 , facet_id = None
                                                 , query_text=query_text
                                                 )
+    elif(prompt_class == "QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2"):
+        if choices is None:
+            raise RuntimeError(f"{prompt_class}: Choices must not be null")
+        qpc = QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(question_id=qid
+                                                                 , question=question
+                                                                 , choices=choices
+                                                                 , correct=correct
+                                                                 , correctKey = correctKey
+                                                                 , query_id=query_id
+                                                                 , facet_id = None
+                                                                 , query_text=query_text
+                                                                 )     
     else:
         raise RuntimeError(f"Prompt class {prompt_class} not supported by tqa_loader.")
     return qpc
