@@ -169,8 +169,14 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
-def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,int])->[str]:
-    evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
+def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,int]
+                      , nExamCorrelation:Optional[CorrelationStats], examCorrelation:Optional[CorrelationStats], sortBy:Optional[str]=None)->[str]:
+    
+    evals_ = sorted (evals, key= lambda eval: eval.method)
+    if sortBy == "exam":
+        evals_ = sorted(evals, key= lambda eval: eval.examScore, reverse=True)
+    if sortBy == "nExam":
+        evals_ = sorted(evals, key= lambda eval: eval.nExamScore, reverse=True)
 
     def f2s(x:Optional[float])->str:
         if x is None:
@@ -194,8 +200,19 @@ def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,
                         , f2s(origExamLeaderboard.get(e.method))
                         ])
                              for e in evals_]
+    corr = []
+    if not (examCorrelation is None  or nExamCorrelation is None):
+        corr = [ '\t'.join(["spearman", f2s(examCorrelation.spearman_correlation), "", ""
+                            ,f2s(nExamCorrelation.spearman_correlation), "","",
+                            "",""
+                            ])
+            ,  '\t'.join(["kendall", f2s(examCorrelation.kendall_correlation), "", ""
+                            ,f2s(nExamCorrelation.kendall_correlation), "","",
+                            "",""
+                            ])
+            ]
     # print('\n'.join([f'EXAM scores produced with {grade_filter}', header]+lines))
-    return [header]+lines
+    return [header]+lines+corr
 
 
 def print_leaderboard_eval(evals:List[ExamCoverEvals], grade_filter:GradeFilter):

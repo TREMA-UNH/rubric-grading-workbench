@@ -128,19 +128,22 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
             # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
             exam_leaderboard_correlation.print_leaderboard_eval(list(resultsPerMethod.values()), grade_filter=grade_filter)
 
-            table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values()), official_leaderboard=official_leaderboard)
-            
             nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values(), official_leaderboard=official_leaderboard)
             print(f'min_rating={str(min_rating)} nExam:{nExamCorrelation}')
             print(f'min_rating={str(min_rating)}  exam:{examCorrelation}')
+
+            table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values())
+                                                                   , official_leaderboard=official_leaderboard
+                                                                   , nExamCorrelation=nExamCorrelation
+                                                                   , examCorrelation=examCorrelation) 
+            
+
 
         
             file.writelines("\n".join(table))
             file.writelines( ["\n"
                             , f' EXAM scores produced with {grade_filter}\n'
                             , f' min_rating\t{str(min_rating)}\n'
-                            , f' nExam\t{nExamCorrelation.pretty_print()}\n'
-                            , f' exam\t{examCorrelation.pretty_print()}\n'
                             ,'\n'])
 
             file.writelines(["\n","\n"])
