@@ -150,28 +150,49 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], min_level = Optional[int]):
-    # with open(leaderboard_file, 'wt') as file:
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level = Optional[int]):
+    with open(leaderboard_out, 'wt') as file:
+        file.write("based on Exam-Qrels\n")
 
-    for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
+        for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
 
-        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level_x}')
-        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
+            print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level_x}')
+            methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
+            correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=official_leaderboard)
 
-        correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=official_leaderboard)
-    
-        print(f'min_level\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
-        # file.writelines("\n".join(table))
-        # file.writelines( ["\n"
-        #                 # , f' EXAM scores produced with {grade_filter}\n'
-        #                 # , f' min_rating\t{str(min_rating)}\n'
-        #                 , f' nExam\t{nExamCorrelation.pretty_print()}\n'
-        #                 , f' exam\t{examCorrelation.pretty_print()}\n'
-        #                 ,'\n'])
+            examScores = [
+                exam_leaderboard_correlation.ExamCoverEvals(method=method
+                                                        , examScore=score
+                                                        , nExamScore=0
+                                                        , examScoreStd=0
+                                                        , nExamScoreStd=0
+                                                        , examCoverPerQuery={}
+                                                        , nExamCoverPerQuery={} 
+                                                        ) 
+                        for method, score in methodScores.items()]
+            lines = exam_leaderboard_correlation.leaderboard_table(evals =examScores
+                                    , official_leaderboard=official_leaderboard 
+                                    , nExamCorrelation = None
+                                    , examCorrelation=correlationStats
+                                    )
+            file.write('\n'.join(lines))
+            file.write('\n'.join([""
+                                  ,f"min_rating\t{min_level_x:.0f}"
+                                , f"qrel_file\t{qrels_file}"
+                                , "\n"]))
+        
+            print(f'min_level\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
+            # file.writelines("\n".join(table))
+            # file.writelines( ["\n"
+            #                 # , f' EXAM scores produced with {grade_filter}\n'
+            #                 # , f' min_rating\t{str(min_rating)}\n'
+            #                 , f' nExam\t{nExamCorrelation.pretty_print()}\n'
+            #                 , f' exam\t{examCorrelation.pretty_print()}\n'
+            #                 ,'\n'])
 
-        # file.writelines(["\n","\n"])
-
-    # file.close()
+        file.writelines(["\n","\n"])
+    file.close()
+    print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs
                                  , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int]):
@@ -465,6 +486,7 @@ def main(cmdargs=None):
                         , help='json file that annotates each paragraph with a number of answerable questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
     parser.add_argument('-q', '--qrel-out', type=str, metavar="FILE", help='Export Qrels to this file', default=None)
+    parser.add_argument('--qrel-leaderboard-out', type=str, metavar="FILE", help='Export Exam-Qrels leaderboard to this file', default=None)
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
@@ -516,6 +538,7 @@ def main(cmdargs=None):
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level
                                  , official_leaderboard=official_leaderboard
+                                 , leaderboard_out=args.qrel_leaderboard_out
                                  )
 
 
@@ -533,6 +556,7 @@ def main(cmdargs=None):
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level
                                  , official_leaderboard=official_leaderboard
+                                 , leaderboard_out=args.qrel_leaderboard_out
                                  )
 
     if args.correlation_out is not None:

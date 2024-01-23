@@ -201,13 +201,13 @@ def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,
                         ])
                              for e in evals_]
     corr = []
-    if not (examCorrelation is None  or nExamCorrelation is None):
-        corr = [ '\t'.join(["spearman", f2s(examCorrelation.spearman_correlation), "", ""
-                            ,f2s(nExamCorrelation.spearman_correlation), "","",
+    if not (examCorrelation is None  and nExamCorrelation is None):
+        corr = [ '\t'.join(["spearman", f2s(examCorrelation.spearman_correlation) if examCorrelation is not None else "", "", ""
+                            ,f2s(nExamCorrelation.spearman_correlation) if nExamCorrelation is not None else "", "","",
                             "",""
                             ])
-            ,  '\t'.join(["kendall", f2s(examCorrelation.kendall_correlation), "", ""
-                            ,f2s(nExamCorrelation.kendall_correlation), "","",
+            ,  '\t'.join(["kendall", f2s(examCorrelation.kendall_correlation)  if examCorrelation is not None else "", "", ""
+                            ,f2s(nExamCorrelation.kendall_correlation) if nExamCorrelation is not None else "", "","",
                             "",""
                             ])
             ]
