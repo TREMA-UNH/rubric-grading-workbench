@@ -31,6 +31,7 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                       , label_to_judgment_kappa:Dict[str,str]
                                       , judgment_title:Optional[str], label_title:Optional[str]
                                       , use_ratings:bool
+                                      , use_exam_grades:bool
                                       , min_answers:int=1
                                       ):
 
@@ -51,7 +52,8 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                                                                                         , judgments=judgment
                                                                                                         , prediction=label
                                                                                                         , min_answers=min_answers
-                                                                                                        ,use_ratings=use_ratings)
+                                                                                                        , use_ratings=use_ratings
+                                                                                                        , use_exam_grades=use_exam_grades)
             print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
             counts[fmt_labels(label)][fmt_judgments(judgment)]=corrAll.predictedRelevant
             if label_to_judgment_kappa[fmt_labels(label)] == fmt_judgments(judgment):
@@ -79,7 +81,7 @@ def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter
 
 
 
-def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ratings, query_paragraphs
+def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ratings, query_paragraphs, use_exam_grades:bool
                                  , relevant_grades:Optional[Set[int]]=None,  non_relevant_grades:Optional[Set[int]]=None):
     corrAll:ConfusionStats
     corrPerQuery:Dict[str, ConfusionStats]
@@ -107,9 +109,9 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
 
 
     if use_ratings:
-        selfRated_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set)
+        selfRated_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set, use_exam_grades=use_exam_grades)
     else:
-        binary_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set)
+        binary_vs_judged_correlation(correlation_out_file, grade_filter, query_paragraphs, relevant_grade_set, non_relevant_grade_set, use_exam_grades=use_exam_grades)
 
     print("\n\n exam_vs_judged")
 
@@ -195,7 +197,7 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Di
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs
-                                 , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int]):
+                                 , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int], use_exam_grades:bool):
     print("\n\n binary correlation")
    
     table_printer = print_correlation_table.TablePrinter()
@@ -216,7 +218,7 @@ def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFi
                                         , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                         , label_to_judgment_kappa=label_to_judgment_kappa
                                         ,  judgment_title="Judgments",   label_title="BINARY"
-                                        , min_answers=min_answers, use_ratings=False)
+                                        , min_answers=min_answers, use_ratings=False, use_exam_grades=use_exam_grades)
         
         table_printer.add_new_paragraph()
 
@@ -239,7 +241,7 @@ def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFi
                                         , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                         , label_to_judgment_kappa=label_to_judgment_kappa
                                         ,  judgment_title="Judgments",   label_title="GRADED"
-                                        , min_answers=min_answers, use_ratings=False)
+                                        , min_answers=min_answers, use_ratings=False, use_exam_grades=use_exam_grades)
         table_printer.add_new_paragraph()
     
     
@@ -258,7 +260,7 @@ def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFi
     table_printer.export(Path(correlation_out_file))
 
 def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, query_paragraphs
-                                    , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int]):
+                                    , relevant_grade_set:Set[int],  non_relevant_grade_set:Set[int], use_exam_grades:bool):
     print("\n\n binary correlation")
 
     table_printer = print_correlation_table.TablePrinter()
@@ -300,7 +302,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
                                             ,  judgment_title="Judgments",   label_title="GRADED"
-                                            , min_answers=min_answers, use_ratings=True)
+                                            , min_answers=min_answers, use_ratings=True, use_exam_grades=use_exam_grades)
             table_printer.add_new_paragraph()
         detailedCorrelation()
 
@@ -323,7 +325,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
                                             ,  judgment_title="Judgments",   label_title="MERGE"
-                                            , min_answers=min_answers, use_ratings=True)
+                                            , min_answers=min_answers, use_ratings=True, use_exam_grades=use_exam_grades)
             table_printer.add_new_paragraph()
         mergedCorrelation()
 
@@ -342,7 +344,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
                                             ,  judgment_title="Judgments",   label_title="LENIENT"
-                                            , min_answers=min_answers, use_ratings=True)
+                                            , min_answers=min_answers, use_ratings=True, use_exam_grades=use_exam_grades)
             
             table_printer.add_new_paragraph()
         binaryLenientCorrelation()
@@ -364,7 +366,7 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
                                             , label_to_judgment_kappa=label_to_judgment_kappa
                                             ,  judgment_title="Judgments",   label_title="STRICT"
-                                            , min_answers=min_answers, use_ratings=True)
+                                            , min_answers=min_answers, use_ratings=True, use_exam_grades=use_exam_grades)
             
             table_printer.add_new_paragraph()
         binaryStrictCorrelation()
@@ -500,6 +502,7 @@ def main(cmdargs=None):
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
+    parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
     parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
@@ -566,6 +569,7 @@ def main(cmdargs=None):
                                      , query_paragraphs=query_paragraphs
                                      , non_relevant_grades=non_relevant_grades
                                      , relevant_grades = relevant_grades
+                                     , use_exam_grades = not (args.use_relevance_prompt)
                                      )
 
 

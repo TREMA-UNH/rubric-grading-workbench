@@ -25,6 +25,8 @@ def get_prompt_classes()->List[str]:
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
             , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
+            # relevance grade prompts
+            , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
             ]
 
 

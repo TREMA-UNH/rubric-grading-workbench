@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Any, Optional, Dict, Tuple
+from typing import List, Any, Optional, Dict, Tuple, Union
 from dataclasses import dataclass
 from pathlib import Path
 import gzip
@@ -60,7 +60,10 @@ class GradeFilter():
     def noFilter():
         return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None)
 
-    def filter(self, grade:ExamGrades)-> bool:
+    def filter_grade(self, grade:Grades)-> bool:
+        return self.filter(grade)
+
+    def filter(self, grade:Union[ExamGrades,Grades])-> bool:
         # Note, the following code is based on inverse logic -- any grade that DOES NOT meet set filter requirements is skipped
 
         # grades are marked as using this model
@@ -93,22 +96,24 @@ class GradeFilter():
                     if not grade_is_self_rated == self.is_self_rated:
                         return False
 
-        # for at least one question, the self_rating is at least self.min_self_rating
-        if self.min_self_rating is not None:
-            if grade.self_ratings is not None and len(grade.self_ratings)>0:  # grade has self_ratings
-                if not any( (rating.self_rating >= self.min_self_rating  for rating in grade.self_ratings) ):
-                    return False
 
-        if self.question_set is not None:
-            if self.question_set == "tqa":
-                is_tqa_question = grade.answers[0][0].startswith("NDQ_")
-                if not is_tqa_question:
-                    return False
-                
-            if self.question_set == "naghmeh":
-                is_naghmeh_question = grade.answers[0][0].startswith("tqa2:")
-                if not is_naghmeh_question:
-                    return False
+        if isinstance(grade, ExamGrades):
+            # for at least one question, the self_rating is at least self.min_self_rating
+            if self.min_self_rating is not None:
+                if grade.self_ratings is not None and len(grade.self_ratings)>0:  # grade has self_ratings
+                    if not any( (rating.self_rating >= self.min_self_rating  for rating in grade.self_ratings) ):
+                        return False
+
+            if self.question_set is not None:
+                if self.question_set == "tqa":
+                    is_tqa_question = grade.answers[0][0].startswith("NDQ_")
+                    if not is_tqa_question:
+                        return False
+                    
+                if self.question_set == "naghmeh":
+                    is_naghmeh_question = grade.answers[0][0].startswith("tqa2:")
+                    if not is_naghmeh_question:
+                        return False
 
         return True
 
@@ -165,6 +170,17 @@ class FullParagraphData(BaseModel):
         # result = list(g for g in self.exam_grades if grade_filter.filter(g))
         # return result
         return [g for g in self.exam_grades if grade_filter.filter(g)]
+        
+
+    def retrieve_grade_any(self, grade_filter:GradeFilter) -> List[Grades]:
+        if self.grades is None:
+            return []
+        
+        found = next((g for g in self.grades if grade_filter.filter_grade(g)), None)
+        if found is not None:
+            return [found]
+        else: 
+            return []
         
 
 
