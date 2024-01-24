@@ -193,7 +193,7 @@ def main(cmdargs=None):
     if args.question_type == "tqa":
         question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
     elif args.question_type == 'naghmeh':
-        question_set = dict(question_loader.load_naghmehs_questions(args.question_path, prompt_class=args.prompt_class))
+        question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
         question_set = dict(question_bank_loader.load_exam_question_bank(args.question_path, prompt_class=args.prompt_class))
     else:

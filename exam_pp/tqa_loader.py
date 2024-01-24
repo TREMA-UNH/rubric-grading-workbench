@@ -2,6 +2,8 @@ import itertools
 import os
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, Optional
+
+from pydantic import BaseModel
 import json
 
 
@@ -10,8 +12,8 @@ from .question_types import *
 
 
 
-@dataclass
-class Question():
+# @dataclass
+class Question(BaseModel):
     query_id:str
     query_text:Optional[str]
     qid:str
@@ -19,7 +21,53 @@ class Question():
     choices:Optional[Dict[str,str]]
     correctKey:Optional[str]
     correct:Optional[str]
+    facet_id:Optional[str]
 
+
+
+def writeQuestions(file_path:Path, questions:List[Tuple[str, List[Question]]]) :
+    import gzip
+    # Open the gzipped file
+    with gzip.open(file_path, 'wt', encoding='utf-8') as file:
+        # Iterate over each line in the file
+        for queryId, qs in questions:
+                for q in qs:
+                    j = q.json()
+                    file.write(j)
+                    file.write('\n')
+        # file.writelines([json.dumps(x)+'\n' for x in questions])
+    file.close()
+
+
+def parseConvertedQuestions(file_path:Path)->List[Question]:
+    import gzip
+
+    result:List[Question] = list()
+    try: 
+        with gzip.open(file_path, 'rt', encoding='utf-8') as file:
+            # return [parseQueryWithFullParagraphList(line) for line in file]
+            for line in file:
+                result.append(Question.parse_raw(line))
+    except  EOFError as e:
+        print("Warning: Gzip EOFError on {file_path}. Use truncated data....\nFull Error:\n{e}")
+    return result
+
+
+    # Open the gzipped file
+    with gzip.open(file_path, 'wt', encoding='utf-8') as file:
+        # Iterate over each line in the file
+        for queryId, qs in questions:
+                for q in qs:
+                    j = q.json()
+                    file.write(j)
+                    file.write('\n')
+        # file.writelines([json.dumps(x)+'\n' for x in questions])
+    file.close()
+
+
+
+
+#  ------------------------
 
 def load_TQA_questions(tqa_file:Path)-> List[Tuple[str, List[Question]]]:
 
@@ -41,7 +89,14 @@ def load_TQA_questions(tqa_file:Path)-> List[Tuple[str, List[Question]]]:
                 print('bad question, because correct answer is not among the choices', 'key: ',correctKey, 'choices: ', choices)
                 continue
            
-            q = Question(query_id, query_text, qid, question, choices, correctKey, correct)
+            q = Question(query_id=query_id
+                         , query_text=query_text
+                         , qid=qid
+                         , question=question
+                         , choices=choices
+                         , correctKey=correctKey
+                         , correct=correct
+                         , facet_id=None)
             # print('qpc', qpc)
             local_results.append(q)
         result.append((query_id, local_results))
@@ -58,16 +113,17 @@ def question_obj_to_prompt(prompt_class:str, q:Question)->QuestionPrompt:
                             , choices=q.choices
                             , correctKey=q.correctKey
                             , correct=q.correct
+                            , facet_id = q.facet_id
                             )
 
-def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct)->QuestionPrompt:
+def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct, facet_id)->QuestionPrompt:
     qpc:QuestionPrompt
 
     if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
         qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id=qid
                                                                      , question=question
                                                                      , query_id=query_id
-                                                                     , facet_id = None
+                                                                     , facet_id = facet_id
                                                                      , query_text=query_text
                                                                      , unanswerable_expressions=set()
                                                                      )
@@ -80,7 +136,7 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                  , correct=correct
                                                                  , correctKey = correctKey
                                                                  , query_id=query_id
-                                                                 , facet_id = None
+                                                                 , facet_id = facet_id
                                                                  , query_text=query_text
                                                                  )
     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey2"):
@@ -92,14 +148,14 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                  , correct=correct
                                                                  , correctKey = correctKey
                                                                  , query_id=query_id
-                                                                 , facet_id = None
+                                                                 , facet_id = facet_id
                                                                  , query_text=query_text
                                                                  ) 
     elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
         qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id=qid
                                                                            , question=question
                                                                            , query_id=query_id
-                                                                           , facet_id = None
+                                                                           , facet_id = facet_id
                                                                            , query_text=query_text
                                                                            , unanswerable_expressions=set()
                                                                            )
@@ -112,7 +168,7 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                 , correct=correct
                                                 , correctKey = correctKey
                                                 , query_id=query_id
-                                                , facet_id = None
+                                                , facet_id = facet_id
                                                 , query_text=query_text
                                                 )
     elif(prompt_class == "QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2"):
@@ -124,7 +180,7 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                  , correct=correct
                                                                  , correctKey = correctKey
                                                                  , query_id=query_id
-                                                                 , facet_id = None
+                                                                 , facet_id = facet_id
                                                                  , query_text=query_text
                                                                  )     
     else:
