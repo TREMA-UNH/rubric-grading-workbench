@@ -22,14 +22,76 @@ def load_leaderboard(file_path:Path)->Dict[str,float]:
     with open(file_path, 'r') as file:
         return json.load(file)
 
-official_DL19_leaderboard:Dict[str,float] = {
+official_DL20_Leaderboard:Dict[str:float] = {
+  "pash_r3": 1,
+  "pash_r2": 2,
+  "pash_f3": 3,
+  "pash_f1": 4,
+  "pash_f2": 5,
+  "p_d2q_bm25_duo": 6,
+  "p_d2q_rm3_duo": 7,
+  "p_bm25rm3_duo": 8,
+  "CoRT-electra": 9,
+  "RMIT-Bart": 10,
+  "pash_r1": 11,
+  "NLE_pr3": 12,
+  "pinganNLP2": 13,
+  "pinganNLP3": 14,
+  "pinganNLP1": 15,
+  "NLE_pr2": 16,
+  "NLE_pr1": 17,
+  "1": 18,
+  "bigIR-BERT-R": 19,
+  "fr_pass_roberta": 20,
+  "bigIR-DCT-T5-F": 21,
+  "rr-pass-roberta": 22,
+  "bcai_bertl_pass": 23,
+  "bigIR-T5-R": 24,
+  "2": 25,
+  "bigIR-T5-BERT-F": 26,
+  "bigIR-T5xp-T5-F": 27,
+  "nlm-ens-bst-2": 28,
+  "nlm-ens-bst-3": 29,
+  "nlm-bert-rr": 30,
+  "relemb_mlm_0_2": 31,
+  "nlm-prfun-bert": 32,
+  "TUW-TK-Sparse": 33,
+  "TUW-TK-2Layer": 34,
+  "p_d2q_bm25": 35,
+  "p_d2q_bm25rm3": 36,
+  "bert_6": 37,
+  "CoRT-bm25": 38,
+  "CoRT-standalone": 39,
+  "bl_bcai_mdl1_vt": 40,
+  "bcai_class_pass": 41,
+  "bl_bcai_mdl1_vs": 42,
+  "indri-fdm": 43,
+  "terrier-InL2": 44,
+  "terrier-BM25": 45,
+  "DLH_d_5_t_25": 46,
+  "indri-lmds": 47,
+  "indri-sdm": 48,
+  "p_bm25rm3": 49,
+  "p_bm25": 50,
+  "bm25_bert_token": 51,
+  "terrier-DPH": 52,
+  "TF_IDF_d_2_t_50": 53,
+  "small_1k": 54,
+  "med_1k": 55,
+  "DoRA_Large_1k": 56,
+  "DoRA_Small": 57,
+  "DoRA_Med": 58,
+  "DoRA_Large": 59
+}
+
+manualDL19Leaderboard:Dict[str,float] = {
                         "idst_bert_p1": 1,
                         "idst_bert_p2": 2,
                         "idst_bert_p3": 3,
                         "p_exp_rm3_bert": 4,
                         "p_bert": 5,
-                        "ids_bert_pr2": 6,
-                        "ids_bert_pr1": 7,
+                        "idst_bert_pr2": 6,
+                        "idst_bert_pr1": 7,
                         "p_exp_bert": 8,
                         "test1": 9,
                         "TUA1-1": 10,
@@ -59,7 +121,7 @@ official_DL19_leaderboard:Dict[str,float] = {
                         "srchvrs_ps_run1": 34,
                         "bm25tuned_p": 35,
                         "UNH_bm25": 36
-                    }
+}
 
 official_CarY3_leaderboard:Dict[str,float] = { "dangnt-nlp": 1
                                             , "ReRnak3_BERT": 2
@@ -290,6 +352,8 @@ def main():
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
         official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
+    elif args.testset == "dl20":
+        official_leaderboard = exam_leaderboard_correlation.official_DL20_leaderboard
 
 
     if args.eval:

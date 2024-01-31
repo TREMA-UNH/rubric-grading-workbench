@@ -504,8 +504,8 @@ def main(cmdargs=None):
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
-    parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
-    parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
+    parser.add_argument('--testset', type=str, choices=["cary3","dl19","dl20"], required=True, metavar="SET ", help='Which question set to use. Options: cary3,dl19, or dl20 ')
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     
 
@@ -529,6 +529,10 @@ def main(cmdargs=None):
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
         official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
+        non_relevant_grades = {0,1}
+        relevant_grades = {2,3}
+    elif args.testset == "dl20":
+        official_leaderboard = exam_leaderboard_correlation.official_DL20_leaderboard
         non_relevant_grades = {0,1}
         relevant_grades = {2,3}
     if args.official_leaderboard is not None:
