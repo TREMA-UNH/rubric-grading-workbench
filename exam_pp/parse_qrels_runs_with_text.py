@@ -41,11 +41,11 @@ class Grades(BaseModel):
         # must have fields:
         #  prompt_info["prompt_class"]="FagB"
             # info =  {
-            #       "prompt_class":  FagB  # or self.__class__.__name__
+            #       "prompt_class":  Fag  # or self.__class__.__name__
             #     , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
             #     , "is_self_rated": false # false if not self-rated, otherwise true
             #     }
-    self_ratings: Optional[int]         #  if availabel: self-rating (e.g. 0-5)
+    self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
 
 
 @dataclass
@@ -110,9 +110,9 @@ class GradeFilter():
                     if not is_tqa_question:
                         return False
                     
-                if self.question_set == "naghmeh":
-                    is_naghmeh_question = grade.answers[0][0].startswith("tqa2:")
-                    if not is_naghmeh_question:
+                if self.question_set == "genq":
+                    is_genq_question = grade.answers[0][0].startswith("tqa2:")
+                    if not is_genq_question:
                         return False
 
         return True

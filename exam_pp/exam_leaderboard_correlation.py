@@ -169,6 +169,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     print_leaderboard_eval(evals, grade_filter=grade_filter)
     pass
 
+
 def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,int]
                       , nExamCorrelation:Optional[CorrelationStats], examCorrelation:Optional[CorrelationStats], sortBy:Optional[str]=None)->[str]:
     
@@ -183,8 +184,6 @@ def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,
             return ' '
         else:
             return f'{x:.3f}'
-    # def i2s(x:Union[int,str])->str:
-    #     return f'{x}'
     
     header = '\t'.join(['method'
                         ,'exam','+/-','exam-std'

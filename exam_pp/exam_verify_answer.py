@@ -360,7 +360,7 @@ def main(cmdargs=None):
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
-    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     # parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     parser.add_argument('--answer-verification-prompt', type=str, metavar="PROMPT-CLASS", help='Prompt class to use for answer re-verification')
     parser.add_argument( '--t5-verification', action='store_true', help='If set, will use T5 for answer verification')

@@ -193,7 +193,7 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Di
             #                 ,'\n'])
 
         file.writelines(["\n","\n"])
-    file.close()
+        file.close()
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 def binary_vs_judged_correlation(correlation_out_file:Path, grade_filter:GradeFilter, query_paragraphs
@@ -504,7 +504,7 @@ def main(cmdargs=None):
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant. (Only applies to when -r is used.)')
-    parser.add_argument('--question-set', type=str, choices=["tqa","naghmeh","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
+    parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     
