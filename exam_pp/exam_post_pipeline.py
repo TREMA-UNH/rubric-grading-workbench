@@ -528,7 +528,7 @@ def main(cmdargs=None):
     if args.testset == "cary3":
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
-        official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
+        official_leaderboard = exam_leaderboard_correlation.official_DL19_Leaderboard
         non_relevant_grades = {0,1}
         relevant_grades = {2,3}
     elif args.testset == "dl20":

@@ -23,7 +23,7 @@ def load_leaderboard(file_path:Path)->Dict[str,float]:
         return json.load(file)
 
 
-manualDL19Leaderboard:Dict[str,float] = {
+official_DL19_Leaderboard:Dict[str,float] = {
                         "idst_bert_p1": 1,
                         "idst_bert_p2": 2,
                         "idst_bert_p3": 3,
