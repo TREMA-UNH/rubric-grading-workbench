@@ -532,7 +532,7 @@ def main(cmdargs=None):
         non_relevant_grades = {0,1}
         relevant_grades = {2,3}
     elif args.testset == "dl20":
-        official_leaderboard = exam_leaderboard_correlation.official_DL20_leaderboard
+        official_leaderboard = exam_leaderboard_correlation.official_DL20_Leaderboard
         non_relevant_grades = {0,1}
         relevant_grades = {2,3}
     if args.official_leaderboard is not None:
