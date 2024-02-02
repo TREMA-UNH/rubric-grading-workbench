@@ -123,6 +123,7 @@ def davinci_response_to_full_paragraph(query_id:str, query_facet_id:Optional[str
                                         , paragraph=None
                                         , paragraph_data=pdata
                                         , exam_grades=None
+                                        , grades = None
                                         )
         result.append(fp)
                            
