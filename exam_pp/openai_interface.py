@@ -28,9 +28,6 @@ if os.environ['OPENAI_API_KEY'] is None:
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 
-
-
-
 class OpenAIRateLimiter:
     def __init__(self, max_requests_per_minute=5000, max_tokens_per_minute=40000):
         self.max_requests_per_minute = max_requests_per_minute
@@ -104,15 +101,13 @@ def retry_with_exponential_backoff(
  
     return wrapper
 
-def query_gpt_batch_with_rate_limiting(prompt:str, rate_limiter, gpt_model:str):
+def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int):
     result = []
 
     rate_limiter.wait_if_needed()
 
     messages = [{"role":"user", "content":prompt}]
-    # messaes = [openai.ChatCompletionUserMessageParam(content)]
-    completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=1500) 
-    # print(completion.model_dump_json(indent=2))
+    completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens) 
 
     result = [choice.message.content.strip() for choice in completion.choices]
 
@@ -128,59 +123,3 @@ def query_gpt_batch_with_rate_limiting(prompt:str, rate_limiter, gpt_model:str):
 
     print(rate_limiter)
     return result[0]
-
-
-
-class FetchGptResponsesForTrecCar:
-    def __init__(self, rate_limiter):
-        self.rate_limiter = rate_limiter
-
-    def section_prompt(self, query_title:str, query_heading:str)->str:
-        return f"Generate a Wikipedia section on \"{query_heading}\" for an article on \"{query_title}\"."
-
-    def page_prompt(self, query_title:str)->str:
-        return f"Generate a 1000-word long Wikipedia article on \"{query_title}\"."
-
-    def generate(self, prompt:str, gpt_model:str)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt,rate_limiter=self.rate_limiter, gpt_model=gpt_model)
-        return answer
-
-
-def noodle_gpt(page_davinci_path:Path, gpt_out:Path, gpt_model:str):
-    fetcher = FetchGptResponsesForTrecCar(OpenAIRateLimiter())
-
-    davinci_by_query_id = parse_davinci_into_dict(section_file_path=None, page_file_path=page_davinci_path)
-
-    with open(gpt_out, "wt", encoding='utf-8') as file:
-        for query_id, davincis in davinci_by_query_id.items(): # itertools.islice(davinci_by_query_id.items(),1):
-            for davinci in davincis:
-                answer = fetcher.generate(davinci.prompt, gpt_model=gpt_model)
-                answer = fetcher.generate(davinci.prompt, gpt_model=gpt_model)
-                davinci.response=answer
-                davinci.gptmodel=gpt_model
-
-                davinci.datatime=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                file.write(pydantic_dump(davinci)+'\n')
-                print(query_id, rate_limiter)
-            file.flush()
-        file.close()
-
-
-
-
-
-def main():
-    # rate_limiter=OpenAIRateLimiter()
-    # fetcher = FetchGptResponsesForTrecCar(rate_limiter=rate_limiter)
-    # answer = fetcher.generate(["the skeletal system"])
-    # print(answer)
-
-    page_davinci_path = "./v24-20-lucene-page--text-davinci-003-benchmarkY3test.jsonl"
-    gpt_model="gpt-3.5-turbo"
-    gpt_out = Path(f"./openai-{gpt_model}-benchmarkY3test.jsonl")
-
-    noodle_gpt(page_davinci_path=page_davinci_path, gpt_model=gpt_model, gpt_out=gpt_out)
-
-
-if __name__ == "__main__":
-    main()
