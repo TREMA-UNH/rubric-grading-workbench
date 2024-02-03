@@ -170,7 +170,7 @@ def main(cmdargs=None):
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or file)')
-    parser.add_argument('--question-type', type=str, choices=['tqa','naghmeh', 'question-bank'], required=True, metavar='PATH', help='Question type to read from question-path')
+    parser.add_argument('--question-type', type=str, choices=['tqa','genq', 'question-bank'], required=True, metavar='PATH', help='Question type to read from question-path')
     
 
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
@@ -192,7 +192,7 @@ def main(cmdargs=None):
     question_set:Dict[str,List[QuestionPrompt]]
     if args.question_type == "tqa":
         question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
-    elif args.question_type == 'naghmeh':
+    elif args.question_type == 'genq':
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
         question_set = dict(question_bank_loader.load_exam_question_bank(args.question_path, prompt_class=args.prompt_class))

@@ -28,6 +28,8 @@ if os.environ['OPENAI_API_KEY'] is None:
 client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 
+
+
 class OpenAIRateLimiter:
     def __init__(self, max_requests_per_minute=5000, max_tokens_per_minute=40000):
         self.max_requests_per_minute = max_requests_per_minute
