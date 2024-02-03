@@ -1,4 +1,5 @@
 from collections import defaultdict
+import hashlib
 import itertools
 import typing
 from pydantic import BaseModel
@@ -38,12 +39,71 @@ def parseQuestionBank(file_path:Path) -> typing.List[QueryQuestionBank] :
     return result
 
 
+
 def writeQuestionBank(file_path:Path, queryQuestionBanks:List[QueryQuestionBank]) :
     # Open the gzipped file
     with gzip.open(file_path, 'wt', encoding='utf-8') as file:
         # Iterate over each line in the file
         for questionBank in queryQuestionBanks:
             file.write(pydantic_dump(questionBank)+'\n')
+
+## --------- create question bank ------------------
+
+def write_single_query_question_bank(file, questionBank:QueryQuestionBank):
+    file.write(pydantic_dump(questionBank)+"\n")
+    file.flush()
+
+def get_md5_hash(input_string: str) -> str:
+    # Convert the string to bytes
+    input_bytes = input_string.encode('utf-8')
+
+    # Create an MD5 hash object
+    md5_hash = hashlib.md5()
+
+    # Update the hash object with the bytes
+    md5_hash.update(input_bytes)
+
+    # Get the hexadecimal digest of the hash
+    hex_digest = md5_hash.hexdigest()
+
+    return hex_digest
+
+
+
+def as_exam_questions(query_id:str, facet_id:Optional[str], questions:List[str], generation_info:Any)->List[ExamQuestion]:
+    result:List[ExamQuestion] = list()
+    use_facet_id = facet_id is not None
+    for question in questions:
+        clean_question = question.strip()
+        question_hash = get_md5_hash(clean_question)
+
+        qid = f'{query_id}/{facet_id}/{question_hash}' if use_facet_id else f'{query_id}/{question_hash}'
+
+        q = ExamQuestion(question_id=qid
+                         , query_id=query_id
+                         , question_text=clean_question
+                         , facet_id=facet_id if use_facet_id else None
+                         , info=generation_info)
+        result.append(q)
+    return result
+
+
+def emit_exam_question_bank_entry(out_file, test_collection, generation_info, query_id, query_facet_id, query_text, questions):
+    exam_questions = as_exam_questions(query_id=query_id
+                                               , facet_id=query_facet_id
+                                               , questions=questions
+                                               , generation_info=generation_info)
+            
+    question_bank = QueryQuestionBank(questions=exam_questions
+                                    , query_id=query_id
+                                    , facet_id=query_facet_id
+                                    , test_collection=test_collection
+                                    , query_text=query_text
+                                    , info = None
+                                    # , info=generation_info
+                                    )
+    write_single_query_question_bank(file=out_file, questionBank=question_bank)
+
 
 ## -------------------------------------------
         

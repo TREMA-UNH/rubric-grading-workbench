@@ -64,7 +64,7 @@ def main():
     parser.add_argument('-o', '--out-file', type=str, metavar='runs-xxx.jsonl.gz', required=True
                         , help='Output file name where paragraphs with exam grade annotations will be written to')
 
-    parser.add_argument('--gpt-model', type=str, metavar='MODEL', default=None, help='OpenAI model name to be used')
+    parser.add_argument('--gpt-model', type=str, metavar='MODEL', default="gpt-3.5-turbo", help='OpenAI model name to be used')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
  
     args = parser.parse_args()  
