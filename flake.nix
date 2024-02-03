@@ -12,14 +12,14 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         pythonOverrides = self: super: {
-          pylatex = self.callPackage ./pylatex.nix {};
-          trec-car-tools = self.callPackage ./trec-car-tools.nix {};
-          ir_datasets = self.callPackage ./ir_datasets.nix {};
-          unlzw3 = self.callPackage ./unlzw3.nix {};
-          pyautocorpus = self.callPackage ./pyautocorpus.nix {};
-          zlib-state = self.callPackage ./zlib-state.nix {};
-          warc3-wet = self.callPackage ./warc3-wet.nix {};
-          warc3-wet-clueweb09 = self.callPackage ./warc3-wet-clueweb09.nix {};
+          pylatex = self.callPackage ./nix/pylatex.nix {};
+          trec-car-tools = self.callPackage ./nix/trec-car-tools.nix {};
+          ir_datasets = self.callPackage ./nix/ir_datasets.nix {};
+          unlzw3 = self.callPackage ./nix/unlzw3.nix {};
+          pyautocorpus = self.callPackage ./nix/pyautocorpus.nix {};
+          zlib-state = self.callPackage ./nix/zlib-state.nix {};
+          warc3-wet = self.callPackage ./nix/warc3-wet.nix {};
+          warc3-wet-clueweb09 = self.callPackage ./nix/warc3-wet-clueweb09.nix {};
         };
 
         mkShell = target: (dspy-nix.lib.${system}.mkShell {
@@ -40,7 +40,7 @@
         });
 
       in {
-        packages.trec-eval = pkgs.callPackage ./trec-eval.nix {};
+        packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";
