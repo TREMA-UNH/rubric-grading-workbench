@@ -9,7 +9,7 @@ from scipy.stats import spearmanr, kendalltau, rankdata
 import scipy.stats
 
 
-from .question_types import *
+from .test_bank_prompts import *
 from .parse_qrels_runs_with_text import *
 from .parse_qrels_runs_with_text import GradeFilter
 from .exam_cover_metric import *

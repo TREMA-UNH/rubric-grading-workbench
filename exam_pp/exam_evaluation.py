@@ -10,7 +10,7 @@ from .exam_to_qrels import exam_to_qrels_files
 from . import exam_to_qrels
 
 
-from .question_types import get_prompt_classes
+from .test_bank_prompts import get_prompt_classes
 from .parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 from .exam_cover_metric import ExamCoverEvals, ExamCoverScorerFactory, compute_exam_cover_scores
 # from . import exam_to_qrels

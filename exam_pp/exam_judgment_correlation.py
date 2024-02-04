@@ -4,7 +4,7 @@ from typing import *
 from pathlib import Path
 import heapq
 
-from .question_types import *
+from .test_bank_prompts import *
 from .parse_qrels_runs_with_text import FullParagraphData, Grades, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 
 
@@ -119,7 +119,7 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
                 if min_rating is not None:
                     if exam_grade.self_ratings is None: 
                         raise RuntimeError("These grades don't have self-ratings.")
-                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                    filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
                     hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
                 isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
 
@@ -164,10 +164,10 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
 
                 hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
                 if exact_rating is not None:
-                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating==exact_rating]
+                    filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating==exact_rating]
                     hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
                 elif min_rating is not None:
-                    filteredRatedAnswers =  [rate.question_id for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                    filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
                     hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
                 isJudgedRelevant = any (j.relevance== exact_judgment_level for j in para.paragraph_data.judgments)
 

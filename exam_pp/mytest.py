@@ -79,21 +79,6 @@ def main_rating():
             if len(para.retrieve_exam_grade_any(grade_filter=grade_filter))>1:
                    raise RuntimeError('there should only be 0 or 1')
             
-            # for exam_grade in para.retrieve_exam_grade(grade_filter=grade_filter.get_min_grade_filter(4)): # there will be 1 or 0
-
-            #     ratings = DefaultDict(list)
-            #     for rate in exam_grade.self_ratings:
-            #         ratings[rate.self_rating].append(rate.question_id)
-                
-            #     rate_stats = {rating: len(qlist) for rating, qlist in ratings.items()}
-
-            #     if rate_stats.get(4,None) is None and rate_stats.get(5,None) is None:
-            #         print(query_id, para.paragraph_id, exam_grade)
-            #         pass
-
-            #     print(query_id, para.paragraph_id, '4:',rate_stats.get(4), '5:',rate_stats.get(5))
-
-
 
     min_rating_level = 1
     print(f'min_rating={min_rating_level}')

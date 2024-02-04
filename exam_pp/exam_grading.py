@@ -4,8 +4,8 @@ from . import question_bank_loader
 
 
 from . import question_loader
-from .question_types import QuestionPrompt, get_prompt_classes
-from .question_types import *
+from .test_bank_prompts import QuestionPrompt, get_prompt_classes
+from .test_bank_prompts import *
 from .t5_qa import *
 from .parse_qrels_runs_with_text import *
 from . import tqa_loader
@@ -16,24 +16,39 @@ def fix_car_query_id(input:List[Tuple[str,List[QuestionPrompt]]]) -> List[Tuple[
 
 
 def runSquadQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+    # promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
     promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
     answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt)
     return answerTuples
 
 def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
+    promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
     # promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
     answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
     return answerTuples
 
+
+def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
+    if prompt.prompt_type == QuestionPrompt.my_prompt_type:
+        return SelfRating(question_id=prompt.prompt_id()
+                            , self_rating=prompt.check_answer_rating(answer)
+                            ) 
+    elif prompt.prompt_type()==NuggetPrompt.my_prompt_type:
+        return SelfRating(nugget_id=prompt.prompt_id()
+                         , question_id=None
+                         , self_rating=prompt.check_answer_rating(answer)
+                         ) 
+    else:
+        raise RuntimeError(f"Unknown self rating prompt: {prompt}")
+
+
 def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
-    anyQpc = questions[0]
+    anyPrompt = questions[0]
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
@@ -47,29 +62,28 @@ def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_para
             # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
 
         ratedQs: Optional[List[SelfRating]]
-        ratedQs = [SelfRating(question_id=qpc.question_id
-                            , self_rating=qpc.check_answer_rating(answer)) 
-                            for qpc,answer in answerTuples
-                            if qpc.has_rating()]
+        ratedQs = [self_ratings_from_prompt(prompt=prompt, answer=answer)         
+                            for prompt,answer in answerTuples
+                            if prompt.has_rating()]
         
         if len(ratedQs)==0:
             ratedQs = None
 
 
-        correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
+        correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
         numAll = len(answerTuples)
         if numAll > 0: # can't provide exam when no questions are answered.
             print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
 
             # adding exam data to the JSON file
-            exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                                    , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                    , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]
+            exam_grades = ExamGrades( correctAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                                    , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                    , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]
                                     , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                     , llm = qaPipeline.exp_modelName()
                                     , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
-                                    , prompt_info = anyQpc.prompt_info()
+                                    , prompt_info = anyPrompt.prompt_info()
                                     , self_ratings = ratedQs
                             ) 
             if para.exam_grades is None:
@@ -178,6 +192,8 @@ def main(cmdargs=None):
     parser.add_argument('--model-pipeline', type=str, choices=modelPipelineOpts.keys(), required=True, metavar='MODEL', help='the huggingface pipeline used to answer questions. For example, \'sjrhuschlee/flan-t5-large-squad2\' is designed for the question-answering pipeline, where \'google/flan-t5-large\' is designed for the text2text-generation pipeline. Choices: '+", ".join(modelPipelineOpts.keys()))
     parser.add_argument('--model-name', type=str, metavar='MODEL', help='the huggingface model used to answer questions')
 
+    parser.add_argument('--use-nuggets', action='store_true', help="if set uses nuggets instead of questions")
+
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
 
@@ -195,7 +211,7 @@ def main(cmdargs=None):
     elif args.question_type == 'genq':
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
-        question_set = dict(question_bank_loader.load_exam_question_bank(args.question_path, prompt_class=args.prompt_class))
+        question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     

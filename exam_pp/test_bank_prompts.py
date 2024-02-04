@@ -25,44 +25,78 @@ def get_prompt_classes()->List[str]:
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
             , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
+            , 'NuggetSelfRatedPrompt'
+            , 'NuggetExtractionPrompt'
             # relevance grade prompts
             , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
             ]
 
 
-
-@dataclass
-class QuestionPrompt(abc.ABC):
-    question_id:str
+class Prompt(abc.ABC):
 
     @abstractmethod
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         pass
 
     @abstractmethod
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         pass
+
+    @abstractmethod
+    def check_answer(self, answer):
+        return True
+    
+    @abstractmethod
+    def has_rating(self):
+        return True
+    
+    def check_answer_rating(self,answer:str)->int:
+        if self.check_answer(answer=answer):
+            return 1
+        else:
+            return 0    
+    
+    @abstractmethod
+    def prompt_id(self)->str:
+        return ""
+
+    @abstractmethod
+    def prompt_type(self)->str:
+        return "undefined"
+
+
+@dataclass
+class NuggetPrompt(Prompt):
+    my_prompt_type="nugget"
+    nugget_id:str
+    
+    def prompt_id(self)->str:
+        return self.nugget_id
+
+    def prompt_type(self)->str:
+        return NuggetPrompt.my_prompt_type
+
+
+
+
+@dataclass
+class QuestionPrompt(Prompt):
+    my_prompt_type="question"
+    question_id:str
 
     @abstractmethod
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         pass
 
-    @abstractmethod
-    def check_answer(self,answer:str)->bool:
-        pass
-
-    def check_answer_rating(self,answer:str)->int:
-        if self.check_answer(answer=answer):
-            return 1
-        else:
-            return 0
-
-    @abstractmethod
-    def has_rating(self):
-        return False
-    
     def answer_match_info(self):
         return ""
+    
+    def prompt_id(self)->str:
+        return self.question_id
+
+    def prompt_type(self)->str:
+        return QuestionPrompt.my_prompt_type
+
 
 def normalize_answer(answer:str)->str:
     # Lowercase, Perform other normalization like removing punctuation, if necessary
@@ -161,7 +195,7 @@ class QuestionPromptWithChoices(QuestionPrompt):
 
 
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         question = self.question
         prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {question}", max_length=max_token_len)
         return prompt
@@ -272,7 +306,7 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
 
 
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         question_prompt =  f' question: How does this text answer this question: {self.question}'
         context_prompt = f"context: {context};"
         # question =  f'Is this question answerable: {self.question}'
@@ -407,7 +441,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     # def generate_prompt_with_context(self,context:str) -> str:
     #     return f"context: {context}; question: {self.question}; choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
@@ -492,6 +526,8 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
         return False
 
 
+
+
     @staticmethod
     def truncate_context_question_prompt(tokenizer, context, question, max_length):
 
@@ -534,7 +570,7 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
         return prompt
 
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
@@ -598,7 +634,7 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
                 }
         return info
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         return ""
 
 
@@ -711,7 +747,7 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
         return prompt
 
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
@@ -729,7 +765,6 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
     def stop_stem_normalize_answer(self, text:str)->str:
         # Convert text to lowercase
         text = text.lower().strip()
-
 
         # Remove punctuation
         text = text.translate(str.maketrans('', '', string.punctuation))
@@ -788,12 +823,7 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
 
 
     def check_answer_stemmed(self,answer:str)->Optional[bool]:
-        # def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-        #         return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
         stemmed_answer = self.stop_stem_normalize_answer(answer)
-        # is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-        #                            for stemmed_gold in self.normalized_correct_answers)
 
         if len(stemmed_answer) >=2:
             is_match = stemmed_answer in self.stop_stemmed_correct_answers
@@ -808,49 +838,52 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
 
 
 
-# @dataclass
-# class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
-#     question_id:str
-#     question:str
-#     choices:Dict[str,str]
-#     correct:str
-#     correctKey:Optional[str]
-#     query_id:str
-#     facet_id:Optional[str]
-#     query_text:str
+@dataclass
+class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
+    question_id:str
+    question:str
+    choices:Dict[str,str]
+    correct:str
+    correctKey:Optional[str]
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
 
-#     stemmer = PorterStemmer()
+    stemmer = PorterStemmer()
 
-#     def __post_init__(self):
-#         self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
+    def __post_init__(self):
+        self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
             
-#         self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
-#         self.stop_stemmed_correct_answers = {self.stop_stem_normalize_answer(gold) for gold in self.correct_answers}
+        self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
+        self.stop_stemmed_correct_answers = {self.stop_stem_normalize_answer(gold) for gold in self.correct_answers}
 
-#     def prompt_info(self)-> Dict[str, Any]:
-#         return {"prompt_class": self.__class__.__name__
-#                 ,"prompt_style": "provide a complete and concise answer to the question based on the context."
-#                 , "context_first": False
-#                 , "check_unanswerable": False
-#                 , "check_answer_key": True
-#                 , "is_self_rated":self.has_rating()
-#                 }
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                , "context_first": False
+                , "check_unanswerable": False
+                , "check_answer_key": True
+                , "is_self_rated":self.has_rating()
+                }
 
-#     def has_rating(self):
-#         return False
-
-
-#     def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
-#         raise RuntimeError("This is a post-hoc answer checker")
-
-#     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-#         raise RuntimeError("This is a post-hoc answer checker")
+    def has_rating(self):
+        return False
 
 
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        raise RuntimeError("This is a post-hoc answer checker")
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        raise RuntimeError("This is a post-hoc answer checker")
 
 
-#     def check_answer(self,answer:str)->bool:
-#         return self.check_answer_simple(answer)
+    def check_answer_simple(self,answer:str)->bool:
+        return answer in self.correct_answers
+
+
+
+    def check_answer(self,answer:str)->bool:
+        return self.check_answer_simple(answer)
 
 
 
@@ -949,7 +982,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         '''
 
 
-    def generate_prompt_with_context_no_choices(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
 
 
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}\n'
@@ -1015,4 +1048,271 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
 
 
+
+
+@dataclass
+class NuggetSelfRatedPrompt(NuggetPrompt):
+    nugget_id:str
+    nugget_text:str
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+
+    unanswerable_expressions:Set[str]
+
+    stemmer = PorterStemmer()
+
+    def __post_init__(self):
+        self.unanswerable_expressions = self.unanswerable_expressions.union( {"unanswerable"
+                                                                        ,"no"
+                                                                        ,"no answer",
+                                                                        "not enough information"
+                                                                        ,"unknown"
+                                                                        ,"it is not possible to tell"
+                                                                        ,"it does not say"
+                                                                        ,"no relevant information"
+                                                                        # ,"[iv]","(iv)","[ii]"
+                                                                        })
+        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+
+
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": "Is the nugget addressed..."
+                , "context_first": False
+                , "check_unanswerable": True
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating()
+                }
+
+    def has_rating(self):
+        return True
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        # Combine truncated context with the full question
+        combined_tokens = question_tokens + truncated_context_tokens
+        prompt = tokenizer.decode(combined_tokens)
+
+        return prompt
+
+
+    # pretext ='''Is the key fact (also known as a "nugget") covered in the provided context? Please evaluate based on the following scale:
+    #     - 5: The key fact is explicitly covered, with detailed explanation and context, ensuring a comprehensive understanding.
+    #     - 4: The key fact is covered with sufficient detail, though some minor elements or nuances may not be fully explored.
+    #     - 3: The key fact is mentioned and generally correct, but lacks detailed elaboration or contains minor inaccuracies.
+    #     - 2: The key fact is briefly mentioned or alluded to, but significant details are missing or inaccuracies are present.
+    #     - 1: The key fact is barely mentioned, with major inaccuracies or missing context, providing minimal insight.
+    #     - 0: The key fact is not covered or mentioned at all in the provided context.
+    #     '''
+    pretext ='''Given the context, evaluate the coverage of the specified key fact (nugget). Use this scale:
+        - 5: Detailed, clear coverage.
+        - 4: Sufficient coverage, minor omissions.
+        - 3: Mentioned, some inaccuracies or lacks detail.
+        - 2: Briefly mentioned, significant omissions or inaccuracies.
+        - 1: Minimally mentioned, largely inaccurate.
+        - 0: Not mentioned at all.
+        '''
+
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        # Combine truncated context with the full question
+        combined_tokens = question_tokens + truncated_context_tokens
+        prompt = tokenizer.decode(combined_tokens)
+
+        return prompt
+
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+
+
+        question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
+        context_prompt = f"Context: {context}"
+        prompt = NuggetSelfRatedPrompt.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+
+    def check_answer(self, answer:str)->bool:
+        rating = self.check_answer_rating(answer=answer)
+        return rating > 0
+
+    
+    # self-rated logic. We are scanning for 0-5. 
+    # other answers get rating 1
+    # unanserable expressions get rating 0
+    def check_answer_rating(self,answer:str)->int:
+        rating:int 
+        # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
+        match = re.fullmatch(r'[^\w]*([0-5])[^\w]*', answer)
+        if match:
+            rating = int(match.group(1))
+        elif self.check_unanswer(answer):
+            rating = 0
+        else:
+            rating = 1
+
+        return rating
+
+
+    # inverse logic!  we are scanning for non-answers!!!
+    def check_unanswer(self,answer:str)->bool:
+        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
+
+
+
+    def check_unanswer_simple(self,answer:str)->bool:
+        return not (answer in self.unanswerable_expressions)
+
+
+    def check_unanswer_stemmed(self,answer:str)->bool:
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
+                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        
+        stemmed_answer = normalize_answer(answer)
+        if len(stemmed_answer)<1:
+            return False
+        
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+                                   for stemmed_gold in self.normalized_unanswerable_expressions)
+
+        return not is_match
+
+
+
+
+
+@dataclass
+class NuggetExtractionPrompt(NuggetPrompt):
+    nugget_id:str
+    nugget_text:str
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+
+    unanswerable_expressions:Set[str]
+
+    stemmer = PorterStemmer()
+
+    def __post_init__(self):
+        self.unanswerable_expressions = self.unanswerable_expressions.union( {"unanswerable"
+                                                                        ,"no"
+                                                                        ,"no answer",
+                                                                        "not enough information"
+                                                                        ,"unknown"
+                                                                        ,"it is not possible to tell"
+                                                                        ,"it does not say"
+                                                                        ,"no relevant information"
+                                                                        # ,"[iv]","(iv)","[ii]"
+                                                                        })
+        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+
+
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": "Is the nugget addressed..."
+                , "context_first": False
+                , "check_unanswerable": True
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating()
+                }
+
+    def has_rating(self):
+        return False
+
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        # Combine truncated context with the full question
+        combined_tokens = question_tokens + truncated_context_tokens
+        prompt = tokenizer.decode(combined_tokens)
+
+        return prompt
+
+    @staticmethod
+    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
+        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        prompt = {
+            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
+            'context': tokenizer.decode(context_tokens)
+        }
+        return prompt
+
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
+        question_prompt =  f'Extract the passage from the text that best relates to the key fact (nugget), ensuring relevance and clarity. Key Fact: {self.nugget_text}\n'
+        context_prompt = f"Context: {context}"
+        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+
+    def check_answer(self, answer:str)->bool:
+        return self.check_unanswer(answer)
+
+
+    # inverse logic!  we are scanning for non-answers!!!
+    def check_unanswer(self,answer:str)->bool:
+        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
+
+
+
+    def check_unanswer_simple(self,answer:str)->bool:
+        return not (answer in self.unanswerable_expressions)
+
+
+    def check_unanswer_stemmed(self,answer:str)->bool:
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
+                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        
+        stemmed_answer = normalize_answer(answer)
+        if len(stemmed_answer)<1:
+            return False
+        
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+                                   for stemmed_gold in self.normalized_unanswerable_expressions)
+
+        return not is_match
 

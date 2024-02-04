@@ -10,7 +10,7 @@ from typing import Set, List, Tuple, Dict, Optional, Iterable
 from collections import defaultdict
 from pathlib import Path
 
-from .question_types import *
+from .test_bank_prompts import *
 from .parse_qrels_runs_with_text import *
 from .parse_qrels_runs_with_text import GradeFilter
 from .pydantic_helper import pydantic_dump
@@ -121,7 +121,7 @@ class ExamCoverScorerSelfRatings(ExamCoverScorer):
 
 
     def __countTotalCorrectQuestions(self,paras:List[FullParagraphData])->int:
-        correct:Set[str] = { rate.question_id
+        correct:Set[str] = { rate.get_id()
                                             for para in paras 
                                                 for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                                         for rate in grade.self_ratings_as_iterable()
@@ -130,7 +130,7 @@ class ExamCoverScorerSelfRatings(ExamCoverScorer):
         return len(correct)
 
     def __countTotalQuestions(self,paras:List[FullParagraphData])->int:
-        answered:Set[str] = { rate.question_id
+        answered:Set[str] = { rate.get_id()
                                             for para in paras 
                                                 for grade in para.retrieve_exam_grade_any(grade_filter=self.grade_filter)
                                                         for rate in grade.self_ratings_as_iterable()

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import gzip
 from pathlib import Path
 
-from .question_types import QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
+from .test_bank_prompts import NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 from .pydantic_helper import pydantic_dump
 
 
@@ -132,7 +132,7 @@ def get_md5_hash(input_string: str) -> str:
 
 
 def as_exam_test_points(query_id:str, facet_id:Optional[str], test_texts:List[str], generation_info:Any, use_nuggets:bool)->List[TestPoint]:
-    result:List[ExamQuestion] = list()
+    result:List[TestPoint] = list()
     use_facet_id = facet_id is not None
     for test_text in test_texts:
         clean_test_text = test_text.strip()
@@ -145,8 +145,7 @@ def as_exam_test_points(query_id:str, facet_id:Optional[str], test_texts:List[st
                             , query_id=query_id
                             , nugget_text=clean_test_text
                             , facet_id=facet_id if use_facet_id else None
-                            , info=generation_info
-                            , gold_answers= None)
+                            , info=generation_info)
             result.append(n)
         else: # exam question 
             q = ExamQuestion(question_id=test_id
@@ -159,28 +158,43 @@ def as_exam_test_points(query_id:str, facet_id:Optional[str], test_texts:List[st
     return result
 
 
-def emit_exam_question_bank_entry(out_file:TextIO, test_collection:str, generation_info:Any, query_id:str, query_facet_id:Optional[str], query_text:str, question_texts:List[str]):
-    exam_questions = as_exam_test_points(query_id=query_id
+def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:Any, query_id:str, query_facet_id:Optional[str], query_text:str, question_texts:List[str], use_nuggets:bool):
+    test_points:List[TestPoint]
+    test_points = as_exam_test_points(query_id=query_id
                                                , facet_id=query_facet_id
                                                , test_texts=question_texts
-                                               , generation_info=generation_info)
-            
-    question_bank = QueryQuestionBank(items=exam_questions
-                                    , query_id=query_id
-                                    , facet_id=query_facet_id
-                                    , test_collection=test_collection
-                                    , query_text=query_text
-                                    , info = None
-                                    # , info=generation_info
-                                    )
-    write_single_query_test_bank(file=out_file, bank=question_bank)
+                                               , generation_info=generation_info
+                                               , use_nuggets=use_nuggets)
 
+    if not use_nuggets:
+
+        question_bank = QueryQuestionBank(items=[cast(ExamQuestion, q) for q in test_points]
+                                        , query_id=query_id
+                                        , facet_id=query_facet_id
+                                        , test_collection=test_collection
+                                        , query_text=query_text
+                                        , info = None
+                                        # , info=generation_info
+                                        )
+        write_single_query_test_bank(file=out_file, bank=question_bank)
+
+
+    elif use_nuggets:
+        nugget_bank = QueryNuggetBank(items=[cast(Nugget, n) for n in test_points]
+                                        , query_id=query_id
+                                        , facet_id=query_facet_id
+                                        , test_collection=test_collection
+                                        , query_text=query_text
+                                        , info = None
+                                        # , info=generation_info
+                                        )
+        write_single_query_test_bank(file=out_file, bank=nugget_bank)
 
 
 ## -------------------------------------------
         
 
-def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
+def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
         option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]', f'{ch}.',f'{ch}']   for ch in char_options]) )
@@ -189,7 +203,8 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
     option_non_answers = generate_letter_choices()
     option_non_answers.add('unanswerable')
     test_banks = parseTestBank(question_file, use_nuggets=use_nuggets)
-    qpc_dict = defaultdict(list)
+    prompt_dict : Dict[str, List[Prompt]]
+    prompt_dict = defaultdict(list)
 
     if not use_nuggets:
         for bank in test_banks:
@@ -198,9 +213,9 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
             for question in question_bank.get_questions():
                 if not question.query_id == query_id:
                         raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
-                qpc:QuestionPrompt
+                prompt:Prompt
                 if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
-                    qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
+                    prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
                                                                         , question = question.question_text
                                                                         , query_id = question.query_id
                                                                         , facet_id = question.facet_id
@@ -208,7 +223,7 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
                                                                         , unanswerable_expressions = option_non_answers
                                                                         )
                 elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
-                    qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
+                    prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
                                                                         , question = question.question_text
                                                                         , query_id = question.query_id
                                                                         , facet_id = question.facet_id
@@ -216,7 +231,7 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
                                                                         , unanswerable_expressions = option_non_answers
                                                                         )
                 elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
-                    qpc = QuestionAnswerablePromptWithChoices(question_id = question.question_id
+                    prompt = QuestionAnswerablePromptWithChoices(question_id = question.question_id
                                                                         , question = question.question_text
                                                                         , query_id = question.query_id
                                                                         , facet_id = question.facet_id
@@ -227,7 +242,7 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
                     raise RuntimeError(f"Prompt class {prompt_class} not supported by this question_loader.")\
             
 
-                qpc_dict[query_id].append(qpc)
+                prompt_dict[query_id].append(prompt)
 
 
     if use_nuggets:
@@ -237,40 +252,32 @@ def load_exam_question_bank(question_file:Path, use_nuggets:bool, prompt_class:s
             for nugget in nugget_bank.get_nuggets():
                 if not nugget.query_id == query_id:
                         raise RuntimeError(f"query_ids don't match between QueryNuggetBank ({query_id}) and contained ExamNugget ({nugget.query_id}) ")
-                qpc:QuestionPrompt
-                if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
-                    qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = nugget.nugget_id
-                                                                        , question = nugget.nugget_text
-                                                                        , query_id = nugget.query_id
-                                                                        , facet_id = nugget.facet_id
-                                                                        , query_text = nugget_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
-                elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
-                    qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = nugget.nugget_id
-                                                                        , question = nugget.nugget_text
-                                                                        , query_id = nugget.query_id
-                                                                        , facet_id = nugget.facet_id
-                                                                        , query_text = nugget_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
-                elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
-                    qpc = QuestionAnswerablePromptWithChoices(question_id = nugget.nugget_id
-                                                                        , question = nugget.nugget_text
-                                                                        , query_id = nugget.query_id
-                                                                        , facet_id = nugget.facet_id
-                                                                        , query_text = nugget_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
+                prompt:Prompt
+                if(prompt_class =="NuggetSelfRatedPrompt"):
+                    prompt = NuggetSelfRatedPrompt(nugget_id = nugget.nugget_id
+                                                , nugget_text = nugget.nugget_text
+                                                , query_id = nugget.query_id
+                                                , facet_id = nugget.facet_id
+                                                , query_text = nugget_bank.query_text
+                                                , unanswerable_expressions = option_non_answers
+                                                )
+                if(prompt_class =="NuggetExtractionPrompt"):
+                    prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id
+                                                , nugget_text = nugget.nugget_text
+                                                , query_id = nugget.query_id
+                                                , facet_id = nugget.facet_id
+                                                , query_text = nugget_bank.query_text
+                                                , unanswerable_expressions = option_non_answers
+                                                )
                 else:
                     raise RuntimeError(f"Prompt class {prompt_class} not supported by this nugget_loader.")\
             
 
-                qpc_dict[query_id].append(qpc)
+                prompt_dict[query_id].append(prompt)
 
 
 
-    return list(qpc_dict.items())
+    return list(prompt_dict.items())
 
 ## -------------------------------------------        
 
@@ -289,8 +296,8 @@ def main():
     bank_again = parseTestBank("newfile.jsonl.gz")
     print(bank_again[0])
 
-    qpcs = load_exam_question_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
-    print(qpcs[0])
+    prompts = load_prompts_from_test_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    print(prompts[0])
 
 if __name__ == "__main__":
     main()

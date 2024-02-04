@@ -11,8 +11,17 @@ from pathlib import Path
 from .pydantic_helper import pydantic_dump
 
 class SelfRating(BaseModel):
-    question_id:str
+    question_id:Optional[str]
+    nugget_id:Optional[str]=None
     self_rating:int
+    def get_id(self)->str:
+        if self.question_id is not None:
+            return self.question_id
+        elif self.nugget_id is not None:
+            return self.nugget_id
+        else:
+            raise RuntimeError("Neither question_id nor nugget_id is given.")
+
 
 
 class ExamGrades(BaseModel):
@@ -24,6 +33,7 @@ class ExamGrades(BaseModel):
     exam_ratio: float                        # correct / all questions
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
+    prompt_type: Optional[str]
 
     def self_ratings_as_iterable(self):
         if self.self_ratings is None:
@@ -232,7 +242,7 @@ def parseQueryWithFullParagraphs(file_path:Path) -> List[QueryWithFullParagraphL
 
 def dumpQueryWithFullParagraphList(queryWithFullParagraph:QueryWithFullParagraphList)->str:
     '''Write `QueryWithFullParagraphList` to jsonl.gz'''
-    return  json.dumps ([queryWithFullParagraph.queryId,[p.dict() for p in queryWithFullParagraph.paragraphs]])+"\n"
+    return  json.dumps ([queryWithFullParagraph.queryId,[p.dict(exclude_none=True) for p in queryWithFullParagraph.paragraphs]])+"\n"
 
 def writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList]) :
     # Open the gzipped file

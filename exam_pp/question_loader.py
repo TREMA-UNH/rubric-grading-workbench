@@ -12,8 +12,8 @@ import hashlib
 from .tqa_loader import Question, writeQuestions, parseConvertedQuestions
 
 
-from .question_types import QuestionAnswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices
-from .question_types import *
+from .test_bank_prompts import QuestionAnswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices
+from .test_bank_prompts import *
 
 
 def get_md5_hash(input_string: str) -> str:
@@ -73,35 +73,6 @@ def load_naghmehs_questions(question_file:Path)-> List[Tuple[str, List[Question]
                                 , query_text = query_text
                                 , choices = None, correctKey=None, correct=None
                                 )
-                    
-                    # if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
-                    #     qpc = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = qid
-                    #                                                          , question = question_text
-                    #                                                          , query_id = query_id
-                    #                                                          , facet_id = facet_id
-                    #                                                          , query_text = query_text
-                    #                                                          , unanswerable_expressions = option_non_answers
-                    #                                                          )
-                    # elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
-                    #     qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id=qid
-                    #                                 , question = question_text
-                    #                                 , query_id = query_id
-                    #                                 , facet_id = facet_id
-                    #                                 , query_text = query_text
-                    #                                 , unanswerable_expressions=option_non_answers
-                    #                                 )
-                    # elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
-                    #     qpc = QuestionAnswerablePromptWithChoices(question_id = qid
-                    #                                 , question= question_text
-                    #                                 , query_id= query_id
-                    #                                 , facet_id = facet_id
-                    #                                 , query_text = query_text
-                    #                                 , unanswerable_expressions=option_non_answers
-                    #                                 )
-                    # else:
-                    #     raise RuntimeError(f"Prompt class {prompt_class} not supported by naghmeh's question_loader.")\
-                
-
                     question_list.append(q)
         result.append((query_id, question_list))
     return result

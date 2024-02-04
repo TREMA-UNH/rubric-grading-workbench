@@ -7,7 +7,7 @@ from typing import TextIO
 
 import trec_car.read_data as trec_car
 
-from .question_bank_loader import ExamQuestion, QueryQuestionBank, emit_exam_question_bank_entry, write_single_query_test_bank, writeTestBank
+from .question_bank_loader import ExamQuestion, QueryQuestionBank, emit_test_bank_entry, write_single_query_test_bank, writeTestBank
 
 from .openai_interface import query_gpt_batch_with_rate_limiting
 from .davinci_to_runs_with_text import *
@@ -96,25 +96,6 @@ Give the nugget set in the following JSON format:
         self.set_json_instruction(json_instruction=json_instruction, field_name=field_name)
 
 
-
-
-
-
-#
-#        Nuggets are stored in  
-    #         {
-    #   "question_id": "tqa2:L_0002/T_0018/bdde682b973b1faa0c73d5e54deabcf7",
-    #   "question_text": "Troposphere houses weather phenomena",
-# 
-
-
-
-
-
-
-
-
-
 # ---------------- CAR Y3 -------------------
 
 def car_section_question_prompt(query_title:str, query_subtopic:str)->str:
@@ -126,7 +107,12 @@ def car_section_nugget_prompt(query_title:str, query_subtopic:str)->str:
         Generate insightful nuggets (key facts) that delve into advanced aspects of '{query_subtopic}', showcasing a deep understanding of the subject matter. Avoid basic or introductory-level nuggets. Keep nuggets to a maximum of 4 words.'''    
 
 
-def generate_questions_cary3(car_outlines_path:Path, fetcher: FetchGptJson, out_file:TextIO, use_nuggets:bool, max_queries:Optional[int]=None, test_collection:str="cary3"):
+def generate_questions_cary3(car_outlines_path:Path
+                             , fetcher: FetchGptJson
+                             , out_file:TextIO
+                             , use_nuggets:bool
+                             , test_collection:str="cary3"
+                             , max_queries:Optional[int]=None):
    
     generation_info = fetcher.generation_info()
     
@@ -150,20 +136,36 @@ def generate_questions_cary3(car_outlines_path:Path, fetcher: FetchGptJson, out_
 
 
             questions = fetcher.generate_question(prompt)
-            emit_exam_question_bank_entry(out_file, test_collection, generation_info, query_id, query_facet_id, query_text, questions)
-
+            emit_test_bank_entry(out_file=out_file
+                                 , test_collection=test_collection
+                                 , generation_info= generation_info
+                                 , query_id= query_id
+                                 , query_facet_id= query_facet_id
+                                 , query_text= query_text
+                                 , question_texts =questions
+                                 , use_nuggets=use_nuggets)
 
 #  ------------------- TREC DL ------------------
 
 
 
-def dl_query_prompt(query_text:str)->str:
+def web_search_question_prompt(query_text:str)->str:
     return f'''Break the query '{query_text}' into concise questions that must be answered. 
      Generate 10 concise insightful questions that reveal whether information relevant for '{query_text}' was provided, showcasing a deep understanding of the subject matter. Avoid basic or introductory-level inquiries. Keep the questions short.'''
 
 
 
-def generate_questions_dl(query_json:Path, fetcher: FetchGptQuestions, out_file:TextIO, max_queries:Optional[int]=None, test_collection:str="cary3"):
+def web_search_nugget_prompt(query_text:str)->str:
+    return f'''Break the query '{query_text}' into concise nuggets that must be mentioned. 
+     Generate 10 concise insightful nuggets that reveal whether information relevant for '{query_text}' was provided, showcasing a deep understanding of the subject matter. Avoid basic or introductory-level nuggets. Keep nuggets to a maximum of 4 words.'''
+
+
+def generate_questions_json(query_json:Path
+                            , fetcher: FetchGptJson
+                            , out_file:TextIO
+                            , test_collection:str
+                            , use_nuggets:bool
+                            , max_queries:Optional[int]=None):
   
     generation_info = fetcher.generation_info()
     
@@ -173,41 +175,46 @@ def generate_questions_dl(query_json:Path, fetcher: FetchGptQuestions, out_file:
 
         for query_id, query_text in itertools.islice(queries.items(), max_queries):
             print(query_id, query_text)
-            prompt = dl_query_prompt(query_text=query_text)
+            if not use_nuggets:
+                prompt = web_search_question_prompt(query_text=query_text)
+            elif use_nuggets:
+                prompt = web_search_nugget_prompt(query_text=query_text)
 
             questions = fetcher.generate_question(prompt)
-            emit_exam_question_bank_entry(out_file, test_collection, generation_info, query_id, None, query_text, questions)
+            emit_test_bank_entry(out_file=out_file
+                                 , test_collection=test_collection
+                                 , generation_info= generation_info
+                                 , query_id= query_id
+                                 , query_facet_id= None
+                                 , query_text= query_text
+                                 , question_texts =questions
+                                 , use_nuggets=use_nuggets)
 
 # -------------------------------------------
             
 
-def noodle_car_gpt(car_outlines_cbor:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, max_tokens:int=1500):
-    json_instruction= r'''
-Give the question set in the following JSON format:
-```json
-{ "questions": [question_text_1, question_text_2, ... ] }
-```'''
-    field_name="questions"
-
-
-
+def noodle_car_gpt(car_outlines_cbor:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, max_tokens:int=1500, max_queries:Optional[int]=None):
     fetcher:FetchGptJson
-
     fetcher = FetchGptQuestions(gpt_model=gpt_model, max_tokens=max_tokens)
     if use_nuggets:
         fetcher = FetchGptNuggets(gpt_model=gpt_model, max_tokens=max_tokens)
 
 
     with gzip.open(gpt_out, "wt", encoding='utf-8') as file:
-        generate_questions_cary3(car_outlines_path = car_outlines_cbor, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets)
+        generate_questions_cary3(car_outlines_path = car_outlines_cbor, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, max_queries=max_queries)
 
         file.close()
 
-def noodle_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, max_tokens:int=1500):
-    fetcher = FetchGptQuestions(gpt_model=gpt_model, max_tokens=max_tokens)
+def noodle_json_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, test_collection:str, max_tokens:int=1500, max_queries:Optional[int]=None):
+    fetcher:FetchGptJson
+    if not use_nuggets:
+        fetcher = FetchGptQuestions(gpt_model=gpt_model, max_tokens=max_tokens)
+    elif use_nuggets:
+        fetcher = FetchGptNuggets(gpt_model=gpt_model, max_tokens=max_tokens)
+
 
     with gzip.open(gpt_out, "wt", encoding='utf-8') as file:
-        generate_questions_dl(query_json = query_json, fetcher=fetcher, out_file = file)
+        generate_questions_json(query_json = query_json, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, test_collection=test_collection, max_queries=max_queries)
 
         file.close()
 
@@ -249,8 +256,10 @@ def main():
                         , help='Output file name where paragraphs with exam grade annotations will be written to')
 
     parser.add_argument('--gpt-model', type=str, metavar='MODEL', default="gpt-3.5-turbo", help='OpenAI model name to be used')
+    parser.add_argument('--test-collection', type=str, default="anonymous", metavar='NAME', help='Test collection where queries are taken from.')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
- 
+    parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
+
     args = parser.parse_args()  
 
     if not (args.car_outlines_cbor  or args.query_json):
@@ -259,10 +268,10 @@ def main():
         raise RuntimeError("Either --car-outines-cbor or --query-json must be set. (not both)")
 
     if args.car_outlines_cbor is not None:
-        noodle_car_gpt(car_outlines_cbor=args.car_outlines_cbor, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets)
+        noodle_car_gpt(car_outlines_cbor=args.car_outlines_cbor, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, max_queries=args.max_queries)
 
     if args.query_json is not None:
-        noodle_query_gpt(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens)
+        noodle_json_query_gpt(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, test_collection=args.test_collection, max_queries=args.max_queries)
 
 if __name__ == "__main__":
     main()

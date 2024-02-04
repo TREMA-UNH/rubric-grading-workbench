@@ -6,9 +6,9 @@ from typing import Tuple, List, Any, Dict, Optional
 from pydantic import BaseModel
 import json
 
-
-from .question_types import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
-from .question_types import *
+from .pydantic_helper import pydantic_dump
+from .test_bank_prompts import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
+from .test_bank_prompts import *
 
 
 
@@ -32,7 +32,7 @@ def writeQuestions(file_path:Path, questions:List[Tuple[str, List[Question]]]) :
         # Iterate over each line in the file
         for queryId, qs in questions:
                 for q in qs:
-                    j = q.json()
+                    j = pydantic_dump(q)
                     file.write(j)
                     file.write('\n')
         # file.writelines([json.dumps(x)+'\n' for x in questions])
@@ -53,16 +53,16 @@ def parseConvertedQuestions(file_path:Path)->List[Question]:
     return result
 
 
-    # Open the gzipped file
-    with gzip.open(file_path, 'wt', encoding='utf-8') as file:
-        # Iterate over each line in the file
-        for queryId, qs in questions:
-                for q in qs:
-                    j = q.json()
-                    file.write(j)
-                    file.write('\n')
-        # file.writelines([json.dumps(x)+'\n' for x in questions])
-    file.close()
+    # # Open the gzipped file
+    # with gzip.open(file_path, 'wt', encoding='utf-8') as file:
+    #     # Iterate over each line in the file
+    #     for queryId, qs in questions:
+    #             for q in qs:
+    #                 j = q.json()
+    #                 file.write(j)
+    #                 file.write('\n')
+    #     # file.writelines([json.dumps(x)+'\n' for x in questions])
+    # file.close()
 
 
 

@@ -94,7 +94,7 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
     def best_rating_by_facet(self_ratings:List[SelfRating])->Dict[str,int]:
         grouped:Dict[str,Set[int]] = defaultdict(set) # default: 0
         for self_rating in self_ratings:
-            question_id = self_rating.question_id
+            question_id = self_rating.get_id()
             rating = self_rating.self_rating
             match = re.search(beforeLastSlashpattern, question_id)            
             if match:

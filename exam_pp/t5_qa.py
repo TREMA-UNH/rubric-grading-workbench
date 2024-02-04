@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 
-from .question_types import QuestionPromptWithChoices,QuestionPrompt
+from .test_bank_prompts import QuestionPromptWithChoices,QuestionPrompt
 
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
@@ -146,7 +146,7 @@ class Text2TextPipeline():
 
     def chunkingBatchAnswerQuestions(self, questions:List[QuestionPrompt],  paragraph_txt:str)->List[Tuple[QuestionPrompt, str]]:
             """Run question answering over batches of questions, and tuples it up with the answers"""
-            promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+            promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
 
             def processBatch(qpcs:List[QuestionPrompt])->Iterable[Tuple[QuestionPrompt, str]]:
                 """Prepare a batch for question answering, tuple it up with the answers"""
@@ -204,7 +204,7 @@ class TextGenerationPipeline():
 
     def chunkingBatchAnswerQuestions(self, questions:List[QuestionPrompt],  paragraph_txt:str)->List[Tuple[QuestionPrompt, str]]:
             """Run question answering over batches of questions, and tuples it up with the answers"""
-            promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+            promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
 
             def processBatch(qpcs:List[QuestionPrompt])->Iterable[Tuple[QuestionPrompt, str]]:
                 """Prepare a batch for question answering, tuple it up with the answers"""
@@ -244,7 +244,7 @@ def mainT2T():
     
     # qa = Text2TextPipeline('google/flan-t5-large')
     qa = Text2TextPipeline('google/flan-t5-small')
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_no_choices(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
+    # promptGenerator=lambda qpc: qpc.generate_prompt(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
         answerTuples = qa.chunkingBatchAnswerQuestions(questions, "")

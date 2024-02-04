@@ -1,8 +1,8 @@
 from typing import *
 
 from .exam_grading import *
-from .question_types import QuestionPromptWithChoices
-from .question_types import *
+from .test_bank_prompts import QuestionPromptWithChoices
+from .test_bank_prompts import *
 from .t5_qa import *
 from .parse_qrels_runs_with_text import *
 from . import tqa_loader
@@ -15,7 +15,8 @@ def main():
 
 
     # load  exam questions
-    exam_questions: List[QuestionPromptWithChoices] = [
+    exam_questions: List[QuestionPromptWithChoices] 
+    exam_questions = [
         QuestionPromptWithChoices( question_id="?1"
         ,question = "How many people live in this text?"
         ,choices = {"correct":"zero"}
@@ -36,7 +37,8 @@ def main():
 
     # load system responses for this query (dummy example)
 
-    paragraphs:List[FullParagraphData] = [FullParagraphData(paragraph_id="1", text='''
+    paragraphs:List[FullParagraphData] 
+    paragraphs = [FullParagraphData(paragraph_id="1", text='''
                                                             It has four main linguistic and cultural regions: German, French, Italian and Romansh. 
                                                             Although most Swiss are German-speaking, national identity is fairly cohesive, being 
                                                             rooted in a common historical background, shared values such as federalism and direct 
@@ -52,7 +54,7 @@ def main():
     for para in paragraphs:
         paragraph_txt = para.text
         answerTuples = qaPipeline.chunkingBatchAnswerQuestions(exam_questions, paragraph_txt=paragraph_txt)
-        # correctQs = [(qpc.question_id, answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
+        # correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
 
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
         numAll = len(answerTuples)
@@ -60,12 +62,13 @@ def main():
             print(f"{para.paragraph_id}: {numRight} of {numAll} answers are correct.")
 
             # adding exam data to the JSON file
-            exam_grades = ExamGrades( correctAnswered=[qpc.question_id for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                                    , wrongAnswered=[qpc.question_id for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                    , answers = [(qpc.question_id, answer) for qpc,answer in answerTuples ]  #  not needed, but for debugging
+            exam_grades = ExamGrades( correctAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                                    , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                    , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]  #  not needed, but for debugging
                                     , exam_ratio = 0.0   #  don't use this  ((1.0 * numRight) / (1.0*  numAll))
                                     , llm = qaPipeline.exp_modelName()
                                     , llm_options={}
+                                    , prompt_type=qpc.prompt_type()
                             ) 
             # annotate paragraph with the exam grade
             if para.exam_grades is None:
