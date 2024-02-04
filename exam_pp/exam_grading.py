@@ -4,14 +4,14 @@ from . import question_bank_loader
 
 
 from . import question_loader
-from .test_bank_prompts import QuestionPrompt, get_prompt_classes
+from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
 from .t5_qa import *
 from .parse_qrels_runs_with_text import *
 from . import tqa_loader
 
 
-def fix_car_query_id(input:List[Tuple[str,List[QuestionPrompt]]]) -> List[Tuple[str,List[QuestionPrompt]]]:
+def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
 
 
@@ -44,7 +44,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs:Optional[int]=None)->None:
+def noodle_one_query(queryWithFullParagraphList, questions:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -83,6 +83,7 @@ def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_para
                                     , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                     , llm = qaPipeline.exp_modelName()
                                     , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                    , prompt_type= anyPrompt.prompt_type()
                                     , prompt_info = anyPrompt.prompt_info()
                                     , self_ratings = ratedQs
                             ) 
@@ -95,7 +96,7 @@ def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_para
     
 
 
-def noodle(qaPipeline, question_set, paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -205,13 +206,12 @@ def main(cmdargs=None):
     # Parse the arguments
     args = parser.parse_args(args = cmdargs)  
 
-    question_set:Dict[str,List[QuestionPrompt]]
+    question_set:Dict[str,List[Prompt]]
     if args.question_type == "tqa":
         question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
     elif args.question_type == 'genq':
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
-        x = args.use_nuggets
         question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
