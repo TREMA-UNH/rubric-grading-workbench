@@ -7,16 +7,6 @@
 from exam_pp import exam_grading, exam_post_pipeline
 
 
-exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
-                           ,"-o","result.jsonl.gz"
-                           ,"--model-pipeline", "text2text"
-                           ,"--model-name","google/flan-t5-base"
-                           ,"--prompt-class","QuestionCompleteConcisePromptWithAnswerKey"
-                           ,"--question-path","./tqa_train_val_test"
-                           ,"--max-queries","1","--max-paragraphs","1","--question-type", "tqa"
-                           ])
-
-
 #python -m exam_pp.exam_grading  -o result.jsonl.gz  ./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz--model-pipeline text2text --model-name google/flan-t5-large --prompt-class QuestionCompleteConcisePromptWithAnswerKey tqa --question-path ./tqa_train_val_test --question-type tqa
 
 print("\n\n\n\n\n\n")
@@ -69,11 +59,119 @@ dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 # exam_post_pipeline.main(cmdargs= [car_graded_file ,"--leaderboard-out","out.leaderboard.tsv","--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices", 
 #                                "--question-set", "tqa", "-r", "--min-self-rating","4"])
 
+print("\n\n\nNuggets\n\n\n")
+
+
+exam_grading.main(["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","NuggetSelfRatedPrompt"
+                           ,"--max-queries","1","--max-paragraphs","1"
+                           ,"--question-type","question-bank"
+                           ,"--use-nuggets"
+                           ,"--question-path","car-nuggets.jsonl.gz"])
+
+print("\n\n\n\n\n\n")
+
+
+exam_grading.main(["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","NuggetExtractionPrompt"
+                           ,"--max-queries","1","--max-paragraphs","1"
+                           ,"--question-type","question-bank"
+                           ,"--use-nuggets"
+                           ,"--question-path","car-nuggets.jsonl.gz"])
+
+
+
+
+print("\n\n\nQuestionbank Questions\n\n\n")
+
+
+exam_grading.main(["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionAnswerablePromptWithChoices"
+                           ,"--max-queries","1","--max-paragraphs","1"
+                           ,"--question-type","question-bank"
+                           ,"--question-path","car-questions.jsonl.gz"])
 
 
 print("\n\n\n\n\n\n")
 
 
+print("\n\n\n\n\n\n")
+
+
+exam_grading.main(["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionCompleteConciseUnanswerablePromptWithChoices"
+                           ,"--max-queries","1","--max-paragraphs","1"
+                           ,"--question-type","question-bank"
+                           ,"--question-path","car-questions.jsonl.gz"])
+
+
+print("\n\n\n\n\n\n")
+
+
+exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
+                           ,"--max-queries","1","--max-paragraphs","1"
+                           ,"--question-type","question-bank"
+                           ,"--question-path","car-questions.jsonl.gz"])
+
+
+print("\n\n\nTQA \n\n\n")
+
+
+
+
+exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionCompleteConcisePromptWithAnswerKey2"
+                           ,"--question-path","./tqa_train_val_test"
+                           ,"--max-queries","1","--max-paragraphs","1","--question-type", "tqa"
+                           ])
+
+
+
+print("\n\n\n\n\n\n")
+exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionCompleteConcisePromptWithAnswerKey"
+                           ,"--question-path","./tqa_train_val_test"
+                           ,"--max-queries","1","--max-paragraphs","1","--question-type", "tqa"
+                           ])
+
+
+
+print("\n\n\n\n\n\n")
+exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
+                           ,"-o","result.jsonl.gz"
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","QuestionPromptWithChoices"
+                           ,"--question-path","./tqa_train_val_test"
+                           ,"--max-queries","1","--max-paragraphs","1","--question-type", "tqa"
+                           ])
+
+
+
+
+print("\n\n\ngenQ \n\n\n")
 
 
 exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
@@ -82,33 +180,8 @@ exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz
                      ,"--model-name","google/flan-t5-base"
                      ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
                      ,"--max-queries","1","--max-paragraphs","1"
-                     ,"--question-type","naghmeh","--question-path","naghmeh-questions.json"
+                     ,"--question-type","genq","--question-path","naghmeh-questions.json"
                      ])
-
-print("\n\n\n\n\n\n")
-
-
-
-exam_grading.main(cmdargs=["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
-                           ,"-o","result.jsonl.gz"
-                           ,"--model-pipeline", "text2text"
-                           ,"--model-name","google/flan-t5-base"
-                           ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
-                           ,"--max-queries","1","--max-paragraphs","1"
-                           ,"--question-type","question-bank"
-                           ,"--question-path","newfile.json.gz"])
-print("\n\n\n\n\n\n")
-
-
-
-exam_grading.main(["./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
-                           ,"-o","result.jsonl.gz"
-                           ,"--model-pipeline", "text2text"
-                           ,"--model-name","google/flan-t5-base"
-                           ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
-                           ,"--max-queries","1","--max-paragraphs","1"
-                           ,"--question-type","question-bank"
-                           ,"--question-path","newfile.json.gz"])
 
 
 #  result_trecDL2019-qrels-with-text__new_subqueries_v2__large.jsonl.gz

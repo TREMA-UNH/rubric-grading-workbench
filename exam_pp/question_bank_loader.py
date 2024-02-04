@@ -3,6 +3,7 @@ import abc
 from collections import defaultdict
 import hashlib
 import itertools
+import time
 import typing
 from pydantic import BaseModel
 from pydantic.generics import GenericModel
@@ -44,35 +45,29 @@ class QueryTestBank(GenericModel, Generic[T]):
 
 
 class QueryQuestionBank(QueryTestBank[ExamQuestion]):
-    def __init__(self, items:List[ExamQuestion]
-                                    , query_id:str
-                                    , facet_id: Optional[str]
-                                    , test_collection:str
-                                    , query_text:str
-                                    , info:Any):
-        super().__init__(query_id = query_id
-                         , facet_id = facet_id
-                         , test_collection=test_collection
-                         , query_text=query_text
-                         , info=info
-                         , items = items)
+    hash:int = 1243234 # TODO random
+
+    # def __post_init__(self):
+    #     self.items
+
+    # def __init__(self,  query_id:str
+    #                 , facet_id: Optional[str]
+    #                 , test_collection:str
+    #                 , query_text:str
+    #                 , items:List[ExamQuestion]
+    #                 , info:Optional[Dict]):
+    #     super().__init__(query_id = query_id
+    #                      , facet_id = facet_id
+    #                      , test_collection=test_collection
+    #                      , query_text=query_text
+    #                      , info=info
+    #                      , items = items)
 
     def get_questions(self) -> List[ExamQuestion]:
         return self.items
 
 class QueryNuggetBank(QueryTestBank[Nugget]):
-    def __init__(self, items:List[Nugget]
-                                    , query_id:str
-                                    , facet_id: Optional[str]
-                                    , test_collection:str
-                                    , query_text:str
-                                    , info:Any):
-        super().__init__(query_id = query_id
-                         , facet_id = facet_id
-                         , test_collection=test_collection
-                         , query_text=query_text
-                         , info=info
-                         , items = items)
+    hash:int = 1243234 # TODO random
 
     def get_nuggets(self) -> List[Nugget]:
         return self.items
@@ -163,7 +158,8 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
     test_points = as_exam_test_points(query_id=query_id
                                                , facet_id=query_facet_id
                                                , test_texts=question_texts
-                                               , generation_info=generation_info
+                                            #    , generation_info=generation_info
+                                               , generation_info = None
                                                , use_nuggets=use_nuggets)
 
     if not use_nuggets:
@@ -173,8 +169,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
                                         , facet_id=query_facet_id
                                         , test_collection=test_collection
                                         , query_text=query_text
-                                        , info = None
-                                        # , info=generation_info
+                                        , info=generation_info
                                         )
         write_single_query_test_bank(file=out_file, bank=question_bank)
 
@@ -185,8 +180,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
                                         , facet_id=query_facet_id
                                         , test_collection=test_collection
                                         , query_text=query_text
-                                        , info = None
-                                        # , info=generation_info
+                                        , info=generation_info
                                         )
         write_single_query_test_bank(file=out_file, bank=nugget_bank)
 
@@ -205,6 +199,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
     test_banks = parseTestBank(question_file, use_nuggets=use_nuggets)
     prompt_dict : Dict[str, List[Prompt]]
     prompt_dict = defaultdict(list)
+    prompt:Prompt
 
     if not use_nuggets:
         for bank in test_banks:
@@ -213,7 +208,6 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
             for question in question_bank.get_questions():
                 if not question.query_id == query_id:
                         raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
-                prompt:Prompt
                 if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
                     prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
                                                                         , question = question.question_text
@@ -252,7 +246,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
             for nugget in nugget_bank.get_nuggets():
                 if not nugget.query_id == query_id:
                         raise RuntimeError(f"query_ids don't match between QueryNuggetBank ({query_id}) and contained ExamNugget ({nugget.query_id}) ")
-                prompt:Prompt
+                
                 if(prompt_class =="NuggetSelfRatedPrompt"):
                     prompt = NuggetSelfRatedPrompt(nugget_id = nugget.nugget_id
                                                 , nugget_text = nugget.nugget_text
@@ -261,7 +255,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
                                                 , query_text = nugget_bank.query_text
                                                 , unanswerable_expressions = option_non_answers
                                                 )
-                if(prompt_class =="NuggetExtractionPrompt"):
+                elif(prompt_class =="NuggetExtractionPrompt"):
                     prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id
                                                 , nugget_text = nugget.nugget_text
                                                 , query_id = nugget.query_id

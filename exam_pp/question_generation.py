@@ -25,10 +25,14 @@ class FetchGptJson:
         self._field_name = field_name
 
 
-    def generation_info(self):
+    def generation_info(self, test_collection:str, hash:str, description:Optional[str]):
         return {"gpt_model":self.gpt_model
                 , "format_instruction":"json"
                 , "prompt_style": "Explore the connection..."
+                , "prompt_target": self._field_name
+                , "test_collection": test_collection
+                , "hash":hash
+                , "description":description
                 }
 
 
@@ -112,9 +116,11 @@ def generate_questions_cary3(car_outlines_path:Path
                              , out_file:TextIO
                              , use_nuggets:bool
                              , test_collection:str="cary3"
+                             , description:Optional[str]=None
                              , max_queries:Optional[int]=None):
    
-    generation_info = fetcher.generation_info()
+    hash=datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
+    generation_info = fetcher.generation_info(test_collection=test_collection, hash= hash, description=description)
     
     page:trec_car.Page
     for page in itertools.islice(trec_car.iter_outlines(open(car_outlines_path, 'rb')), max_queries):
@@ -165,9 +171,11 @@ def generate_questions_json(query_json:Path
                             , out_file:TextIO
                             , test_collection:str
                             , use_nuggets:bool
+                            , description:Optional[str]=None
                             , max_queries:Optional[int]=None):
-  
-    generation_info = fetcher.generation_info()
+
+    hash=datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
+    generation_info = fetcher.generation_info(test_collection=test_collection, hash= hash, description=description)
     
     queries:Dict[str,str]
     with open(query_json, "rt", encoding="utf-8") as file:
@@ -193,7 +201,7 @@ def generate_questions_json(query_json:Path
 # -------------------------------------------
             
 
-def noodle_car_gpt(car_outlines_cbor:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, max_tokens:int=1500, max_queries:Optional[int]=None):
+def noodle_car_gpt(car_outlines_cbor:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, max_tokens:int=1500, description:Optional[str]=None,max_queries:Optional[int]=None):
     fetcher:FetchGptJson
     fetcher = FetchGptQuestions(gpt_model=gpt_model, max_tokens=max_tokens)
     if use_nuggets:
@@ -201,11 +209,11 @@ def noodle_car_gpt(car_outlines_cbor:Path, gpt_out:Path, gpt_model:str, use_nugg
 
 
     with gzip.open(gpt_out, "wt", encoding='utf-8') as file:
-        generate_questions_cary3(car_outlines_path = car_outlines_cbor, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, max_queries=max_queries)
+        generate_questions_cary3(car_outlines_path = car_outlines_cbor, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, description=description, max_queries=max_queries)
 
         file.close()
 
-def noodle_json_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, test_collection:str, max_tokens:int=1500, max_queries:Optional[int]=None):
+def noodle_json_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, use_nuggets:bool, test_collection:str, description:Optional[str]=None, max_tokens:int=1500, max_queries:Optional[int]=None):
     fetcher:FetchGptJson
     if not use_nuggets:
         fetcher = FetchGptQuestions(gpt_model=gpt_model, max_tokens=max_tokens)
@@ -214,7 +222,7 @@ def noodle_json_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, use_nugg
 
 
     with gzip.open(gpt_out, "wt", encoding='utf-8') as file:
-        generate_questions_json(query_json = query_json, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, test_collection=test_collection, max_queries=max_queries)
+        generate_questions_json(query_json = query_json, fetcher=fetcher, out_file = file, use_nuggets=use_nuggets, test_collection=test_collection, description=description, max_queries=max_queries)
 
         file.close()
 
@@ -259,6 +267,7 @@ def main():
     parser.add_argument('--test-collection', type=str, default="anonymous", metavar='NAME', help='Test collection where queries are taken from.')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
+    parser.add_argument('--description', type=str, metavar='DESC', default=None, help='Description of the generated question set')
 
     args = parser.parse_args()  
 
@@ -268,10 +277,10 @@ def main():
         raise RuntimeError("Either --car-outines-cbor or --query-json must be set. (not both)")
 
     if args.car_outlines_cbor is not None:
-        noodle_car_gpt(car_outlines_cbor=args.car_outlines_cbor, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, max_queries=args.max_queries)
+        noodle_car_gpt(car_outlines_cbor=args.car_outlines_cbor, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, max_queries=args.max_queries, description=args.description)
 
     if args.query_json is not None:
-        noodle_json_query_gpt(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, test_collection=args.test_collection, max_queries=args.max_queries)
+        noodle_json_query_gpt(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, use_nuggets = args.use_nuggets, test_collection=args.test_collection, description=args.description , max_queries=args.max_queries)
 
 if __name__ == "__main__":
     main()

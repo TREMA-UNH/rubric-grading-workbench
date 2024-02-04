@@ -23,8 +23,8 @@ def get_prompt_classes()->List[str]:
             , 'QuestionCompleteConcisePromptWithAnswerKey'
             , 'QuestionCompleteConcisePromptWithAnswerKey2'
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
-            , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
+            # Nugget prompts
             , 'NuggetSelfRatedPrompt'
             , 'NuggetExtractionPrompt'
             # relevance grade prompts
@@ -32,6 +32,273 @@ def get_prompt_classes()->List[str]:
             ]
 
 
+# -------   helpers --------------- 
+
+
+class QuestionPromptNormalizer():
+    stemmer = PorterStemmer()
+
+    def normalize_answer(self, answer:str)->str:
+        # Lowercase, Perform other normalization like removing punctuation, if necessary
+        # Stem the answer
+        return self.stemmer.stem(answer.lower())
+
+
+
+class QuestionStemmedChecker():
+
+    def __init__(self, correct_answers:Set[str]):
+        self.question_prompt_normalizer = QuestionPromptNormalizer()
+        self.correct_answers = correct_answers
+        self.normalized_correct_answers = {normalize_answer(answer) for answer in correct_answers}
+
+    def normalize_answer(self, answer:str)->str:
+        return self.question_prompt_normalizer.normalize_answer(answer)
+
+    def check_answer(self,answer:str)->bool:
+        return self.check_answer_simple(answer) or self.check_answer_stemmed(answer)
+        # return self.check_answer_stemmed(answer)
+
+
+    def check_answer_simple(self,answer:str)->bool:
+        return answer in self.correct_answers
+
+
+    def check_answer_stemmed(self,answer:str)->bool:
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
+                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        
+        stemmed_answer = normalize_answer(answer)
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+                                   for stemmed_gold in self.normalized_correct_answers)
+
+        return is_match
+
+
+class TrueFalseMatcher():
+
+    def __init__(self,correct:str):
+        self.correct_answers:Set[str] = {correct}
+
+        if correct.lower().strip() =="false":
+            self.correct_answers.add("no")
+            self.correct_answers.add("incorrect")
+            self.correct_answers.add("wrong")
+        if correct.lower().strip() =="true":
+            self.correct_answers.add("yes")
+            self.correct_answers.add("correct")
+
+    def is_match(self, answer:str)->bool:
+        return answer.lower().strip() in self.correct_answers
+    
+    def check_answer(self, answer:str)->bool:
+        return self.is_match(answer)
+
+class TrueFalseMatcher2():
+    def check_true_false(self, correct:str, answer:str)->Optional[bool]:
+        FALSE_answers = {"no", "incorrect","false"}
+        TRUE_answers = {"yes", "correct","true"}
+        answer_ = correct.lower().strip()
+
+        if answer_ == "false":
+            if answer.lower() in FALSE_answers:
+                return True
+            else:
+                return False
+
+        if answer_ == "true":
+            if answer.lower() in TRUE_answers:
+                return True
+            else:
+                return False
+            
+        return None
+            
+class UnanswerableMatcher():
+    unanswerable_expressions:Set[str]
+
+    def __init__(self, unanswerable_expressions:Set[str]):
+        self.unanswerable_expressions = unanswerable_expressions | {"unanswerable"
+                                                                        ,"no"
+                                                                        ,"no answer",
+                                                                        "not enough information"
+                                                                        ,"unknown"
+                                                                        ,"it is not possible to tell"
+                                                                        ,"it does not say"
+                                                                        ,"no relevant information"
+                                                                        # ,"[iv]","(iv)","[ii]"
+                                                                        }
+        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+
+    # inverse logic!  we are scanning for non-answers!!!
+    def check_answer(self,answer:str)->bool:
+        return self.check_answer_simple(answer) and self.check_answer_stemmed(answer)
+    
+
+    def check_answer_simple(self,answer:str)->bool:
+        return not (answer in self.unanswerable_expressions)
+    
+    def check_answer_stemmed(self,answer:str)->bool:
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
+                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        
+        stemmed_answer = normalize_answer(answer)
+        if len(stemmed_answer)<1:
+            return False
+        
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+                                   for stemmed_gold in self.normalized_unanswerable_expressions)
+
+        return not is_match
+
+
+class UnanswerableMatcher2():
+    def __init__(self, unanswerable_expressions:Set[str]):
+        self.unanswerable_expressions = unanswerable_expressions.union( {"unanswerable"
+                                                                        ,"no"
+                                                                        ,"no answer",
+                                                                        "not enough information"
+                                                                        ,"unknown"
+                                                                        ,"it is not possible to tell"
+                                                                        ,"it does not say"
+                                                                        ,"no relevant information"
+                                                                        # ,"[iv]","(iv)","[ii]"
+                                                                        })
+        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+
+
+    # inverse logic!  we are scanning for non-answers!!!
+    def check_unanswer(self,answer:str)->bool:
+        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
+
+
+
+    def check_unanswer_simple(self,answer:str)->bool:
+        return not (answer in self.unanswerable_expressions)
+
+
+    def check_unanswer_stemmed(self,answer:str)->bool:
+        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
+                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        
+        stemmed_answer = normalize_answer(answer)
+        if len(stemmed_answer)<1:
+            return False
+        
+        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
+                                   for stemmed_gold in self.normalized_unanswerable_expressions)
+
+        return not is_match
+
+
+class SelfRater():
+    def __init__(self, unanswerable_matcher2):
+        self.unanswerable_matcher2 = unanswerable_matcher2
+    
+    # self-rated logic. We are scanning for 0-5. 
+    # other answers get rating 1
+    # unanserable expressions get rating 0
+        
+    def check_answer_rating(self,answer:str)->int:
+        rating:int 
+        # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
+        match = re.fullmatch(r'[^\w]*([0-5])[^\w]*', answer)
+        if match:
+            rating = int(match.group(1))
+        elif self.unanswerable_matcher2.check_unanswer(answer):   # TODO I think this is a bug
+            rating = 0
+        else:
+            rating = 1
+
+        return rating
+
+
+    def check_answer(self, answer:str)->bool:
+        rating = self.check_answer_rating(answer=answer)
+        return rating > 0
+
+
+
+
+
+class AnswerKey2Verifier():
+    question_prompt_normalizer = QuestionPromptNormalizer()
+    true_false_matcher = TrueFalseMatcher2()
+
+    def __init__(self, correct):
+        self.correct=self.strip_trailing_period(correct)
+        if self.correct.endswith('.'):
+            self.correct = self.correct[:-1]
+
+        self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
+
+        self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
+        self.stop_stemmed_correct_answers = {self.stop_stem_normalize_answer(gold) for gold in self.correct_answers}
+
+
+    def strip_trailing_period(self, answer):
+        answer_ =answer.strip()
+        if answer_.endswith('.'):
+            answer_ = answer_[:-1]
+        return answer_
+
+
+    def stop_stem_normalize_answer(self, text:str)->str:
+        # Convert text to lowercase
+        text = text.lower().strip()
+
+        # Remove punctuation
+        text = text.translate(str.maketrans('', '', string.punctuation))
+
+        # Tokenize text
+        tokens = word_tokenize(text)
+
+        # Remove stopwords
+        tokens = [word for word in tokens if word not in stopwords.words('english')]
+
+        # Stemming
+        stemmer = PorterStemmer()
+        stemmed_tokens = [stemmer.stem(word) for word in tokens]
+
+        # Rejoin words
+        normalized_text = ' '.join(stemmed_tokens)
+
+        return normalized_text
+
+    def check_answer(self,answer:str)->bool:
+        answer_=self.strip_trailing_period(answer)
+
+        checkTF = self.check_true_false(answer_)
+        if checkTF is not None:
+            return checkTF
+        
+        stemmedAnswer = self.check_answer_stemmed(answer_)
+        if stemmedAnswer is not None:
+            return stemmedAnswer
+        return self.check_answer_simple(answer_)
+
+    def check_true_false(self, answer):
+        return self.true_false_matcher.check_true_false(self.correct, answer)
+
+
+    def check_answer_simple(self,answer:str)->bool:
+        return answer in self.correct_answers
+
+
+    def check_answer_stemmed(self,answer:str)->Optional[bool]:
+        stemmed_answer = self.stop_stem_normalize_answer(answer)
+
+        if len(stemmed_answer) >=2:
+            is_match = stemmed_answer in self.stop_stemmed_correct_answers
+            if is_match: 
+                return is_match
+
+        if len(stemmed_answer) >=4:
+            is_fuzzy = any (fuzz.ratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
+            return is_fuzzy
+        return None
+
+# ------------ prompt classes ------------
 class Prompt(abc.ABC):
 
     @abstractmethod
@@ -101,8 +368,12 @@ class QuestionPrompt(Prompt):
 def normalize_answer(answer:str)->str:
     # Lowercase, Perform other normalization like removing punctuation, if necessary
     # Stem the answer
-    return QuestionPromptWithChoices.stemmer.stem(answer.lower())
+    return QuestionPromptNormalizer().normalize_answer(answer)
 
+
+
+
+#  ----------- Prompts ---------------
 
 @dataclass
 class QuestionPromptWithChoices(QuestionPrompt):
@@ -115,20 +386,14 @@ class QuestionPromptWithChoices(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    stemmer = PorterStemmer()
+    question_prompt_normalizer = QuestionPromptNormalizer()
 
     def __post_init__(self):
-        correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
-        if self.correct.lower().strip() =="false":
-            self.correct_answers += "no"
-            self.correct_answers += "incorrect"
-            self.correct_answers += "wrong"
-        if self.correct.lower().strip() =="true":
-            self.correct_answers += "yes"
-            self.correct_answers += "correct"
-            
-        self.normalized_correct_answers = {normalize_answer(gold) for gold in correct_answers}
-        self.correct_answers = correct_answers
+        # self.normalized_correct_answers = {normalize_answer(gold) for gold in correct_answers}
+        self.true_false_matcher = TrueFalseMatcher(correct=self.correct)
+        self.question_stemmed_checker = QuestionStemmedChecker(correct_answers={self.correct})
+
+        self.correct_answers = self.true_false_matcher.correct_answers.union(self.question_stemmed_checker.correct_answers)
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -204,27 +469,8 @@ class QuestionPromptWithChoices(QuestionPrompt):
         prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {question}", max_length=max_token_len)
         return prompt
 
-
     def check_answer(self,answer:str)->bool:
-        return self.check_answer_simple(answer) or self.check_answer_stemmed(answer)
-        # return self.check_answer_stemmed(answer)
-
-
-    def check_answer_simple(self,answer:str)->bool:
-        return answer in self.correct_answers
-
-
-    def check_answer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
-        stemmed_answer = normalize_answer(answer)
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_correct_answers)
-
-        return is_match
-
-
+        return self.true_false_matcher.check_answer(answer) or  self.question_stemmed_checker.check_answer(answer)
 
 
 @dataclass
@@ -236,20 +482,9 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
     query_text:str
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
-
     def __post_init__(self):
-        self.unanswerable_expressions = self.unanswerable_expressions | {"unanswerable"
-                                                                        ,"no"
-                                                                        ,"no answer",
-                                                                        "not enough information"
-                                                                        ,"unknown"
-                                                                        ,"it is not possible to tell"
-                                                                        ,"it does not say"
-                                                                        ,"no relevant information"
-                                                                        # ,"[iv]","(iv)","[ii]"
-                                                                        }
-        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+        self.unanswerable_matcher=UnanswerableMatcher(self.unanswerable_expressions)
+        self.unanswerable_expressions = self.unanswerable_matcher.unanswerable_expressions 
 
     def check_answer_rating(self, answer: str) -> int:
         return super().check_answer_rating(answer)
@@ -324,28 +559,17 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
 
     # inverse logic!  we are scanning for non-answers!!!
     def check_answer(self,answer:str)->bool:
-        return self.check_answer_simple(answer) and self.check_answer_stemmed(answer)
+        return self.unanswerable_matcher.check_answer(answer)
 
 
 
     def check_answer_simple(self,answer:str)->bool:
-        return not (answer in self.unanswerable_expressions)
+        return self.unanswerable_matcher.check_answer_simple(answer)
 
 
 
     def check_answer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
-        stemmed_answer = normalize_answer(answer)
-        if len(stemmed_answer)<1:
-            return False
-        
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_unanswerable_expressions)
-
-        return not is_match
-
+        return self.unanswerable_matcher.check_answer_stemmed(answer)
 
 
 
@@ -359,20 +583,10 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     query_text:str
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_expressions = self.unanswerable_expressions | {"unanswerable"
-                                                                        ,"no"
-                                                                        ,"no answer",
-                                                                        "not enough information"
-                                                                        ,"unknown"
-                                                                        ,"it is not possible to tell"
-                                                                        ,"it does not say"
-                                                                        ,"no relevant information"
-                                                                        # ,"[iv]","(iv)","[ii]"
-                                                                        }
-        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
+        self.unanswerable_matcher = UnanswerableMatcher(self.unanswerable_expressions)
+        self.unanswerable_expressions = self.unanswerable_matcher.unanswerable_expressions 
 
 
     def check_answer_rating(self, answer: str) -> int:
@@ -433,14 +647,6 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         return prompt
 
 
-
-    # def generate_prompt(self,model_tokenizer, max_token_len)  -> str:
-    #     prompt = f"question: {self.question} choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
-    #     return model_tokenizer.decode(model_tokenizer.encode(prompt, add_special_tokens=False, truncation = True, max_length = max_token_len-1))
-
-    # def generate_prompt_with_context(self,context:str) -> str:
-    #     return f"context: {context}; question: {self.question}; choices: " + " ; ".join([f"{i}) {choice}" for i, choice in self.choices.items()])
-
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
@@ -461,28 +667,16 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
 
     # inverse logic!  we are scanning for non-answers!!!
     def check_answer(self,answer:str)->bool:
-        return self.check_answer_simple(answer) and self.check_answer_stemmed(answer)
-
-
+        return self.unanswerable_matcher.check_answer(answer)
 
     def check_answer_simple(self,answer:str)->bool:
-        return not (answer in self.unanswerable_expressions)
+        return self.unanswerable_matcher.check_answer_simple(answer)
+
 
 
     def check_answer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+        return self.unanswerable_matcher.check_answer_stemmed(answer)
         
-        stemmed_answer = normalize_answer(answer)
-        if len(stemmed_answer)<1:
-            return False
-        
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_unanswerable_expressions)
-
-        return not is_match
-
-
 
 
 
@@ -499,19 +693,12 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    stemmer = PorterStemmer()
+    # stemmer = PorterStemmer()
+    question_prompt_normalizer = QuestionPromptNormalizer()
 
     def __post_init__(self):
-        self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
-        if self.correct.lower().strip() =="false":
-            self.correct_answers.add("no")
-            self.correct_answers.add("incorrect")
-            self.correct_answers.add("wrong")
-        if self.correct.lower().strip() =="true":
-            self.correct_answers.add("yes")
-            self.correct_answers.add("correct")
-            
-        self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
+        self.true_false_matcher = TrueFalseMatcher(self.correct)
+        self.question_stemmed_checker = QuestionStemmedChecker({self.correct})
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -585,23 +772,14 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
 
     def check_answer(self,answer:str)->bool:
-        return self.check_answer_simple(answer) or self.check_answer_stemmed(answer)
-        # return self.check_answer_stemmed(answer)
-
+        return self.true_false_matcher.check_answer(answer) or self.question_stemmed_checker.check_answer(answer)
 
     def check_answer_simple(self,answer:str)->bool:
-        return answer in self.correct_answers
+        return self.question_stemmed_checker.check_answer_simple(answer)
 
 
     def check_answer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
-        stemmed_answer = normalize_answer(answer)
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_correct_answers)
-
-        return is_match
+        return self.question_stemmed_checker.check_answer_stemmed(answer)
 
 
 @dataclass
@@ -615,8 +793,6 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
     query_id:str
     facet_id:Optional[str]
     query_text:str
-
-
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         def old_prompt(key, default):
@@ -670,26 +846,16 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    stemmer = PorterStemmer()
+
+    # stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.correct=self.strip_trailing_period(self.correct)
-        if self.correct.endswith('.'):
-            self.correct = self.correct[:-1]
+        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
 
-        self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
-
-        self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
-        self.stop_stemmed_correct_answers = {self.stop_stem_normalize_answer(gold) for gold in self.correct_answers}
 
     def answer_match_info(self)->str:
         return "lowercase, stopped, stemmed, removed trailing period, fuzz > 0.8 / true-false special handling"
 
-    def strip_trailing_period(self, answer):
-        answer_ =answer.strip()
-        if answer_.endswith('.'):
-            answer_ = answer_[:-1]
-        return answer_
         
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         def old_prompt(key, default):
@@ -761,80 +927,8 @@ class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
         return prompt
 
 
-
-    def stop_stem_normalize_answer(self, text:str)->str:
-        # Convert text to lowercase
-        text = text.lower().strip()
-
-        # Remove punctuation
-        text = text.translate(str.maketrans('', '', string.punctuation))
-
-        # Tokenize text
-        tokens = word_tokenize(text)
-
-        # Remove stopwords
-        tokens = [word for word in tokens if word not in stopwords.words('english')]
-
-        # Stemming
-        stemmer = PorterStemmer()
-        stemmed_tokens = [stemmer.stem(word) for word in tokens]
-
-        # Rejoin words
-        normalized_text = ' '.join(stemmed_tokens)
-
-        return normalized_text
-
     def check_answer(self,answer:str)->bool:
-        answer_=self.strip_trailing_period(answer)
-
-        checkTF = self.check_true_false(answer_)
-        if checkTF is not None:
-            return checkTF
-        
-        stemmedAnswer = self.check_answer_stemmed(answer_)
-        if stemmedAnswer is not None:
-            return stemmedAnswer
-        return self.check_answer_simple(answer_)
-
-
-    def check_true_false(self, answer:str)->Optional[bool]:
-        FALSE_answers = {"no", "incorrect","false"}
-        TRUE_answers = {"yes", "correct","true"}
-        answer_ = self.correct.lower().strip()
-
-        if answer_ == "false":
-            if answer.lower() in FALSE_answers:
-                return True
-            else:
-                return False
-
-        if answer_ == "true":
-            if answer.lower() in TRUE_answers:
-                return True
-            else:
-                return False
-            
-        return None
-            
-                
-
-    def check_answer_simple(self,answer:str)->bool:
-        return answer in self.correct_answers
-
-
-    def check_answer_stemmed(self,answer:str)->Optional[bool]:
-        stemmed_answer = self.stop_stem_normalize_answer(answer)
-
-        if len(stemmed_answer) >=2:
-            is_match = stemmed_answer in self.stop_stemmed_correct_answers
-            if is_match: 
-                return is_match
-
-        if len(stemmed_answer) >=4:
-            is_fuzzy = any (fuzz.ratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
-            return is_fuzzy
-        return None
-
+        return self.answer_key2_verifier.check_answer(answer)
 
 
 
@@ -904,18 +998,8 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_expressions = self.unanswerable_expressions.union( {"unanswerable"
-                                                                        ,"no"
-                                                                        ,"no answer",
-                                                                        "not enough information"
-                                                                        ,"unknown"
-                                                                        ,"it is not possible to tell"
-                                                                        ,"it does not say"
-                                                                        ,"no relevant information"
-                                                                        # ,"[iv]","(iv)","[ii]"
-                                                                        })
-        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
-
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
+        self.self_rater = SelfRater(self.unanswerable_matcher2)
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -1002,51 +1086,11 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
 
     def check_answer(self, answer:str)->bool:
-        rating = self.check_answer_rating(answer=answer)
-        return rating > 0
+        return self.self_rater.check_answer(answer)
 
-    
-    # self-rated logic. We are scanning for 0-5. 
-    # other answers get rating 1
-    # unanserable expressions get rating 0
     def check_answer_rating(self,answer:str)->int:
-        rating:int 
-        # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
-        match = re.fullmatch(r'[^\w]*([0-5])[^\w]*', answer)
-        if match:
-            rating = int(match.group(1))
-        elif self.check_unanswer(answer):
-            rating = 0
-        else:
-            rating = 1
-
-        return rating
-
-
-    # inverse logic!  we are scanning for non-answers!!!
-    def check_unanswer(self,answer:str)->bool:
-        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
-
-
-
-    def check_unanswer_simple(self,answer:str)->bool:
-        return not (answer in self.unanswerable_expressions)
-
-
-    def check_unanswer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
-        stemmed_answer = normalize_answer(answer)
-        if len(stemmed_answer)<1:
-            return False
-        
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_unanswerable_expressions)
-
-        return not is_match
-
-
+        return self.self_rater.check_answer_rating(answer)
+    
 
 
 
@@ -1063,18 +1107,8 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
     stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_expressions = self.unanswerable_expressions.union( {"unanswerable"
-                                                                        ,"no"
-                                                                        ,"no answer",
-                                                                        "not enough information"
-                                                                        ,"unknown"
-                                                                        ,"it is not possible to tell"
-                                                                        ,"it does not say"
-                                                                        ,"no relevant information"
-                                                                        # ,"[iv]","(iv)","[ii]"
-                                                                        })
-        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
-
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
+        self.self_rater = SelfRater(self.unanswerable_matcher2)
 
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
@@ -1101,6 +1135,7 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
         # Tokenize and truncate the context
         truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
 
         # Combine truncated context with the full question
         combined_tokens = question_tokens + truncated_context_tokens
@@ -1148,8 +1183,6 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-
-
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
         prompt = NuggetSelfRatedPrompt.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
@@ -1157,50 +1190,11 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
 
     def check_answer(self, answer:str)->bool:
-        rating = self.check_answer_rating(answer=answer)
-        return rating > 0
+        return self.self_rater.check_answer(answer)
 
-    
-    # self-rated logic. We are scanning for 0-5. 
-    # other answers get rating 1
-    # unanserable expressions get rating 0
     def check_answer_rating(self,answer:str)->int:
-        rating:int 
-        # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
-        match = re.fullmatch(r'[^\w]*([0-5])[^\w]*', answer)
-        if match:
-            rating = int(match.group(1))
-        elif self.check_unanswer(answer):
-            rating = 0
-        else:
-            rating = 1
-
-        return rating
-
-
-    # inverse logic!  we are scanning for non-answers!!!
-    def check_unanswer(self,answer:str)->bool:
-        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
-
-
-
-    def check_unanswer_simple(self,answer:str)->bool:
-        return not (answer in self.unanswerable_expressions)
-
-
-    def check_unanswer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
-        
-        stemmed_answer = normalize_answer(answer)
-        if len(stemmed_answer)<1:
-            return False
-        
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_unanswerable_expressions)
-
-        return not is_match
-
+        return self.self_rater.check_answer_rating(answer)
+    
 
 
 
@@ -1218,18 +1212,8 @@ class NuggetExtractionPrompt(NuggetPrompt):
     stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_expressions = self.unanswerable_expressions.union( {"unanswerable"
-                                                                        ,"no"
-                                                                        ,"no answer",
-                                                                        "not enough information"
-                                                                        ,"unknown"
-                                                                        ,"it is not possible to tell"
-                                                                        ,"it does not say"
-                                                                        ,"no relevant information"
-                                                                        # ,"[iv]","(iv)","[ii]"
-                                                                        })
-        self.normalized_unanswerable_expressions = {normalize_answer(zonk) for zonk in self.unanswerable_expressions}
-
+        self.unanswerable_matcher=UnanswerableMatcher(self.unanswerable_expressions)
+        self.unanswerable_expressions = self.unanswerable_matcher.unanswerable_expressions 
 
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
@@ -1294,25 +1278,15 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
 
     # inverse logic!  we are scanning for non-answers!!!
-    def check_unanswer(self,answer:str)->bool:
-        return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
+    def check_answer(self,answer:str)->bool:
+        return self.unanswerable_matcher.check_answer(answer)
+
+    def check_answer_simple(self,answer:str)->bool:
+        return self.unanswerable_matcher.check_answer_simple(answer)
 
 
 
-    def check_unanswer_simple(self,answer:str)->bool:
-        return not (answer in self.unanswerable_expressions)
-
-
-    def check_unanswer_stemmed(self,answer:str)->bool:
-        def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+    def check_answer_stemmed(self,answer:str)->bool:
+        return self.unanswerable_matcher.check_answer_stemmed(answer)
         
-        stemmed_answer = normalize_answer(answer)
-        if len(stemmed_answer)<1:
-            return False
-        
-        is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
-                                   for stemmed_gold in self.normalized_unanswerable_expressions)
-
-        return not is_match
 

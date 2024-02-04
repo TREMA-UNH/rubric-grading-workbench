@@ -31,7 +31,7 @@ def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
 
 
 def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
-    if prompt.prompt_type == QuestionPrompt.my_prompt_type:
+    if prompt.prompt_type() == QuestionPrompt.my_prompt_type:
         return SelfRating(question_id=prompt.prompt_id()
                             , self_rating=prompt.check_answer_rating(answer)
                             ) 
@@ -41,7 +41,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
                          , self_rating=prompt.check_answer_rating(answer)
                          ) 
     else:
-        raise RuntimeError(f"Unknown self rating prompt: {prompt}")
+        raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
 def noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs:Optional[int]=None)->None:
@@ -211,6 +211,7 @@ def main(cmdargs=None):
     elif args.question_type == 'genq':
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
+        x = args.use_nuggets
         question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
