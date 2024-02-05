@@ -7,7 +7,7 @@ from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
 from .t5_qa import *
-from .parse_qrels_runs_with_text import *
+from .data_model import *
 from . import tqa_loader
 
 

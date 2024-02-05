@@ -4,7 +4,7 @@ from .exam_grading import *
 from .test_bank_prompts import QuestionPromptWithChoices
 from .test_bank_prompts import *
 from .t5_qa import *
-from .parse_qrels_runs_with_text import *
+from .data_model import *
 from . import tqa_loader
 from .exam_cover_metric import *
 

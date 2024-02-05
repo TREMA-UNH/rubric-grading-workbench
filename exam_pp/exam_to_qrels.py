@@ -4,8 +4,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 import re
 
-from .parse_qrels_runs_with_text import *
-from .parse_qrels_runs_with_text import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
+from .data_model import *
+from .data_model import parseQueryWithFullParagraphs, QueryWithFullParagraphList, GradeFilter
 
 
 from pathlib import Path

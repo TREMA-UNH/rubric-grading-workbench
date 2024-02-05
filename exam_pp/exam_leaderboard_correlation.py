@@ -10,8 +10,8 @@ import scipy.stats
 
 
 from .test_bank_prompts import *
-from .parse_qrels_runs_with_text import *
-from .parse_qrels_runs_with_text import GradeFilter
+from .data_model import *
+from .data_model import GradeFilter
 from .exam_cover_metric import *
 from .exam_cover_metric import ExamCoverEvals
 from . import exam_leaderboard_correlation

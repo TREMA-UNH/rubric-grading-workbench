@@ -11,8 +11,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from .test_bank_prompts import *
-from .parse_qrels_runs_with_text import *
-from .parse_qrels_runs_with_text import GradeFilter
+from .data_model import *
+from .data_model import GradeFilter
 from .pydantic_helper import pydantic_dump
 
 

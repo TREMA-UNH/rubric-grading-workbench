@@ -14,7 +14,7 @@ from transformers import pipeline, T5ForConditionalGeneration, AutoTokenizer
 
 from .exam_cover_metric import frac
 from .test_bank_prompts import QuestionCompleteConcisePromptWithAnswerKey2, QuestionPrompt, QuestionPromptWithChoices, get_prompt_classes
-from . import parse_qrels_runs_with_text as parse
+from . import data_model as parse
 from . import tqa_loader
 
 

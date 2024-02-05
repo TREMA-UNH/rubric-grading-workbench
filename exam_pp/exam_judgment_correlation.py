@@ -5,7 +5,7 @@ from pathlib import Path
 import heapq
 
 from .test_bank_prompts import *
-from .parse_qrels_runs_with_text import FullParagraphData, Grades, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
+from .data_model import FullParagraphData, Grades, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 
 
 def frac(num:int,den:int)->float:

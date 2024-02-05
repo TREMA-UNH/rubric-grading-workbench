@@ -12,8 +12,8 @@ from pydantic import BaseModel
 
 
 import trec_car.read_data as trec_car
-from .parse_qrels_runs_with_text import *
-from . import parse_qrels_runs_with_text
+from .data_model import *
+from . import data_model
 from .pydantic_helper import pydantic_dump
 
 
@@ -241,7 +241,7 @@ def main():
                         , max_queries = args.max_queries
                         )
 
-    parse_qrels_runs_with_text.writeQueryWithFullParagraphs(args.out_file, contents)
+    data_model.writeQueryWithFullParagraphs(args.out_file, contents)
 
 if __name__ == "__main__":
     main()

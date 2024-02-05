@@ -3,7 +3,7 @@ from typing import *
 
 from .exam_judgment_correlation import ConfusionStats
 from . import exam_judgment_correlation
-from .parse_qrels_runs_with_text import GradeFilter, QueryWithFullParagraphList, parseQueryWithFullParagraphs
+from .data_model import GradeFilter, QueryWithFullParagraphList, parseQueryWithFullParagraphs
 
 def main_other():
     prompt_class = "QuestionCompleteConcisePromptWithAnswerKey"

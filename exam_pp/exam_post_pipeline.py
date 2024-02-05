@@ -8,7 +8,7 @@ from collections import defaultdict
 
 
 from .test_bank_prompts import get_prompt_classes
-from .parse_qrels_runs_with_text import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
+from .data_model import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 from .exam_cover_metric import ExamCoverEvals, ExamCoverScorerFactory, compute_exam_cover_scores
 from . import exam_to_qrels
 from . import exam_leaderboard_correlation

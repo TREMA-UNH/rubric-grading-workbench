@@ -1,7 +1,3 @@
-# from pathlib import Path
-# from typing import Dict, List
-# from exam_pp.exam_cover_metric import compute_exam_cover_scores, write_exam_results, ExamCoverScorerFactory
-# from exam_pp.parse_qrels_runs_with_text import GradeFilter, QueryWithFullParagraphList, parseQueryWithFullParagraphs
 
 
 from exam_pp import exam_grading, exam_post_pipeline

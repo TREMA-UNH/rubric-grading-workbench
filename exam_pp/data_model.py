@@ -48,6 +48,8 @@ class Grades(BaseModel):
     llm: str                                 # huggingface model name  google/flan-t5-large
     llm_options: Dict[str,Any]               # anything that seems relevant
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
+    self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
+
         # must have fields:
         #  prompt_info["prompt_class"]="FagB"
             # info =  {
@@ -55,8 +57,6 @@ class Grades(BaseModel):
             #     , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
             #     , "is_self_rated": false # false if not self-rated, otherwise true
             #     }
-    self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
-
 
 @dataclass
 class GradeFilter():
