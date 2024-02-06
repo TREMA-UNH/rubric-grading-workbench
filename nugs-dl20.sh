@@ -4,11 +4,11 @@
 
 echo "\n\n\nGenerate DL20 Nuggets"
 
-python -O -m exam_pp.question_generation -q dl20-queries.json -o dl20-nuggets.jsonl.gz --use-nuggets --description "A new set of generated nuggets for DL20"
+#python -O -m exam_pp.question_generation -q dl20-queries.json -o dl20-nuggets.jsonl.gz --use-nuggets --description "A new set of generated nuggets for DL20"
 
 echo "\n\n\Generate DL20 Questions"
 
-python -O -m exam_pp.question_generation -q dl20-queries.json -o dl20-questions.jsonl.gz --description "A new set of generated questions for DL20"
+#python -O -m exam_pp.question_generation -q dl20-queries.json -o dl20-questions.jsonl.gz --description "A new set of generated questions for DL20"
 
 echo "\n\n\nself-rated DL20 nuggets"
 
@@ -17,7 +17,7 @@ ungraded="trecDL2020-qrels-runs-with-text.jsonl.gz"
 echo "Grading ${ungraded}. Number of queries:"
 zcat $ungraded | wc -l
 
-withrate="nuggets-rate--10q-${ungraded}"
+withrate="nuggets-rate--all-${ungraded}"
 withrateextract="nuggets-explain--${withrate}"
 
 # grade nuggets
@@ -60,14 +60,15 @@ final=$withrateextract
 
 
 for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRatedPrompt; do
+	echo $promptclass
 
 # autograde-qrels
-python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl-qrel-leaderboard-$promptclass.tsv --run-dir ./dl20runs 
+#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl-qrel-leaderboard-$promptclass.tsv --run-dir ./dl20runs 
 
 # autograde-cover leaderboard
-python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl-autograde-cover-$promptclass.tsv
+#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl-autograde-cover-$promptclass.tsv
 
 # inter-annotator agreement with judgments
-python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --correlation-out dl-correlation-$promptclass.tex
+#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --correlation-out dl-correlation-$promptclass.tex
 
 done
