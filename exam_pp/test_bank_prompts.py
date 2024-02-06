@@ -23,6 +23,7 @@ def get_prompt_classes()->List[str]:
             , 'QuestionCompleteConcisePromptWithAnswerKey'
             , 'QuestionCompleteConcisePromptWithAnswerKey2'
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
+            , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
             # Nugget prompts
             , 'NuggetSelfRatedPrompt'
@@ -1274,7 +1275,7 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
 
     def check_answer(self, answer:str)->bool:
-        return self.check_unanswer(answer)
+        return self.unanswerable_matcher.check_unanswer(answer)
 
 
     # inverse logic!  we are scanning for non-answers!!!
