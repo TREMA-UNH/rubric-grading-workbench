@@ -527,7 +527,8 @@ def main(cmdargs=None):
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
     parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried', default=None)
 
-    parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
+    parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Deprecated option, use --inter-annotator-out instead!', default=None)
+    parser.add_argument('--inter-annotator-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Leaderboard to this file ', default=None)
 
@@ -607,8 +608,9 @@ def main(cmdargs=None):
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  )
 
-    if args.correlation_out is not None:
-        run_interannotator_agreement(correlation_out_file=args.correlation_out
+    if args.inter_annotator_out is not None or args.correlation_out is not None:
+        correlation_out = args.inter_annotator_out if args.inter_annotator_out is not None else args.correlation_out
+        run_interannotator_agreement(correlation_out_file=correlation_out
                                      , grade_filter=grade_filter
                                      , use_ratings=use_ratings
                                      , query_paragraphs=query_paragraphs

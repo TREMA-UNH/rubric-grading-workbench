@@ -24,6 +24,16 @@ car_graded_file = "./t5-rating-naghmehs-tqa-exam-qrel-runs-result-T0050.jsonl.gz
 dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 
 
+exam_post_pipeline.main(cmdargs=[dl_graded_file,
+                                 "--inter-annotator-out","out.correlation.tex"
+                                 ,"--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
+                              , "--question-set", "question-bank"
+                              , "--testset","dl19"
+                              , "--min-relevant-judgment", "2"
+                              ,"--use-ratings"
+                              , '--official-leaderboard', 'faux-leaderboard.json'
+                                ])
+
 exam_post_pipeline.main(cmdargs=[dl_graded_file
                               ,"-q","out.qrel"
                               ,"--run-dir","./run-dl","--qrel-query-facets", "--use-ratings"
@@ -32,20 +42,11 @@ exam_post_pipeline.main(cmdargs=[dl_graded_file
                              , "--leaderboard-out", "dl.cover.tsv"
                              , "--qrel-leaderboard-out", "dl.qrel.tsv"
                             #   , "--testset","dl19"
-                              , "-r"
+                              ,"--use-ratings"
                               , "--min-relevant-judgment", "2"
                               , '--official-leaderboard', 'faux-leaderboard.json'
                               ])
 
-
-# exam_post_pipeline.main(cmdargs=[dl_graded_file,
-#                                  "--correlation-out","out.correlation.tex"
-#                                  ,"--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
-#                               , "--question-set", "question-bank"
-#                               , "--testset","dl19"
-#                               ,"--use-ratings"
-#                               , '--official-leaderboard', 'faux-leaderboard.json'
-#                                 ])
 
 # exam_post_pipeline.main(cmdargs=[dl_graded_file 
 #                                  ,"--leaderboard-out","out.leaderboard.tsv"
