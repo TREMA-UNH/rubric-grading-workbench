@@ -58,10 +58,15 @@ for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRat
 
 	for minrating in 3 4 5; do
 	# autograde-cover leaderboard
-		python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating ${minrating} --leaderboard-out dl20-autograde-cover-$promptclass-minrating-${minrating}.tsv
+		#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating ${minrating} --leaderboard-out dl20-autograde-cover-$promptclass-minrating-${minrating}.tsv
+		echo ""
 	done
 
 	# inter-annotator agreement with judgments
 	#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --correlation-out dl20-correlation-$promptclass.tex
+
+	# just the leaderboard - no analysis
+	python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl20-autograde-cover-$promptclass-minrating-4.solo.tsv 
+	python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass -q dl20-autograde-qrels-$promptclass-minrating-4.solo.qrels  --min-self-rating 4 --qrel-leaderboard-out dl20-autograde-qrels-$promptclass-minrating-4.solo.tsv --run-dir ./dl20runs 
 
 done
