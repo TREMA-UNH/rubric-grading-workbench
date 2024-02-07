@@ -24,15 +24,18 @@ car_graded_file = "./t5-rating-naghmehs-tqa-exam-qrel-runs-result-T0050.jsonl.gz
 dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 
 
-# exam_post_pipeline.main(cmdargs=[dl_graded_file
-#                               ,"-q","out.qrel"
-#                               ,"--run-dir","./run-dl","--qrel-query-facets", "--use-ratings"
-#                               , "--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
-#                               , "--question-set", "question-bank"
-#                               , "--testset","dl19"
-#                               , "-r"
-#                               , '--official-leaderboard', 'faux-leaderboard.json'
-#                               ])
+exam_post_pipeline.main(cmdargs=[dl_graded_file
+                              ,"-q","out.qrel"
+                              ,"--run-dir","./run-dl","--qrel-query-facets", "--use-ratings"
+                              , "--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
+                              , "--question-set", "question-bank"
+                             , "--leaderboard-out", "dl.cover.tsv"
+                             , "--qrel-leaderboard-out", "dl.qrel.tsv"
+                            #   , "--testset","dl19"
+                              , "-r"
+                              , "--min-relevant-judgment", "2"
+                              , '--official-leaderboard', 'faux-leaderboard.json'
+                              ])
 
 
 # exam_post_pipeline.main(cmdargs=[dl_graded_file,
