@@ -6,6 +6,8 @@ from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
 
+from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard
+
 from .exam_to_qrels import exam_to_qrels_files
 from . import exam_to_qrels
 
@@ -111,7 +113,7 @@ def main(cmdargs=None):
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids)', default=None)
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard', default=None)
     # parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval', default=None)
-    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried', default=None)
+    # parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried', default=None)
 
     # parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
@@ -120,7 +122,7 @@ def main(cmdargs=None):
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
-    # parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
+    parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, will use  graded self-ratings. Default is to use the number of correct answers.')
     # parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will use self-ratings  >= RATING as relevant. (only applies to exam grades with self-ratings)')
     parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
@@ -135,33 +137,9 @@ def main(cmdargs=None):
 
 
     exam_input_file=args.exam_graded_file
-    # use_ratings=args.use_ratings
+
 
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
-
-
-
-    # official_leaderboard:Dict[str,float]
-    # non_relevant_grades = None
-    # relevant_grades = None
-    # if args.testset == "cary3":
-    #     official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
-    # elif args.testset == "dl19":
-    #     official_leaderboard = exam_leaderboard_correlation.official_DL19_leaderboard
-    #     non_relevant_grades = {0,1}
-    #     relevant_grades = {2,3}
-    # if args.official_leaderboard is not None:
-    #     official_leaderboard = exam_leaderboard_correlation.load_leaderboard(args.official_leaderboard)
-
-
-    # if args.trec_eval_qrel_correlation is not None:
-    #     if args.run_dir is not None:
-    #         run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
-    #                              ,run_dir=Path(args.run_dir)
-    #                              , min_level=args.min_trec_eval_level
-    #                              , official_leaderboard=official_leaderboard
-    #                              , leaderboard_out=args.qrel_leaderboard_out
-    #                              )
 
 
     if args.qrel_out is not None:
@@ -174,29 +152,18 @@ def main(cmdargs=None):
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            run_minimal_qrel_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
-                                 , min_level=args.min_trec_eval_level
-                                 , official_leaderboard=official_leaderboard
+                                 , min_level=args.min_self_rating
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  )
-
-    # if args.correlation_out is not None:
-    #     run_interannotator_agreement(correlation_out_file=args.correlation_out
-    #                                  , grade_filter=grade_filter
-    #                                  , use_ratings=use_ratings
-    #                                  , query_paragraphs=query_paragraphs
-    #                                  , non_relevant_grades=non_relevant_grades
-    #                                  , relevant_grades = relevant_grades
-    #                                  , use_exam_grades = not (args.use_relevance_prompt)
-    #                                  )
 
 
     if args.leaderboard_out is not None:
         run_leaderboard(leaderboard_file=args.leaderboard_out
                         , grade_filter=grade_filter
                         , query_paragraphs=query_paragraphs
-                        # , use_ratings=use_ratings
+                         , use_ratings=args.use_ratings
                         , min_self_rating=args.min_self_rating
                         )
 

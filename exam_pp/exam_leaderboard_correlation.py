@@ -290,6 +290,17 @@ def print_leaderboard_eval(evals:List[ExamCoverEvals], grade_filter:GradeFilter)
     print("\n".join( ["\t".join([x.method, "n-exam", f'{x.eval_score:.4}' ]) 
                         for x in create_leaderboard(nExamEval)]))
 
+def leaderboard_qrel(evals:List[ExamCoverEvals], header:Optional[str]="exam") -> str:
+    '''Format the Leaderboard in trec_eval evaluation output format.
+    Load necessary data with `read_exam_result_file()` or use the convenience method `print_leaderboard_eval_file`
+    '''
+    # nExamEval = {eval.method: eval.nExamScore for eval in evals}
+    examEval = {eval.method: eval.examScore for eval in evals}
+
+    result = f'method\t{header}\n'
+    result += "\n".join( ["\t".join([x.method, f'{x.eval_score:.4}']) 
+                        for x in create_leaderboard(examEval)])
+    return result
 
 def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
     import gzip

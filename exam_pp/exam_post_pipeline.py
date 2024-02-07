@@ -152,6 +152,39 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
+def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int]):
+    with open(leaderboard_out, 'wt') as file:
+        file.write("based on Exam-Qrels\n")
+
+
+        print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level}')
+        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level)
+
+        examScores = [
+            exam_leaderboard_correlation.ExamCoverEvals(method=method
+                                                    , examScore=score
+                                                    , nExamScore=0
+                                                    , examScoreStd=0
+                                                    , nExamScoreStd=0
+                                                    , examCoverPerQuery={}
+                                                    , nExamCoverPerQuery={} 
+                                                    ) 
+                    for method, score in methodScores.items()]
+        lines = exam_leaderboard_correlation.leaderboard_qrel(evals =examScores, header="exam-P@20")
+        file.write(lines+'\n')
+        file.write('\n'.join([""
+                                ,(f"min_rating\t{min_level:.0f}" if min_level is not None else "\t")
+                            , f"qrel_file\t{qrels_file}"
+                            , "\n"]))
+    
+        print(f'min_level\t{min_level}\n')
+
+
+        file.writelines(["\n","\n"])
+        file.close()
+    print(f"exam-qrels leaderboard written to {leaderboard_out}")
+
+
 def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level = Optional[int]):
     with open(leaderboard_out, 'wt') as file:
         file.write("based on Exam-Qrels\n")
