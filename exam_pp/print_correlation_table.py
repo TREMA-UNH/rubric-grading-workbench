@@ -61,7 +61,6 @@ class TablePrinter():
             
             # Second header row
             table.add_row(['', '', *judgments_header,'', ''])
-            # table.add_hline()
             table.append(NoEscape(r'\cmidrule(l@{\tabcolsep}){1-' + str(4 + len(judgments_header)) + '}'))
 
             # Data rows
@@ -72,7 +71,9 @@ class TablePrinter():
 
                 def format_counts_bold(l:str, j:str):
                     cell = str(counts[l][j])
-                    if counts[l][j] == max_row_values[l]:
+                    # if counts[l][j] == max_row_values[l]:   # highest count per row
+                    #     return bold(cell)
+                    if counts[l][j] == max_col_values[j]:  # highest count per column
                         return bold(cell)
                     else:
                         return cell
@@ -80,8 +81,6 @@ class TablePrinter():
                 def format_counts(l:str, j:str):
                     cell = format_counts_bold(l,j)
                     if label_to_judgment_kappa is not None and (label_to_judgment_kappa.get(l,None) == j):
-                        # return italic(cell)
-                        # return NoEscape(r'\cellcolor{yellow}'+cell)
                         return NoEscape(r'\fbox{'+cell+'}')
                     else:   
                         return cell
