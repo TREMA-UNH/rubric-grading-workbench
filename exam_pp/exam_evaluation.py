@@ -163,7 +163,6 @@ def main(cmdargs=None):
         run_leaderboard(leaderboard_file=args.leaderboard_out
                         , grade_filter=grade_filter
                         , query_paragraphs=query_paragraphs
-                         , use_ratings=args.use_ratings
                         , min_self_rating=args.min_self_rating
                         )
 
