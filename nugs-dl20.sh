@@ -56,8 +56,8 @@ for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRat
 	echo $promptclass
 
 
-	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl20-autograde-cover-$promptclass-minrating-4.solo.tsv 
-	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass -q dl20-autograde-qrels-$promptclass-minrating-4.solo.qrels  --min-self-rating 4 --qrel-leaderboard-out dl20-autograde-qrels-$promptclass-minrating-4.solo.tsv --run-dir ./dl20runs 
+	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl20-autograde-cover-leaderboard-$promptclass-minrating-4.solo.tsv 
+	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass -q dl20-autograde-qrels-leaderboard-$promptclass-minrating-4.solo.qrels  --min-self-rating 4 --qrel-leaderboard-out dl20-autograde-qrels-$promptclass-minrating-4.solo.tsv --run-dir ./dl20runs 
 
 done
 
@@ -66,17 +66,23 @@ done
 for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRatedPrompt; do
 	echo $promptclass
 
-	# autograde-qrels
-	python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl20-qrel-leaderboard-$promptclass.tsv --run-dir ./dl20runs --official-leaderboard official_dl20_leaderboard.json
+
 
 	for minrating in 3 4 5; do
-	# autograde-cover leaderboard
-		#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating ${minrating} --leaderboard-out dl20-autograde-cover-$promptclass-minrating-${minrating}.tsv
+		# autograde-qrels
+		# qrel leaderboard correlation
+		python -O -m exam_pp.exam_post_pipeline $final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-trec-eval-level ${minrating} -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl20-autograde-qrels-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv --run-dir ./dl20runs --official-leaderboard official_dl20_leaderboard.json 
+	
+		# autograde-cover 
+		#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --use-ratings --min-self-rating ${minrating} --leaderboard-out dl20-autograde-cover-$promptclass-minrating-${minrating}.tsv
+		# cover leaderboard correlation
+		python -O -m exam_pp.exam_post_pipeline $final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-self-rating ${minrating} --leaderboard-out dl20-autograde-cover-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv  --official-leaderboard official_dl20_leaderboard.json
+	
 		echo ""
 	done
 
-	# inter-annotator agreement with judgments
-	#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --correlation-out dl20-correlation-$promptclass.tex
 
 
+	# inter-annotator agreement
+	python -O -m exam_pp.exam_post_pipeline $final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings  --inter-annotator-out dl20-autograde-inter-annotator-$promptclass.tex
 done
