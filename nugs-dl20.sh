@@ -35,8 +35,6 @@ ungraded="$withrateextract"
 withrate="questions-rate--${ungraded}"
 withrateextract="questions-explain--${withrate}"
 
-withtqa="tqa-rate--${withrateextract}"
-withtqaexplain="tqa-explain-${withtqa}"
 
 #python -O -m exam_pp.exam_grading $ungraded -o $withrate --model-pipeline text2text --model-name google/flan-t5-large --prompt-class QuestionSelfRatedUnanswerablePromptWithChoices --question-path dl20-questions.jsonl.gz  --question-type question-bank 
 
@@ -49,12 +47,27 @@ echo "\n\n\ Explained DL20 Questions"
 
 final=$withrateextract
 
+echo "Graded: $final"
+
+
+# Phase 4: evaluation
+#
+for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRatedPrompt; do
+	echo $promptclass
+
+
+	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl20-autograde-cover-$promptclass-minrating-4.solo.tsv 
+	#python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass -q dl20-autograde-qrels-$promptclass-minrating-4.solo.qrels  --min-self-rating 4 --qrel-leaderboard-out dl20-autograde-qrels-$promptclass-minrating-4.solo.tsv --run-dir ./dl20runs 
+
+done
+
+# Analyses
 
 for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRatedPrompt; do
 	echo $promptclass
 
 	# autograde-qrels
-	#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl20-qrel-leaderboard-$promptclass.tsv --run-dir ./dl20runs 
+	python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass -q dl20-exam-$promptclass.qrel --qrel-leaderboard-out dl20-qrel-leaderboard-$promptclass.tsv --run-dir ./dl20runs --official-leaderboard official_dl20_leaderboard.json
 
 	for minrating in 3 4 5; do
 	# autograde-cover leaderboard
@@ -65,8 +78,5 @@ for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRat
 	# inter-annotator agreement with judgments
 	#python -O -m exam_pp.exam_post_pipeline $final --testset dl20 --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --correlation-out dl20-correlation-$promptclass.tex
 
-	# just the leaderboard - no analysis
-	python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out dl20-autograde-cover-$promptclass-minrating-4.solo.tsv 
-	python -O -m exam_pp.exam_evaluation $final --question-set question-bank --prompt-class $promptclass -q dl20-autograde-qrels-$promptclass-minrating-4.solo.qrels  --min-self-rating 4 --qrel-leaderboard-out dl20-autograde-qrels-$promptclass-minrating-4.solo.tsv --run-dir ./dl20runs 
 
 done
