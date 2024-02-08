@@ -73,19 +73,65 @@ def noodle_cary3_outlines(cary3_outlines:Path, gpt_out:Path, gpt_model:str, max_
 
 
 
+def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, max_tokens:int=1500, max_queries:Optional[int]=None):
+    fetcher = FetchGptResponsesForTrecCar()
+    with open(gpt_out, "wt", encoding='utf-8') as outfile:
+
+        with open(query_json, "rt", encoding="utf-8") as file:
+            queries = json.load(file)
+
+            for query_id, query_text in itertools.islice(queries.items(), max_queries):
+                    print(query_id, query_text)
+
+
+
+                    prompt = fetcher.page_prompt(query_text)
+                    answer = fetcher.generate(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+                    datatime=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+                    response = DavinciResponse(datatime=datatime
+                                                , response=answer
+                                                , gptmodel=gpt_model
+                                                , prompt=prompt
+                                                , benchmark="question-bank"
+                                                , queryId=query_id
+                                                , queryStr=query_text
+                                                , sectionQueryStr=None
+                                                , pageOrSection="page")
+
+                    outfile.write(pydantic_dump(response)+'\n')
+                    print(query_id)
+                    outfile.flush()
+        outfile.close()
+
+
+
+
 
 def main():
     import argparse
 
-    desc = r'''Create CAR-Y3 content from OpenAI'''
+    query_json_format=r'''
+        {
+          "query_id_1":"query text",
+          "query_id_2":"query text",
+          "query_id_3":"query text",
+          ...
+        }
+'''
+
+    desc = r'''Create Wikipedia-style content from OpenAI'''
     
     parser = argparse.ArgumentParser(description="Create Wiki articles with ChatGPT"
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-q','--query-json', type=str, metavar='JSON'
+                        , help=f'Input query-file in JSON format: {query_json_format}'
+                        )  
     parser.add_argument('-p','--davinci-page-file', type=str, metavar='DAVINCI_PAGE_FILE'
                         , help='Input jsonl file for page-level Davinci3 responses'
                         )
-    parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR', required=True
+    parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR'
                         , help='Input TREC CAR ourlines file (from which page-level queries and order of sections/facets will be taken)'
                         )
 
@@ -95,17 +141,21 @@ def main():
 
     parser.add_argument('--gpt-model', type=str, metavar='MODEL', default="gpt-3.5-turbo", help='OpenAI model name to be used')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
+    parser.add_argument('--max-queries', type=int, metavar='NUM', help='Max queries to process')
  
     args = parser.parse_args()  
 
 
-    if args.davinci_page_file is not None:
+    if args.query_json is not None:
+        noodle_queries(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, max_queries=args.max_queries)
+        
+    elif args.davinci_page_file is not None:
         noodle_from_prior_prompts(page_davinci_path=args.davinci_page_file, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens)
     
     elif args.car_outlines_cbor is not None:
         noodle_cary3_outlines(cary3_outlines=args.car_outlines_cbor, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens)
     else:
-        raise RuntimeError("Must either define --davinci-page-file or --car-outlines-cbor !")
+        raise RuntimeError("Must either define --query-json, --davinci-page-file or --car-outlines-cbor !")
 
 if __name__ == "__main__":
     main()
