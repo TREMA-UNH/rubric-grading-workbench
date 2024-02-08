@@ -30,8 +30,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'exam_grade = exampp.exam_grading:main',
-            'exam_post = exampp.exam_post_pipeline:main',
+            'exam_grade = exam_pp.exam_grading:main',
+            'exam_post = exam_pp.exam_post_pipeline:main',
         ],
     },
 )

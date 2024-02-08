@@ -1,8 +1,9 @@
 [tool.poetry]
-name = "ExamPP"
+name = "exam_pp"
 version = "0.1.0"
 description = "EXAM++ Answerability Metric plus plus"
 authors = ["Laura Dietz <dietz@cs.unh.edu>", "Ben Gamari <ben@smart-cactus.org>", "Naghmeh Farzi <Naghmeh.Farzi@unh.edu>"]
+
 [tool.poetry.dependencies]
 python = "^3.8"  
 pydantic = "*"
