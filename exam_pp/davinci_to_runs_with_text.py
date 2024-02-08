@@ -174,8 +174,11 @@ def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Optiona
 
 
 
-def simple_davinci_to_full_paragraph_list(page_davinci_path:Optional[Path], max_queries:Optional[int]=None) -> List[QueryWithFullParagraphList]:
+def simple_davinci_to_full_paragraph_list(page_davinci_path:Optional[Path], max_queries:Optional[int]=None, run_file:Optional[Path]=None) -> List[QueryWithFullParagraphList]:
     result:List[QueryWithFullParagraphList]=list()
+    run_entries:List[str] = list()
+
+
     davinci_by_query_id = parse_davinci_into_dict(section_file_path=None, page_file_path=page_davinci_path)
 
     for query_id, davinci_pages in itertools.islice(davinci_by_query_id.items(), max_queries):
@@ -186,11 +189,20 @@ def simple_davinci_to_full_paragraph_list(page_davinci_path:Optional[Path], max_
             for davinci_section in davinci_pages: # there should be exactly 1
                 para = davinci_response_to_full_paragraph(query_id=query_id, davinci_response=davinci_section, query_facet_id=None)
                 paragraphs.extend(para)
+                run_entries.append("\n".join( [  
+                                            "\t".join([query_id, "Q0", p.paragraph_id, f"{p.paragraph_data.rankings[0].rank}", f"{p.paragraph_data.rankings[0].score}", p.paragraph_data.rankings[0].method  ])
+                                            for p in para])
+                                      )
         #~ page text
 
         qp = QueryWithFullParagraphList(queryId=query_id, paragraphs=paragraphs)
 
         result.append(qp)
+    if run_file is not None:
+        with open(run_file, 'wt', encoding="utf-8") as runfile:
+            runfile.write("\n".join(run_entries))    
+            runfile.flush()
+            runfile.close()
 
     return result
 
@@ -248,6 +260,9 @@ def main():
     parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR'
                         , help='Input TREC CAR ourlines file (from which page-level queries and order of sections/facets will be taken)'
                         )
+    parser.add_argument('--run', type=str, metavar='FILE'
+                        , help='trec-eval compatible run file to produce'
+                        )
 
 
     parser.add_argument('-o', '--out-file', type=str, metavar='runs-xxx.jsonl.gz', required=True
@@ -263,7 +278,8 @@ def main():
 
     if args.simple:
         contents = simple_davinci_to_full_paragraph_list(page_davinci_path=args.davinci_page_file
-                                          , max_queries = args.max_queries)
+                                          , max_queries = args.max_queries
+                                          , run_file = args.run)
 
     else:
         contents = parse_davinci_as_query_with_full_paragraph_list(
