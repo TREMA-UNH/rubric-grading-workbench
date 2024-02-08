@@ -587,7 +587,7 @@ def main(cmdargs=None):
         if args.run_dir is not None:
             run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
                                  ,run_dir=Path(args.run_dir)
-                                 , min_level=args.min_trec_eval_levelcd tm  
+                                 , min_level=args.min_trec_eval_level
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  )
