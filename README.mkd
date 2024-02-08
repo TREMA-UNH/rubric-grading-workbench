@@ -1,30 +1,354 @@
-# EXAM++  (exampp): EXAM Answerability Metric with generative LLMs
+# Autograder Workbench – LLM-based Evaluation for Retrieve/Generate Systems
+
+*Autograder Workbench* is a toolbox for evaluating information systems that use retrieve and/or generatation approaches.
+
+The workbench builds on a code base for the Exam Answerability Metric that uses a test bank of exam questions to evaluate systems for CAR Y3. In this release, the code base is extended to generate a test bank of nuggets (aka key facts), and to provide better support for a human-in-the-loop to verify and supervise the process (without conducing any passage-level relevance judgments). The code base can evaluate systems even when no manual passage-level judgments are available.
+
+The code base of the Autograder Workbench is released under a BSD-3 open source license.
+
+[exam-appendix]: https://anonymous.4open.science/r/flan-t5-exam
+
+## Approach
+The Autograder evaluation paradigm consists of several phases, each supported with utilities provided in this code base.
+
+ 1. *Test Bank Generation:* LLMs with human-in-the-loop develop a collection of test nuggets and/or exam questions. 
+ 3. *Grading:* The LLM will grade all system responses, passage-by-passage, by either scanning the passage for mentions of each nugget or trying to answer each exam question based on the passage content.
+ 5. *Manual Oversight and Verification:* To manually verify the the LLM is operating as intended, our autograding workbench supports to inspect extracted answers and nugget mentions along with grades on a passage-level.
+ 7. *Evaluation:* An evaluation score for each IR system is computed, either via Autograde-Cover, or Autograde-Qrels. The latter exports a qrels file that is inter-operable with the evaluation tool `trec_eval`
+8. *Additional analyses:* If available,  official leaderboards can be used to analyze rank correlation of the predicted system ranking. If manual judgments are available, the workbench provides an inter-annotator agreement analysis.
+    
+ 
+ ![](https://edit.smart-cactus.org/uploads/6d2e9362-b0c8-4862-ab70-cd893900b4e5.png)
+
+## Resource
+
+This package includes python command line utilities for the phases of the above pipeline:
+
+ * Phase 1: `autograder-generate` generates a test bank from query sets.
+ * Phase 2: `autograder-grade` grades passages from system responses.
+ * Phase 3: we provide `jq` analysis scripts to verify correct self-ratings and answers.
+ * Phase 4: `autograder-evaluate` derives evaluation scores for systems under evaluation.
+ * Additional analyses: `autograder-analyze` offers leaderboard rank correlation and inter-annotator agreement analyses.
+
+Upon installation, each of these command line utilities supports extensive documentation when called with `--help`.
 
 
-##  Installation using nix
+## Installation via poetry
 
-1. install `nix` <https://nix.dev/install-nix>
-2. Clone this repository and cd into it
-3. in a shell type:  `nix develop`
+
+Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. First, clone this repository, fetch the `data-dl20.tar.xz` [tarball](https://shorturl.at/nHOZ8), and extract it into directory `data/dl20`.
+```bash
+$ git clone <this repository>
+$ cd <cloned directory>
+$ poetry install
+$ wget https://shorturl.at/nHOZ8  # will download data-dl20.tar.xz
+$ tar -x -C data/dl20 data-dl20.tar.xz
+```
+
+Official run files can be obtained from the TREC Manager.
+
+Alternative installation methods are described below.
+
+
+## Interchange Data Model 
+
+Different phases are using the same JSON data model (as gzip-compressed JSON-lines).
+
+<figure id="fig:datamodel">
+<div class="footnotesize">
+<pre><code>
+[
+  "Query ID",
+  [
+    {
+      <span style="background-color: lightgray">"paragraph_id": "Unique Paragraph Identifier",
+      "text": "Full Text of the Paragraph",
+      "paragraph": ... // paragraph with additional markup if available.</span>
+      "paragraph_data": {
+        "judgments": [
+          {
+            "paragraphId": "Same Paragraph Identifier",
+            "query": ""Associated Query ID, potantially Identifier of Subquery",
+            <span style="background-color: lightblue">"relevance": 2, // judgment grade</span>
+            "titleQuery": "Query ID"
+          }
+        ],
+        "rankings": [
+          {
+            <span style="background-color: lightblue">"method": "Ranking Method",
+            "paragraphId": "Unique Paragraph Identifier",
+            "queryId": "Associated Query ID, potantially Identifier of Subquery",
+            "rank": 6, // retrieval rank
+            "score": 17.560528 // retrieval score</span>
+          }
+        ]
+      },
+      "exam_grades": [  // for exam questions and nuggets
+        {
+         <span
+style="background-color: yellowgreen"> "correctAnswered": ["List of Correctly Answered Question and Nugget IDs"],
+          "wrongAnswered": ["List of Incorrectly Answered Question and Nugget IDs"],</span>
+          <span
+style="background-color: yellow">"self_ratings": [{
+             "nugget_id": "Nugget ID",
+             // alternatively: "question_id": "Question ID"
+             "self_rating": 4 // self-rating grade</span>
+           },
+          <span
+style="background-color: orange">"answers": [
+            ["Question or Nugget ID", "Answer Text"]
+          ],</span>
+          <span
+style="background-color: pink">"llm": "Huggingface Language Model Used",</span>
+          "llm_options": {
+            "prompt_template": "Template Used for Prompt",
+            "answer_match": "Answer Matching Strategy"
+          },
+        "prompt_info": {
+          <span
+style="background-color: pink">"prompt_class": "NuggetSelfRatedPrompt",</span>
+          "prompt_style": "Is the nugget addressed...",
+          "context_first": false,
+          "check_unanswerable": true,
+          "check_answer_key": false,
+          "is_self_rated": true
+        },
+          "exam_ratio": 0.25 // fraction of questions answered correctly
+        }
+      ],
+      "grades": [
+        {
+          <span
+style="background-color: yellowgreen">"correctAnswered": true, // if judged as relevant</span>
+          <span
+style="background-color: yellow">"self_ratings": 4 // Self-rating on relevance</span>
+          <span
+style="background-color: orange">"answers": "Answer Text"</span> 
+          <span
+style="background-color: pink">"llm": "Huggingface Language Model Used",</span>
+          "llm_options": {...},
+          <span
+style="background-color: orange">"prompt_info": ...</span>
+        }
+      ]
+    }
+  ]
+]
+</code></pre>
+</div>
+<figcaption>Data Model. <span style="background-color: lightgray">Query,
+passage text and ID</span> must be provided externally. If available,
+<span style="background-color: lightblue">manual judgment level</span> and
+with <span style="background-color: lightblue">system information</span> can
+be used for analysis. Phase 2 adds fields <code>exam_grades</code>
+and/or <code>grades</code> with information about <span
+style="background-color: yellowgreen">correct nuggets/questions</span>, <span
+style="background-color: yellow">self-ratings of answerability</span>,
+and <span style="background-color: orange">answers for manual
+verification</span>. Phase 3, the workbench supports filtering based on
+<span style="background-color: pink"><code>llm</code> and
+<code>prompt_class</code></span>. </figcaption>
+</figure>
+
+## Usage
+
+
+### Collection of External Inputs
+
+The following inputs are required:
+
+* `dl-queries.json`: Queries in form of a JSON dictionary mapping query ID to query Text
+
+* `dl20-passages.jsonl.gz`:  Collections of passages from system responses (ranking or generated ext) for grading.
+    These follow the data interchange model, providing the Query ID, paragraph_id, text. <br/>
+    System's rank information can be stored in `paragraph_data.rankings[]` <br/>
+    If available, manual judgments can be stored in `paragraph_data.judgment[]`
+    An example file is provided in `trecDL2020-qrels-runs-with-text.jsonl.gz`
+
+
+### Phase 1: Test Bank Generation
+Generate a test bank of nuggets as follows
+
+```bash
+$ export OPENAI_API_KEY=...
+$ poetry run autograder-generate \
+ -q data/dl20/dl20-queries.json \
+ -o data/dl20/dl20-nuggets.jsonl.gz \
+ --use-nuggets \
+ --gpt-model gpt-3.5-turbo \
+ --test-collection DL20 \
+ --description "A new set of generated nuggets for DL20"
+```
+
+This will produce `dl20-nuggets.jsonl.gz` which contains a test bank of nuggets. For instance,
+```bash
+$ zcat data/dl20/dl20-nuggets.jsonl.gz | jq .items[].question_text
+"Which musicians or bands are considered pioneers of rock n roll?"
+"What were the major influences that led to the emergence of rock n roll?"
+"Are there any specific events or performances that marked the beginning of rock n roll?"
+...
+```
+
+### Phase 2: Grading
+
+We can then assess the quality of an IR system by scanning the system's response for mentions of the nuggets. Here we use a nugget-specific self-rating prompt for the [`flan-t5-large`][flan] model.
+
+This phase will use a local GPU. The CUDA device ID and batch size are configured via environment variables
+
+```bash
+export GPU_DEVICE=0
+export BATCH_SIZE=10
+```
+Use device `None` to use CPUs.
+
+
+```bash 
+$ poetry run autograder-grade \
+   data/dl20/dl20-passages.jsonl.gz \
+   -o data/dl20/dl20-graded.jsonl.gz \
+   --model-name google/flan-t5-large \
+   --model-pipeline text2text \
+   --prompt-class NuggetSelfRatedPrompt \
+   --question-path data/dl20/dl20-nuggets.jsonl.gz  \
+   --question-type question-bank \
+   --use-nuggets 
+```
+
+Alternative prompts classes are 
+
+* `NuggetSelfRatedPrompt`: self-rating of nugget mentions (enable `--use-nuggets`)
+* `NuggetExtractionPrompt`: extraction of nugget mentioned, for explaination and verification (to be used with `use-nuggets`)
+* `QuestionCompleteConciseUnanswerablePromptWithChoices`: self-rating answerability of exam questions
+* `QuestionCompleteConcisePromptWithAnswerKey2`: extract answers for exam questions (informational or for test banks with known correct answers)
+* `FagB`,`FagB_few`, `HELM`, `Sun`, `Sun_few`, `Thomas`: Direct grading prompts.
+
+
+### Phase 3: Manual Verification
+
+See jq scripts
+
+We envision that human verification will leads to an iterate and repeat previous phases with manual refinements of the test bank and adjustment of the grading prompts and models.
+
+### Phase 4: Evaluation
+
+To evaluate systems with Autograder qrels, a trec\_eval compatible QRELs file is exported. 
+
+```bash
+$ poetry run autograder-evaluate \
+     data/dl20/dl20-graded.jsonl.gz \
+     -q data/dl20/dl20-autograde-qrels.qrels \
+     --min-self-rating 4 \
+     --prompt-class $promptclass  \
+     --model google/flan-t5-large \
+     --question-set question-bank 
+```
+
+Our workbench supports to automatically run trec\_eval with this qrels file on a directory of run-files when the following options are added (only supported under bash; `trec_eval` needs to be in PATH):
+
+```
+    --run-dir data/dl20/dl20runs  
+    --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-leaderboard.tsv 
+```
+
+To evaluate systems with Autograde Cover, system information needs to be included in the passage file (e.g. `dl20-passages.jsonl.gz`). This information is preserved during the grading process. The leaderboard is produced with:
+
+```bash
+$ poetry run autograder-evaluate \
+    data/dl20/dl20-graded.jsonl.gz \
+    --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard.tsv 
+    --min-self-rating 4 \
+    --prompt-class $promptclass \
+    --model google/flan-t5-large \
+    --question-set question-bank
+```
+
+Direct grading prompts are only supported via Autograde Qrels.
+
+
+
+## Additional Analyses
+
+Rank correlation with official leaderboards using Autograde qrels.
+```bash
+$ poetry run autograder-analyze \
+    data/dl20/dl20-graded.jsonl.gz \ 
+    -q data/dl20/dl20-autograde-qrels.qrels \
+    --run-dir data/dl20/dl20runs  \
+    --official-leaderboard data/dl20/official_dl20_leaderboard.json \
+    --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-leaderboard.tsv \
+    --min-relevant-judgment 2 \
+    --use-ratings \
+    --min-trec-eval-level 4 \
+    --prompt-class $promptclass  \
+    --model google/flan-t5-large \
+    --question-set question-bank 
+```
+
+Rank correlation with official leaderboards using Autograde Cover.
+
+```bash
+$ poetry run autograder-analyze \
+    data/dl20/dl20-graded.jsonl.gz \ 
+    --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard.tsv \
+    --official-leaderboard data/dl20/official_dl20_leaderboard.json \
+    --use-ratings \
+    --min-self-rating  4 \
+    --prompt-class $promptclass  \
+    --model google/flan-t5-large \
+    --question-set question-bank 
+```
+
+
+Inter-annotator agreement of manual judgments and self-ratings.
+
+```bash
+$ poetry run autograder-analyze \
+      data/dl20/dl20-graded.jsonl.gz \
+      --inter-annotator-out data/dl20/dl20-autograde-inter-annotator.tex \
+      --min-relevant-judgment 2 \ 
+      --use-ratings 4 \
+      --prompt-class $promptclass \
+      --model google/flan-t5-large \
+      --question-set question-bank
+```
+
+
+
+
+## Alternative Installation Methods
+### Installation via `nix`
+
+The easiest way to use `exampp` is via the [Nix][install-nix] package manager:
+
+1. [install `nix`][install-nix]
+1. `nix develop <repo url>#cuda`
+1. Clone this repository and cd into it
+1. in a shell type:  `nix develop`
 
 
 If you are getting error message about unfree packages or experimental command, then run one of these longer commands instead
 
-* `nix --extra-experimental-features 'nix-command flakes' develop` od 
+* `nix --extra-experimental-features 'nix-command flakes' develop` 
 * `NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure`
 
+[install-nix]: https://nix.dev/install-nix
 
-## Installation via setup.py
 
-0. optional: Install `trec_eval`
+**Usage:**
 
-1. Clone this repository and cd into it
-2. call `python setup.py install`
+Command line utilities are directly called via `python -O -m <command>`
 
-## Alternative Installation
 
-Basic (untested) project definitions are available for `poetry`, `pipenv`, and `pip`. 
 
+
+
+--------------------------------
+
+
+
+[flan]: https://huggingface.co/google/flan-t5-large
+
+<!-- 
 ## Usage
 
 The code works in three phases
@@ -86,3 +410,4 @@ examEvaluationPerQuery:Dict[str,float] = resultsPerMethod['my_method'].examCover
 write_exam_results("exam-eval.jsonl.gz", resultsPerMethod)
 ```
 
+ -->
