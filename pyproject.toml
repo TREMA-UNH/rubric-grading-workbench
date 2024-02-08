@@ -6,11 +6,16 @@ authors = ["Laura Dietz <dietz@cs.unh.edu>", "Ben Gamari <ben@smart-cactus.org>"
 
 [tool.poetry.dependencies]
 python = "^3.8"  
-pydantic = "*"
-fuzzywuzzy = "*"
-nltk = "*"
-pylatex = "*"
-trec-car-tools = "*" 
+pydantic = "^2.6"
+fuzzywuzzy = "^0.18"
+nltk = "^3.8"
+pylatex = "^1.4"
+scipy = "*"
+openai = "^1.11"
+requests = "^2.31"
+trec-car-tools = "^2.6"
+torch = "^2.1"
+transformers = "^4.37"
 
 [tool.poetry.dev-dependencies]
 mypy = "*"
@@ -19,3 +24,9 @@ jedi = "*"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+autograder-generate = "exam_pp.question_generation:main"
+autograder-grade = "exam_pp.exam_grading:main"
+autograder-evaluate = "exam_pp.exam_evaluation:main"
+autograder-analyze = "exam_pp.exam_post_pipeline:main"
