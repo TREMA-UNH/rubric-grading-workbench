@@ -1,5 +1,6 @@
 import time
 import datetime
+import typing
 
 import trec_car.read_data as trec_car
 
@@ -7,7 +8,7 @@ from .openai_interface import query_gpt_batch_with_rate_limiting
 from .davinci_to_runs_with_text import *
 
 
-class FetchGptResponsesForTrecCar:
+class FetchGptResponsesForWikipedia:
     def __init__(self):
         pass
 
@@ -22,8 +23,38 @@ class FetchGptResponsesForTrecCar:
         return answer
 
 
+class FetchGptResponsesForQuestion:
+    def __init__(self):
+        pass
+
+    def section_prompt(self, query_title:str, query_heading:str)->str:
+        return f"{query_title} especially {query_heading}?"
+
+    def page_prompt(self, query_title:str)->str:
+        return f"{query_title}?"
+
+    def generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
+        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+        return answer
+
+
+class FetchGptResponsesForWeb:
+    def __init__(self):
+        pass
+
+    def section_prompt(self, query_title:str, query_heading:str)->str:
+        return f"Generate a web page for \"{query_title}\" especially focusing on {query_heading}"
+
+    def page_prompt(self, query_title:str)->str:
+        return f"Generate a web page for \"{query_title}\""
+
+    def generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
+        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+        return answer
+
+
 def noodle_from_prior_prompts(page_davinci_path:Path, gpt_out:Path, gpt_model:str, max_tokens:int=1500):
-    fetcher = FetchGptResponsesForTrecCar()
+    fetcher = FetchGptResponsesForWikipedia()
 
     davinci_by_query_id = parse_davinci_into_dict(section_file_path=None, page_file_path=page_davinci_path)
 
@@ -44,7 +75,7 @@ def noodle_from_prior_prompts(page_davinci_path:Path, gpt_out:Path, gpt_model:st
 
 
 def noodle_cary3_outlines(cary3_outlines:Path, gpt_out:Path, gpt_model:str, max_tokens:int=1500):
-    fetcher = FetchGptResponsesForTrecCar()
+    fetcher = FetchGptResponsesForWikipedia()
     with open(gpt_out, "wt", encoding='utf-8') as file:
         page:trec_car.Page
         for page in trec_car.iter_outlines(open(cary3_outlines, 'rb')):
@@ -73,8 +104,16 @@ def noodle_cary3_outlines(cary3_outlines:Path, gpt_out:Path, gpt_model:str, max_
 
 
 
-def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, benchmark:str, max_tokens:int=1500,  max_queries:Optional[int]=None):
-    fetcher = FetchGptResponsesForTrecCar()
+def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, prompt_style:str, benchmark:str, max_tokens:int=1500,  max_queries:Optional[int]=None):
+
+    fetcher:typing.Union[FetchGptResponsesForWikipedia,FetchGptResponsesForQuestion,FetchGptResponsesForWeb]
+    if prompt_style == "wikipedia":
+        fetcher = FetchGptResponsesForWikipedia()
+    elif prompt_style == "question":
+        fetcher = FetchGptResponsesForQuestion()
+    elif prompt_style == "web":
+        fetcher = FetchGptResponsesForWeb()
+    
     with open(gpt_out, "wt", encoding='utf-8') as outfile:
 
         with open(query_json, "rt", encoding="utf-8") as file:
@@ -132,6 +171,11 @@ def main():
     parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR'
                         , help='Input TREC CAR ourlines file (from which page-level queries and order of sections/facets will be taken)'
                         )
+    
+    parser.add_argument('--prompt-style', type=str, metavar='STR'
+                        , help='Style of prompt to generate content.'
+                        , choices=["wikipedia","question", "web"]
+                        )
 
 
     parser.add_argument('-o', '--out-file', type=str, metavar='runs-xxx.jsonl.gz', required=True
@@ -146,7 +190,8 @@ def main():
 
 
     if args.query_json is not None:
-        noodle_queries(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, benchmark=args.benchmark, max_queries=args.max_queries)
+        noodle_queries(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file
+                       , max_tokens=args.max_tokens, benchmark=args.benchmark,prompt_style=args.prompt_style, max_queries=args.max_queries)
         
     elif args.davinci_page_file is not None:
         noodle_from_prior_prompts(page_davinci_path=args.davinci_page_file, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens)
