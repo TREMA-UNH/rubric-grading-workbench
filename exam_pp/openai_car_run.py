@@ -73,7 +73,7 @@ def noodle_cary3_outlines(cary3_outlines:Path, gpt_out:Path, gpt_model:str, max_
 
 
 
-def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, max_tokens:int=1500, max_queries:Optional[int]=None):
+def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, benchmark:str, max_tokens:int=1500,  max_queries:Optional[int]=None):
     fetcher = FetchGptResponsesForTrecCar()
     with open(gpt_out, "wt", encoding='utf-8') as outfile:
 
@@ -82,10 +82,8 @@ def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, max_tokens:int=
 
             for query_id, query_text in itertools.islice(queries.items(), max_queries):
                     print(query_id, query_text)
-
-
-
                     prompt = fetcher.page_prompt(query_text)
+
                     answer = fetcher.generate(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
                     datatime=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
@@ -93,7 +91,7 @@ def noodle_queries(query_json:Path, gpt_out:Path, gpt_model:str, max_tokens:int=
                                                 , response=answer
                                                 , gptmodel=gpt_model
                                                 , prompt=prompt
-                                                , benchmark="question-bank"
+                                                , benchmark=benchmark
                                                 , queryId=query_id
                                                 , queryStr=query_text
                                                 , sectionQueryStr=None
@@ -142,12 +140,13 @@ def main():
     parser.add_argument('--gpt-model', type=str, metavar='MODEL', default="gpt-3.5-turbo", help='OpenAI model name to be used')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
     parser.add_argument('--max-queries', type=int, metavar='NUM', help='Max queries to process')
+    parser.add_argument('--benchmark', type=str, metavar='NAME', help='Name of test set for which this content was created.')
  
     args = parser.parse_args()  
 
 
     if args.query_json is not None:
-        noodle_queries(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, max_queries=args.max_queries)
+        noodle_queries(query_json=args.query_json, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens, benchmark=args.benchmark, max_queries=args.max_queries)
         
     elif args.davinci_page_file is not None:
         noodle_from_prior_prompts(page_davinci_path=args.davinci_page_file, gpt_model=args.gpt_model, gpt_out=args.out_file, max_tokens=args.max_tokens)
