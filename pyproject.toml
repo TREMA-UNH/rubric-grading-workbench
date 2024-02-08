@@ -6,7 +6,7 @@ authors = ["Laura Dietz <dietz@cs.unh.edu>", "Ben Gamari <ben@smart-cactus.org>"
 
 [tool.poetry.dependencies]
 python = "^3.8"  
-pydantic = "^2.6"
+pydantic = "^1.10"
 fuzzywuzzy = "^0.18"
 nltk = "^3.8"
 pylatex = "^1.4"
