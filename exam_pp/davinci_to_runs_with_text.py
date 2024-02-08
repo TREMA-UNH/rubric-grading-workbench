@@ -170,6 +170,31 @@ def parse_davinci_as_query_with_full_paragraph_list(section_davinci_path:Optiona
     return result
 
 
+# ---------------------------------
+
+
+
+def simple_davinci_to_full_paragraph_list(page_davinci_path:Optional[Path], max_queries:Optional[int]=None) -> List[QueryWithFullParagraphList]:
+    result:List[QueryWithFullParagraphList]=list()
+    davinci_by_query_id = parse_davinci_into_dict(section_file_path=None, page_file_path=page_davinci_path)
+
+    for query_id, davinci_pages in itertools.islice(davinci_by_query_id.items(), max_queries):
+
+        paragraphs:List[Any] = list()
+
+        if(davinci_pages is not None):
+            for davinci_section in davinci_pages: # there should be exactly 1
+                para = davinci_response_to_full_paragraph(query_id=query_id, davinci_response=davinci_section, query_facet_id=None)
+                paragraphs.extend(para)
+        #~ page text
+
+        qp = QueryWithFullParagraphList(queryId=query_id, paragraphs=paragraphs)
+
+        result.append(qp)
+
+    return result
+
+
 
 # --------------------------------
     
@@ -220,7 +245,7 @@ def main():
     parser.add_argument('-s','--davinci-section-file', type=str, metavar='DAVINCI_SECTION_FILE'
                         , help='Input jsonl file for section-level Davinci3 responses'
                         )
-    parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR', required=True
+    parser.add_argument('-c','--car-outlines-cbor', type=str, metavar='CAR_OUTLINES_CBOR'
                         , help='Input TREC CAR ourlines file (from which page-level queries and order of sections/facets will be taken)'
                         )
 
@@ -229,17 +254,24 @@ def main():
                         , help='Output file name where paragraphs with exam grade annotations will be written to')
 
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
+    parser.add_argument('--simple', action='store_true', help="Will only use the page file")
  
 
     # Parse the arguments
     args = parser.parse_args()  
 
-    contents = parse_davinci_as_query_with_full_paragraph_list(
-                        page_davinci_path=args.davinci_page_file
-                        ,section_davinci_path=args.davinci_section_file
-                        , car_outlines_path=args.car_outlines_cbor
-                        , max_queries = args.max_queries
-                        )
+
+    if args.simple:
+        contents = simple_davinci_to_full_paragraph_list(page_davinci_path=args.davinci_page_file
+                                          , max_queries = args.max_queries)
+
+    else:
+        contents = parse_davinci_as_query_with_full_paragraph_list(
+                            page_davinci_path=args.davinci_page_file
+                            ,section_davinci_path=args.davinci_section_file
+                            , car_outlines_path=args.car_outlines_cbor
+                            , max_queries = args.max_queries
+                            )
 
     data_model.writeQueryWithFullParagraphs(args.out_file, contents)
 
