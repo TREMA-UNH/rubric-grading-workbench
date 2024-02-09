@@ -350,6 +350,9 @@ $ poetry run autograder-analyze \
       --question-set question-bank
 ```
 
+## Code walk through on example of TREC DL 2020
+
+A bash script with data for the code walkthrough is provided in [walkthrough-dl20.sh](walkthrough-dl20.sh)
 
 
 
