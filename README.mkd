@@ -355,6 +355,8 @@ $ poetry run autograder-analyze \
 
 A bash script with data for the code walkthrough is provided in [walkthrough-dl20.sh](walkthrough-dl20.sh)
 
+[Unabrigded results and manual verification analyses.](results/README.mkd)
+
 
 
 ## Alternative Installation Methods

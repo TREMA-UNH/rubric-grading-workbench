@@ -1,0 +1,248 @@
+# Self-ratings and extracted answers to Exam Questions 
+
+A high self-rating along with an incorrect answer suggests issues with the question-answering pipeline.
+(In contrast, pairings of low self-rating and correct answer are usually when the passage does not sufficiently substantiate this answer.)
+
+
+Self-ratings and extracted answers to the exam question "Which musicians or bands are considered pioneers of rock n roll?"
+
+| Passage ID | Self-Rating | Extracted Answer |
+| :-- | :-- | :-- |
+| 506003 | 5 | Elvis Presley–the King of Rock and Roll |
+| 870279 | 5 | Led Zeppelin |
+| 1277675 | 5 | The Rolling Stones, The Allman Brothers, The Grateful Dead |
+| 2729630 | 5 | Rolling Stones |
+| 3167333 | 5 | Elvis Presley |
+| 3667609 | 5 | The Rolling Stones |
+| 3822467 | 5 | The Arrows |
+| 4086990 | 5 | Comets |
+| 4489260 | 5 | Rolling Stones |
+| 4584778 | 5 | The Beatles and Rolling Stones |
+| 4696641 | 5 | Hank Williams, Joe Turner, Louis Jordan, Ray Charles, Little Richard, Jerry Lee Lewis, Chuck Berry, Bo Diddley, Buddy Holly - and Elvis Presley |
+| 5288444 | 5 | the Kings of Rhythm |
+| 5295968 | 5 | Ike and The Kings of Rhythm |
+| 5368339 | 5 | Elvis Presley |
+| 6295874 | 5 | Bill Haley & His Comets |
+| 6938106 | 5 | Ike Turner & His Kings |
+| 7052524 | 5 | the rolling stones |
+| 7282182 | 5 | Fats Domino, Lloyd Price, Ike Turner, Hank Williams, Joe Turner, Louis Jordan, Ray Charles, Little Richard, Jerry Lee Lewis, Chuck Berry, Bo Diddley, Buddy Holly |
+| 7290069 | 5 | The Comets |
+| 7855423 | 5 | Elvis Presley |
+| 7935661 | 5 | Joan Jett and the Blackheart |
+| 8254209 | 5 | Elvis Presley |
+| 8269679 | 5 | Elvis' |
+| 8269680 | 5 | Elvis |
+| 8772071 | 5 | The Kings of Rhythm |
+| 61069 | 4 | gospel music |
+| 69247 | 4 | Queen |
+| 1219196 | 4 | Black and White musicians |
+| 1976277 | 4 | Elvis Presley |
+| 2404877 | 4 | Chuck Berry |
+| 2405887 | 4 | Pearl Jam |
+| 2667350 | 4 | the 1950s |
+| 2667353 | 4 | Boswell Sisters |
+| 2701318 | 4 | the Rolling Stones |
+| 2814756 | 4 | Elvis at Sun Studio |
+| 2826200 | 4 | Big Joe Turner |
+| 2826202 | 4 | Elvis Presley |
+| 3048320 | 4 | Bill Haley and Comets |
+| 3113409 | 4 | Queen |
+| 3275347 | 4 | The Beatles |
+| 3314511 | 4 | Bill Haley and His Comets |
+| 3378656 | 4 | Ike & Tina Turner Revue |
+| 3392300 | 4 | The Rolling Stones |
+| 3547813 | 4 | Bill Haley |
+| 3558982 | 4 | the Comets |
+| 3706456 | 4 | rhythm and blues |
+| 3706460 | 4 | Big Bands |
+| 3814285 | 4 | the Comets |
+| 3932566 | 4 | Queen |
+| 4377484 | 4 | Little Richard and Fats Domino |
+| 4380922 | 4 | Joan Jett and the Blackhearts |
+| 4489259 | 4 | Jimmy Preston |
+| 4489266 | 4 | Bill Haley |
+| 4652487 | 4 | Mick Jagger, Keith Richards, Ron Wood & David Bowie |
+| 4664999 | 4 | Little Richard |
+| 4800886 | 4 | Chuck Berry |
+| 4800890 | 4 | Bill Haley and his Comets |
+| 4820847 | 4 | Elvis Presley |
+| 4820850 | 4 | Presley |
+| 4960307 | 4 | Elvis Presley |
+| 5255827 | 4 | Stevie Nicks & The Pretenders |
+| 5300646 | 4 | Elvis Presley |
+| 5300647 | 4 | Elvis Presley |
+| 5300648 | 4 | Elvis Presley |
+| 5300651 | 4 | Bill Haley and his Comets |
+| 5300654 | 4 | Bill Haley and his Comets |
+| 5472541 | 4 | Elvis Presley |
+| 5831702 | 4 | Elvis Presley |
+| 5831708 | 4 | Bill Haley and his Comets |
+| 6298951 | 4 | Ike Turner |
+| 6404591 | 4 | Frank Zappa |
+| 7201455 | 4 | Bill Haley and the Comets |
+| 7280584 | 4 | Alan Freed |
+| 7282176 | 4 | Little Richard |
+| 7290071 | 4 | the Comets |
+| 7290072 | 4 | Bill Haley and the Comet |
+| 7290075 | 4 | Bill Haley & His Comets |
+| 8219049 | 4 | Alan Freed |
+| 8219052 | 4 | Alan Freed |
+| 8219248 | 4 | Elvis Presley |
+| 8219249 | 4 | Elvis Presley |
+| 8229479 | 4 | the Animals |
+| 8254214 | 4 | Elvis Presley |
+| 8269673 | 4 | Elvis Presley |
+| 8667176 | 4 | the Beatles |
+| 8772075 | 4 | Elvis Aron Presley |
+| 7280582 | 2 | Alan Freed |
+| 21660 | 0 | Elvis Presley |
+| 49250 | 0 | The Beatles |
+| 61062 | 0 | rock and roll |
+| 61065 | 0 | the 1800s |
+| 61068 | 0 | blues |
+| 61070 | 0 | blues |
+| 61071 | 0 | the late 1940s and early 1950s |
+| 5118370 | 0 | the 1930s |
+| 5118371 | 0 | rhythm and blues |
+| 5118372 | 0 | the late 1940s and early 1950s |
+| 5118373 | 0 | the late 1940s and early 1950s |
+| 5118376 | 0 | Rock and roll |
+| ... | 0 | ... |
+
+
+
+Self-ratings and extracted answers to the exam question "What were the major influences that led to the emergence of rock n roll?"
+
+
+| Passage ID | Self-Rating | Extracted Answer |
+| :-- | :-- | :-- |
+| 61069 | 5 | gospel music to blues, jazz and country music |
+| 4696641 | 5 | Fats Domino, Lloyd Price, Ike Turner, Hank Williams, Joe Turner, Louis Jordan, Ray Charles, Little Richard, Jerry Lee Lewis, Chuck Berry, Bo Diddley, Buddy Holly |
+| 61068 | 4 | social and economic changes |
+| 61071 | 4 | gospel, Jump blues, jazz, boogie woogie, and rhythm and blues, along with country music |
+| 506000 | 4 | white country-and-western |
+| 837714 | 4 | black rhythm-and-blues with white country |
+| 1219196 | 4 | country music and blues |
+| 2352570 | 4 | Muddy's influence |
+| 2667345 | 4 | rhythm and blues |
+| 2667347 | 4 | rhythm and blues |
+| 2667353 | 4 | rhythm and blues |
+| 2699754 | 4 | rhythm and blues and country western |
+| 3275347 | 4 | Elvis Presley |
+| 3706460 | 4 | The Blues 2) Jazz 3) Bebop 4) Swing. 5) Dixieland 6) \*\*\*\*\* Spirituals 7) Big Bands |
+| 3899964 | 4 | Western musical styles such as country with that of rhythm and blues |
+| 4086990 | 4 | country music, Western swing |
+| 4584778 | 4 | The Beatles and Rolling Stones |
+| 4664999 | 4 | black culture and music |
+| 4665000 | 4 | country music, folk music, gospel music |
+| 4696640 | 4 | rhythm and blues |
+| 4800891 | 4 | rhythm and blues |
+| 5118372 | 4 | boogie-woogie, jump blues, jazz, and gospel music, together with Western swing and country music |
+| 5118373 | 4 | boogie-woogie, jump blues, jazz, and gospel music, together with Western swing and country music |
+| 5270011 | 4 | Country and Western, Swing, Classical, Big Band, Folk |
+| 6656482 | 4 | punk rock |
+| 6782541 | 4 | blues, rhythm and blues, country |
+| 6782543 | 4 | country, and gospel |
+| 7259157 | 4 | gospel, jump blues, jazz, boogie woogie, and rhythm and blues, along with country music |
+| 7280584 | 4 | those who survived the war |
+| 7282182 | 4 | black gospel music and the blues, which he listened to on the radio growing up in Tupelo, Miss |
+| 7855425 | 4 | African American blues and gospel |
+| 8219052 | 4 | those who survived the war |
+| 8805011 | 4 | Black rhythm-and-blues with White country |
+| 7280582 | 2 | Black slang for having sex, and was in use in blues songs way back into the 30's |
+| 21660 | 0 | Elvis Presley |
+| 49250 | 0 | increased temperature introduced with depth in the Earthâ s crust |
+| 61062 | 0 | rock and roll |
+| 61065 | 0 | personalities with various pitches, tones, and styles |
+| 61070 | 0 | blues records |
+| 69247 | 0 | Brian May and recorded by Queen |
+| 160231 | 0 | rockabilly |
+| 246734 | 0 | Radio disc jockeys |
+| 287378 | 0 | country music |
+
+
+
+
+
+Self-ratings and extracted answers to the exam question "Are there any specific events or performances that marked the beginning of rock n roll?"
+
+
+| Passage ID | Self-Rating | Extracted Answer |
+| :-- | :-- | :-- |
+| 2826200 | 5 | The song was first recorded by Big Joe Turner in 1954 |
+| 2826202 | 5 | Elvis Presley performed Stone's Shake, Rattle and Roll |
+| 2913249 | 5 | Elvis performs “Shake, Rattle and Roll” |
+| 3814285 | 5 | first rock and roll song to hit the national charts in the US |
+| 4086990 | 5 | Crazy, Man Crazy from 1953 |
+| 4489259 | 5 | first recorded by Jimmy Preston in May 1949 |
+| 6938106 | 5 | 1951: Willie Kizert with Ike Turner |
+| 7855423 | 5 | Elvis Presley |
+| 7855425 | 5 | 1955 Easter Jubilee |
+| 8269673 | 5 | Elvis' Sun Records session in July 1954 |
+| 8269679 | 5 | Presley's session |
+| 8269680 | 5 | Elvis' Sun Records session |
+| 919390 | 4 | Don't Knock the Rock |
+| 1277675 | 4 | The Rolling Stones, The Allman Brothers, The Grateful Dead, The Doors |
+| 2404877 | 4 | Chuck Berry released hi...s first record Maybellene |
+| 2625173 | 4 | Rock-a-Beatin’ Boogie |
+| 2814756 | 4 | Rocket 88 |
+| 3275347 | 4 | The Beatles |
+| 3314504 | 4 | Bill Haley & His Comets |
+| 3378656 | 4 | Ike & Tina Turner Revue |
+| 3547813 | 4 | Bill Haley version is considered one of the very first rock and roll songs |
+| 3558981 | 4 | his first national success Crazy Man, Crazy |
+| 3705517 | 4 | The story of Tutti Frutti |
+| 3706458 | 4 | music hall |
+| 4218887 | 4 | a storming rendition of Johnny B. Goode |
+| 4274210 | 4 | Rock and Roll Music (1957) |
+| 4377484 | 4 | Elvis, Little Richard and Fats Domino |
+| 4489262 | 4 | Various recordings |
+| 4584778 | 4 | The Beatles and Rolling Stones |
+| 4820847 | 4 | Elvis Presley |
+| 4867251 | 4 | Elvis' first five singles |
+| 5043928 | 4 | Freed started to popularize the term “Rock and Roll |
+| 5255827 | 4 | Stevie Nicks and Chrissie Hynde |
+| 5368339 | 4 | Elvis Presley |
+| 5831702 | 4 | Elvis Presley made it very populer,when he was around |
+| 5831707 | 4 | It all went down--in all places--in Cleveland, Ohio 1951 |
+| 5831711 | 4 | seeing chicks and dudes swing dancing to the fast, hot beat |
+| 6132337 | 4 | A Hard Road to Follow (Upsetter) 1983 |
+| 6295874 | 4 | Bill Haley & His Comets |
+| 6298951 | 4 | Presley's song was the first rock and roll recording |
+| 6404591 | 4 | Happy Together was one of the biggest records of 1967 |
+| 6548463 | 4 | Hound Dog Man |
+| 7280583 | 4 | he first played RATC on his radio show at NYC station WINS |
+| 7290068 | 4 | Bill Haley’s Comets |
+| 7290071 | 4 | Rock Around the Clock |
+| 7290072 | 4 | Rock Around the Clock |
+| 8114915 | 4 | Rock N Roll Renegade |
+| 8219039 | 4 | Freed appeared in a number of rock and roll movies |
+| 8219040 | 4 | The Dominoes recorded Sixty Minute Man |
+| 8219245 | 4 | blues ballad, “My Man Rocks Me (With One Steady Roll)” |
+| 8219246 | 4 | Trixie Smith's My Daddy Rock Me |
+| 8772071 | 4 | the first rock'n'roll single was 1951's Rocket 88 |
+| 8772073 | 4 | “Rocket 88” |
+| 8772075 | 3 | Elvis Aron Presley entered the world |
+| 2667350 | 1 | 1744 1803 1912 |
+| 3822458 | 1 | first album was released |
+| 3822464 | 1 | first album was released |
+| 7290069 | 1 | first-ever rock & roll band |
+| 21660 | 0 | Elvis Presley |
+| 49250 | 0 | Directed applied stress |
+| 61062 | 0 | originating in the U.S |
+| 61065 | 0 | the 1800s |
+| 61068 | 0 | Rock & roll music began in the 1950s |
+| 61069 | 0 | rock and roll |
+| 61070 | 0 | the genre did not acquire its name until the 1950s |
+| 61071 | 0 | the late 1940s and early 1950s |
+| 69247 | 0 | Queen and is found on their 1977 album News of the World |
+| 160231 | 0 | Buddy Holly played |
+| 246734 | 0 | Radio disc jockeys make more money in larger cities than smaller ones |
+| 287378 | 0 | the 1940s and 1950s |
+| 506000 | 0 | 1950s |
+| 506003 | 0 | Elvis Presley–the King of Rock and Roll |
+| 506006 | 0 | predominantly black neighborhoods to mean having sexual intercourse |
+| 755181 | 0 | Rockabilly |
+| 837714 | 0 | rock 'n' roll |
+| 848568 | 0 | Rock and Roll Hall of Fame |
+| 870279 | 0 | formed in London in 1968 |
