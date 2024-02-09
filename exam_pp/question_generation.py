@@ -231,8 +231,6 @@ def noodle_json_query_gpt(query_json:Path, gpt_out:Path, gpt_model:str, use_nugg
 
 
 def main():
-    os.environ['OPENAI_API_KEY']="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"
-
     import argparse
 
     query_json_format=r'''
@@ -264,7 +262,7 @@ def main():
                         , help='Output file name where paragraphs with exam grade annotations will be written to')
 
     parser.add_argument('--gpt-model', type=str, metavar='MODEL', default="gpt-3.5-turbo", help='OpenAI model name to be used')
-    parser.add_argument('--test-collection', type=str, default="anonymous", metavar='NAME', help='Test collection where queries are taken from.')
+    parser.add_argument('--test-collection', type=str, required=True, metavar='NAME', help='Test collection where queries are taken from.')
     parser.add_argument('--max-tokens', type=int, metavar='NUM', default=1500, help='Max Tokens from OpenAI')
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
     parser.add_argument('--description', type=str, metavar='DESC', default=None, help='Description of the generated question set')
