@@ -11,14 +11,14 @@ Results on TREC DL20
 
 |  | Autograder Qrels | Autograder Cover |  |
 | --- | :-- | :-- | :-- |
-| DL20 participants | [Results](dl-qrels.mkd) + leaderboad correlation| [Results](dl-cover.mkd) with stderr |  |
+| DL20 participants | [Results](dl20-qrels.mkd) + leaderboad correlation| [Results](dl20-cover.mkd) with stderr |  |
 | ChatGPT-methods | [Results](generation-methods-dl20-qrels.mkd) with stderr + leaderboard rank | [Results](generation-methods-dl20-cover.mkd) + leaderboard rank |  |
 
 
 
-We find that with the question-based autograder-qrels we can reproduce the original DL20 leaderboard  nearly exactly ([Spearman rank 0.972, Kendall tau 0.872](dl-qrels.mkd)), even when using only 10 automatically generated questions per query. The nugget-based approach is also a strong contender.
+We find that with the question-based autograder-qrels we can reproduce the original DL20 leaderboard  nearly exactly ([Spearman rank 0.972, Kendall tau 0.872](dl20-qrels.mkd)), even when using only 10 automatically generated questions per query. The nugget-based approach is also a strong contender.
 
-The [autograde-cover metric](dl-cover.mkd) is based on how many of nuggets/questions are covered anywhere in the top 20 of the system response (without awarding redundant responses). While we did not expect a high leaderboard correlation, we were positively surprised with a Spearman rank of 0.953 and Kendall tau of 0.811. 
+The [autograde-cover metric](dl20-cover.mkd) is based on how many of nuggets/questions are covered anywhere in the top 20 of the system response (without awarding redundant responses). While we did not expect a high leaderboard correlation, we were positively surprised with a Spearman rank of 0.953 and Kendall tau of 0.811. 
 
 In addition to ranking based methods from DL20 participants, we apply the autograder method to ChatGPT generated IR system responses (both for [autograder-qrels](generation-methods-dl20-qrels.mkd) and [autograder-cover](generation-methods-dl20-cover.mkd)). We find that question-based autograder-cover obtains the most stable results.
 
@@ -29,9 +29,9 @@ In addition to ranking based methods from DL20 participants, we apply the autogr
 
 * [Grading Verification](dl20-verify-grading.mkd): Lists self-ratings and answer extractions per-passage and per question/nugget. Combinations of high self-ratings and incorrect answers suggest that the question answering or nugget detection module needs to be adjusted. 
 
-* [Bad question Analysis](dl20-bad-questions.mkd): Lists questions that are frequently covered (with high self-rating) in passages that are judged non-relevant. These questions should be removed from the test bank.
+* [Bad question Analysis](dl20-bad-question.mkd): Lists questions that are frequently covered (with high self-rating) in passages that are judged non-relevant. These questions should be removed from the test bank.
 
-* [Uncovered Relevant Passages](dl20-uncoveredpassages.mkd): Lists passages that are judged as relevant, but are not covered by any test question/nugget. Additional test questions/nuggets should be developed to capture relevant information in these passages.
+* [Uncovered Relevant Passages](dl20-uncovered-passages.mkd): Lists passages that are judged as relevant, but are not covered by any test question/nugget. Additional test questions/nuggets should be developed to capture relevant information in these passages.
 
 
 
