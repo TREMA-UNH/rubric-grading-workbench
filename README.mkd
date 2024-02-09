@@ -26,7 +26,7 @@ This package includes python command line utilities for the phases of the above 
 
  * Phase 1: `autograder-generate` generates a test bank from query sets.
  * Phase 2: `autograder-grade` grades passages from system responses.
- * Phase 3: we provide `jq` analysis scripts to verify correct self-ratings and answers.
+ * Phase 3: `autograder-verify` supports manual verification and supervision.
  * Phase 4: `autograder-evaluate` derives evaluation scores for systems under evaluation.
  * Additional analyses: `autograder-analyze` offers leaderboard rank correlation and inter-annotator agreement analyses.
 
@@ -225,7 +225,45 @@ Alternative prompts classes are
 
 ### Phase 3: Manual Verification
 
-See jq scripts
+We support manual verification and process supervision with the following commands.
+
+All answers to the grading prompts selfrated/extraction, grouped by question/nugget.
+
+```bash
+$ poetry run autograder-verify \
+   data/dl20/dl20-graded.jsonl.gz \
+   --verify-grading \
+   --question-path data/dl20/dl20-questions.jsonl.gz  \
+   --question-type question-bank \
+    > data/dl20/dl20--verify-grading.txt
+```
+
+
+Questions/nuggets frequently covered by non-relevant passages (those should be removed from the test bank).
+
+```bash
+$ poetry run autograder-verify \
+   data/dl20/dl20-graded.jsonl.gz \
+   --uncovered-passages \
+   --min-judgment 1  \
+   --min-rating 4  \
+   --question-path data/dl20/dl20-questions.jsonl.gz  \
+   --question-type question-bank \
+    > data/dl20/dl20-uncovered-passages.txt
+```
+
+Relevant passages not covered by any question/nugget (these require additional test nuggets/questions).
+
+```bash
+$ poetry run autograder-verify \
+   data/dl20/dl20-graded.jsonl.gz \
+   --bad-question \
+   --min-judgment 1  \
+   --min-rating 4  \
+   --question-path data/dl20/dl20-questions.jsonl.gz  \
+   --question-type question-bank \
+    >  data/dl20/dl20--bad-question.txt
+```
 
 We envision that human verification will leads to an iterate and repeat previous phases with manual refinements of the test bank and adjustment of the grading prompts and models.
 
