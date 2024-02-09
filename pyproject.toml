@@ -28,5 +28,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 autograder-generate = "exam_pp.question_generation:main"
 autograder-grade = "exam_pp.exam_grading:main"
+autograder-verify = "exam_pp.exam_verification:main"
 autograder-evaluate = "exam_pp.exam_evaluation:main"
 autograder-analyze = "exam_pp.exam_post_pipeline:main"
