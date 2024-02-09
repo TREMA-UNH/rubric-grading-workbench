@@ -23,18 +23,16 @@
 
 echo -e "\n\n\nGenerate DL20 Nuggets"
 
-#python -O -m exam_pp.question_generation -q data/dl20/dl20-queries.json -o data/dl20/dl20-nuggets.jsonl.gz --use-nuggets --description "A new set of generated nuggets for DL20"
+python -O -m exam_pp.question_generation -q data/dl20/dl20-queries.json -o data/dl20/dl20-nuggets.jsonl.gz --use-nuggets --description "A new set of generated nuggets for DL20"
 
 echo -e "\n\n\Generate DL20 Questions"
 
-#python -O -m exam_pp.question_generation -q data/dl20/dl20-queries.json -o data/dl20/dl20-questions.jsonl.gz --description "A new set of generated questions for DL20"
+python -O -m exam_pp.question_generation -q data/dl20/dl20-queries.json -o data/dl20/dl20-questions.jsonl.gz --description "A new set of generated questions for DL20"
 
 echo -e "\n\n\nself-rated DL20 nuggets"
 
 
 ungraded="trecDL2020-qrels-runs-with-text.jsonl.gz"
-#ungraded="dl20-system-chat-gpt3.5.jsonl.gz"
-#ungraded="dl20-system-gpt4.jsonl.gz"
 
 for ungradedsystem in data/dl20/dl20-system-*gz; do 
 
@@ -91,8 +89,20 @@ final=$withrateextract
 echo "Graded: $final"
 
 
-#### Phase 3: Manual verification
-#  (please see jq script)
+#### Phase 3: Manual verification and Supervision
+# We demonstrate how we support humans conducting a manual supervision of the process
+#
+# the files produced in this phase are:
+# dl-verify-grading.txt : answers to the grading propts selfrated/extraction (grouped by question/nugget)
+# dl20-bad-question.txt : Questions/nuggets frequently covered by non-relevant passages (should be removed from the test bank)
+# dl20-uncovered-passages.txt : Relevant passages not covered by any question/nugget (require the addition of new test nuggets/questions.
+#
+
+python -O -m exam_pp.exam_verification data/dl20/$final  --question-path data/dl20/dl20-questions.jsonl.gz  --question-type question-bank --verify-grading > data/dl20/dl20--verify-grading.txt
+
+python -O -m exam_pp.exam_verification data/dl20/$final --question-path data/dl20/dl20-questions.jsonl.gz  --question-type question-bank --min-judgment 1 --min-rating 4 --uncovered-passages > data/dl20/dl20-uncovered-passages.txt
+
+python -O -m exam_pp.exam_verification data/dl20/$final  --question-path data/dl20/dl20-questions.jsonl.gz  --question-type question-bank --min-judgment 1 --min-rating 4 --bad-question >  data/dl20/dl20--bad-question.txt
 
 
 
@@ -125,10 +135,10 @@ for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRat
 	python -O -m exam_pp.exam_evaluation data/dl20/$final --question-set question-bank --prompt-class $promptclass --min-self-rating 4 --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard-$promptclass-minrating-4.solo.$ungraded.tsv 
 
 	# N.B. requires TREC-DL20 runs to be populated in data/dl20/dl20runs
-	#python -O -m exam_pp.exam_evaluation data/dl20/$final --question-set question-bank --prompt-class $promptclass -q data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minrating-4.solo.$ungraded.qrels  --min-self-rating 4 --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-$promptclass-minrating-4.solo.$ungraded.tsv --run-dir data/dl20/dl20runs 
+	python -O -m exam_pp.exam_evaluation data/dl20/$final --question-set question-bank --prompt-class $promptclass -q data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minrating-4.solo.$ungraded.qrels  --min-self-rating 4 --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-$promptclass-minrating-4.solo.$ungraded.tsv --run-dir data/dl20/dl20runs 
         
 	# Since generative IR systems will not share any passages, we represent them as special run files
-	python -O -m exam_pp.exam_evaluation data/dl20/$final --question-set question-bank --prompt-class $promptclass -q data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minrating-4.solo.$ungraded.qrels  --min-self-rating 4 --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-$promptclass-minrating-4.solo.$ungraded.gen.tsv --run-dir data/dl20/dl20gen-runs 
+	#python -O -m exam_pp.exam_evaluation data/dl20/$final --question-set question-bank --prompt-class $promptclass -q data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minrating-4.solo.$ungraded.qrels  --min-self-rating 4 --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-$promptclass-minrating-4.solo.$ungraded.gen.tsv --run-dir data/dl20/dl20gen-runs 
 
 done
 
@@ -157,17 +167,17 @@ for promptclass in  QuestionSelfRatedUnanswerablePromptWithChoices NuggetSelfRat
 		# autograde-qrels
 		# qrel leaderboard correlation
 		# N.B. requires TREC-DL20 runs to be populated in data/dl20/dl20runs
-		#python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-trec-eval-level ${minrating} -q data/dl20/dl20-exam-$promptclass.qrel --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv --run-dir data/dl20/dl20runs --official-leaderboard data/dl20/official_dl20_leaderboard.json 
+		python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-trec-eval-level ${minrating} -q data/dl20/dl20-exam-$promptclass.qrel --qrel-leaderboard-out data/dl20/dl20-autograde-qrels-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv --run-dir data/dl20/dl20runs --official-leaderboard data/dl20/official_dl20_leaderboard.json 
 	
 		# autograde-cover 
-		# python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-self-rating ${minrating} --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv  --official-leaderboard data/dl20/official_dl20_leaderboard.json
+		 python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings --min-self-rating ${minrating} --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard-$promptclass-minlevel-$minrating.correlation.tsv  --official-leaderboard data/dl20/official_dl20_leaderboard.json
 		echo ""
 	done
 
 
 
 	# inter-annotator agreement
-	# python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings  --inter-annotator-out data/dl20/dl20-autograde-inter-annotator-$promptclass.tex
+	python -O -m exam_pp.exam_post_pipeline data/dl20/$final  --question-set question-bank --prompt-class $promptclass  --min-relevant-judgment 2 --use-ratings  --inter-annotator-out data/dl20/dl20-autograde-inter-annotator-$promptclass.tex
 done
 
 done
