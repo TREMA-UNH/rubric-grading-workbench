@@ -45,7 +45,8 @@ $ wget https://shorturl.at/nHOZ8  # will download data-dl20.tar.xz
 $ tar -x -C data/dl20 data-dl20.tar.xz
 ```
 
-Official run files can be obtained from the TREC Manager.
+Official run files need to be obtained from <https://trec.nist.gov/results/trec29/deep.passages.input.html>. Access credentials are provided by the TREC Manager.  For reviewing purposes only, we provide an archive of run files at <https://shorturl.at/mGVXY>. Decompressed run files need to be placed in `./data/dl20/dl20runs``
+
 
 Alternative installation methods are described below.
 
