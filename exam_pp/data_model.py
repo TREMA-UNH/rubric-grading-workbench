@@ -1,10 +1,11 @@
+from collections import defaultdict
 from pydantic import BaseModel
-from typing import List, Any, Optional, Dict, Tuple, Union
+from typing import Iterable, List, Any, Optional, Dict, Tuple, Union
 from dataclasses import dataclass
-from pathlib import Path
 import gzip
 import json
 from pathlib import Path
+import pathlib
 
 
 
@@ -22,7 +23,15 @@ class SelfRating(BaseModel):
         else:
             raise RuntimeError("Neither question_id nor nugget_id is given.")
 
+    def __hash__(self):
+        # Hash a tuple of all field values
+        return hash(tuple(self.__dict__.values()))
 
+    def __eq__(self, other):
+        if not isinstance(other, SelfRating):
+            return False
+        # Compare all field values
+        return self.__dict__ == other.__dict__
 
 class ExamGrades(BaseModel):
     correctAnswered: List[str]               # [question_id]
@@ -41,6 +50,15 @@ class ExamGrades(BaseModel):
         else:
             return self.self_ratings
 
+    def __hash__(self):
+        # Hash a tuple of all field values
+        return hash(tuple(self.__dict__.values()))
+
+    def __eq__(self, other):
+        if not isinstance(other, ExamGrades):
+            return False
+        # Compare all field values
+        return self.__dict__ == other.__dict__
 
 class Grades(BaseModel):
     correctAnswered: bool               # true if relevant,  false otherwise
@@ -50,6 +68,15 @@ class Grades(BaseModel):
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
 
+    def __hash__(self):
+        # Hash a tuple of all field values
+        return hash(tuple(self.__dict__.values()))
+
+    def __eq__(self, other):
+        if not isinstance(other, Grades):
+            return False
+        # Compare all field values
+        return self.__dict__ == other.__dict__
         # must have fields:
         #  prompt_info["prompt_class"]="FagB"
             # info =  {
@@ -69,6 +96,35 @@ class GradeFilter():
     @staticmethod
     def noFilter():
         return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None)
+
+    @staticmethod
+    def question_type(grade:Union[ExamGrades,Grades]):
+        if isinstance(grade, ExamGrades):
+            if (grade.answers[0][0].startswith("NDQ_")):
+                return "tqa"
+            elif (grade.answers[0][0].startswith("tqa2:")):
+                return "genq"
+            else: 
+                return "question-bank"
+        else:
+            "direct"
+
+    @staticmethod
+    def key_dict(grade:Union[ExamGrades,Grades])->Dict[str,Any]:
+        return  { "llm": grade.llm
+                , "prompt_class": grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
+                , "is_self_rated": grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
+                , "question_set": GradeFilter.question_type(grade)
+                , "prompt_type": grade.prompt_type if isinstance(grade, ExamGrades) else ""
+                }
+    
+    @staticmethod
+    def key(grade:Union[ExamGrades,Grades])->str:
+        is_self_rated = grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
+        prompt_class =grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
+        prompt_type = grade.prompt_type if isinstance(grade, ExamGrades) else ""
+        return f"llm={grade.llm} prompt_class={prompt_class} is_self_rated={is_self_rated}  question_set={GradeFilter.question_type(grade)} prompt_type={prompt_type}"
+                
 
     def filter_grade(self, grade:Grades)-> bool:
         return self.filter(grade)
@@ -124,7 +180,6 @@ class GradeFilter():
                     is_genq_question = grade.answers[0][0].startswith("tqa2:")
                     if not is_genq_question:
                         return False
-
         return True
 
     def get_min_grade_filter(self, min_self_rating:int):
@@ -139,7 +194,16 @@ class Judgment(BaseModel):
     query : str
     relevance : int
     titleQuery : str
-    
+
+    def __hash__(self):
+        # Hash a tuple of all field values
+        return hash(tuple(self.__dict__.values()))
+
+    def __eq__(self, other):
+        if not isinstance(other, Judgment):
+            return False
+        # Compare all field values
+        return self.__dict__ == other.__dict__    
 
 class ParagraphRankingEntry(BaseModel):
     method : str
@@ -148,7 +212,15 @@ class ParagraphRankingEntry(BaseModel):
     rank : int
     score : float
     
+    def __hash__(self):
+        # Hash a tuple of all field values
+        return hash(tuple(self.__dict__.values()))
 
+    def __eq__(self, other):
+        if not isinstance(other, ParagraphRankingEntry):
+            return False
+        # Compare all field values
+        return self.__dict__ == other.__dict__
 class ParagraphData(BaseModel):
     judgments : List[Judgment]
     rankings : List[ParagraphRankingEntry] 
@@ -250,12 +322,167 @@ def writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List
         # Iterate over each line in the file
         file.writelines([dumpQueryWithFullParagraphList(x) for x in queryWithFullParagraphList])
 
+def unique(elems:Iterable[BaseModel])->List[BaseModel]:
+    return list(set(elems))
+
+def merge(files:List[Path], out:Path):
+    collection:Dict[str,Dict[str,List[FullParagraphData]]] = defaultdict(lambda : defaultdict(list)) # queryid -> (paraId -> List[FullPargaraphData])
+                     
+    for infile in files:
+        for query_paras in parseQueryWithFullParagraphs(file_path=infile):
+            for para in query_paras.paragraphs:
+                collection[query_paras.queryId][para.paragraph_id].append(para)
+
+    mergedQueries = list()
+    for queryId, data in  collection.items():
+        merged_paras:List[FullParagraphData] = list()
+
+        for paraId, paras in data.items():
+            p = paras[0]
+            merged_para = FullParagraphData(paragraph_id=p.paragraph_id
+                                            , text=p.text
+                                            , paragraph=p.paragraph
+                                            , paragraph_data=ParagraphData(judgments= list(), rankings= list())
+                                            , exam_grades=list()
+                                            , grades=list())
+
+            grouped_exam_grades:Dict[Any,List[ExamGrades]] = defaultdict(list)
+            grouped_grades:Dict[Any,List[Grades]] = defaultdict(list)
+            for para in paras:
+                # paragraph
+                if  merged_para.paragraph is None and para.paragraph is not None:
+                    merged_para.paragraph = para.paragraph
+
+                # exam grades
+                for eg in para.exam_grades_iterable():
+                    key = GradeFilter.key(eg)
+                    grouped_exam_grades[key].append(eg)
+                
+                # grades
+                for g in (para.grades if para.grades is not None else list()):
+                    key = GradeFilter.key(g)
+                    grouped_grades[key].append(g)
+                
+
+            for k in grouped_exam_grades.keys():
+                print(f"exam_grades key {k}")
+            for k in grouped_grades.keys():
+                print(f"grades key {k}")
+
+            # exam grades
+            merged_para.exam_grades = [gs[0] for gs in grouped_exam_grades.values()]
+            # grades
+            merged_para.grades = [gs[0] for gs in grouped_grades.values()]
+
+            # judgments
+            merged_para.paragraph_data.judgments = list( set(j for p in paras for j in p.paragraph_data.judgments))
+
+            # rankings
+            merged_para.paragraph_data.rankings = list( set(r for p in paras for r in p.paragraph_data.rankings))
+            merged_paras.append(merged_para)
+
+
+        qp = QueryWithFullParagraphList(queryId=queryId, paragraphs = merged_paras)
+        mergedQueries.append(qp)
+
+    writeQueryWithFullParagraphs(file_path=out, queryWithFullParagraphList=mergedQueries)
+
+
+def convert(files:List[Path], outdir:Optional[Path], outfile:Optional[Path], ranking_method:Optional[str], grade_llm:Optional[str], old_grading_prompt:Optional[str], grading_prompt:Optional[str]):
+
+    for infile in files:
+        converted= list()
+        for query_paras in parseQueryWithFullParagraphs(file_path=infile):
+            for para in query_paras.paragraphs:
+                if ranking_method is not None:
+                    for r in para.paragraph_data.rankings:
+                        r.method = ranking_method
+
+                if grade_llm is not None:
+                    if para.exam_grades:
+                        for eg in  para.exam_grades:
+                            eg.llm=grade_llm
+                    if para.grades:
+                        for g in para.grades:
+                            g.llm=grade_llm
+
+                if grading_prompt is not None:
+                    if para.exam_grades:
+                        for eg in para.exam_grades:
+                            if (eg.prompt_info is None and old_grading_prompt is None) or (eg.prompt_info is not None and eg.prompt_info.get("prompt_class")==old_grading_prompt):  # the old prompt could also have been set to None.
+                                if eg.prompt_info is None:
+                                    eg.prompt_info = dict()
+                                eg.prompt_info["prompt_class"]=grading_prompt
+                    if para.grades:
+                        for g in para.grades:
+                            if (g.prompt_info is None and old_grading_prompt is None) or (g.prompt_info is not None and g.prompt_info.get("prompt_class")==old_grading_prompt):
+                                if g.prompt_info is None:
+                                    g.prompt_info = dict()
+                                g.prompt_info["prompt_class"]=grading_prompt
+
+            converted.append(query_paras)
+
+
+
+        out:Path
+        if outdir is None and outfile is None:
+            print("overwriting original xxx.jsonl.gz files")
+            out = infile
+        elif outdir is not None:
+            print(f" Writing converted files to {outdir}")
+            if outfile is not None:
+                out = Path(outdir /  outfile.name)
+            else:
+                out = Path(outdir / infile.name)
+        elif outfile is not None:
+            out = outfile
+        print(f" Writing converted file to {Path(out).absolute}")
+
+        writeQueryWithFullParagraphs(file_path=out, queryWithFullParagraphList=converted)
+
 
 
 def main():
     """Entry point for the module."""
-    x = parseQueryWithFullParagraphs("./benchmarkY3test-qrels-with-text.jsonl.gz")
-    print(x[0])
+    # x = parseQueryWithFullParagraphs("./benchmarkY3test-qrels-with-text.jsonl.gz")
+    # print(x[0])
+    import argparse
+    parser = argparse.ArgumentParser(description="Merge *jsonl.gz files")
+
+    subparsers = parser.add_subparsers(dest='command', help="Choose one of the sub-commands")
+
+
+
+    merge_parser = subparsers.add_parser('merge', help="Merge full paragraphs (xxx.jsonl.gz files) with or without grades into a single new file.")
+    merge_parser.add_argument(dest='paragraph_file', type=str, metavar='xxx.jsonl.gz', nargs='+'
+                        , help='one or more json files with paragraph with or without exam grades.The typical file pattern is `exam-xxx.jsonl.gz.'
+                        )
+    merge_parser.add_argument('-o','--out', type=str, metavar='FILE'
+                        , help=f'output file that merged all input files'
+                        )
+        
+    convert_parser = subparsers.add_parser('convert', help="change entries in full paragraphs files (xxx.jsonl.gz)")
+    convert_parser.add_argument(dest='paragraph_file', type=str,metavar='xxx.jsonl.gz', nargs='+'
+                        , help='one or more json files with paragraph with or without exam grades.The typical file pattern is `exam-xxx.jsonl.gz.'
+                        )
+    convert_parser.add_argument('--ranking-method', type=str, metavar="NAME", help="Change entry to paragraph_data.rankings[].method to NAME")
+    convert_parser.add_argument('--grade-llm', type=str, metavar="NAME", help="Change entry to exam_grades[].llm to NAME")
+    convert_parser.add_argument('--grading-prompt', type=str, metavar="NAME", help="Change entry to exam_grades[].llm_info[prompt_class] to NAME, but only when it was previously set to --old-grading-prompt)")
+    convert_parser.add_argument('--old-grading-prompt', type=str, metavar="NAME", help="Old value for --grading-prompt.  Can be set to None, to fix legacy configuations.")
+    convert_parser.add_argument('-d','--out-dir', type=str, metavar='DIR'
+                        , help=f'output directory that converted files will be written to, using the same basename'
+                        )
+    convert_parser.add_argument('-o','--out-file', type=str, metavar='FILE'
+                        , help=f'output directory that converted file will be written to (only applies when only a single input file is given)'
+                        )
+
+    args = parser.parse_args()
+
+    if args.command == "merge":
+        merge(files=args.paragraph_file, out=args.out)
+
+    elif args.command == "convert":
+        convert(files=args.paragraph_file, outdir=args.out_dir, outfile=args.out_file, ranking_method=args.ranking_method, grade_llm=args.grade_llm, old_grading_prompt=args.old_grading_prompt, grading_prompt=args.grading_prompt)
 
 if __name__ == "__main__":
     main()
