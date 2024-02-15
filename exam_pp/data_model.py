@@ -430,10 +430,11 @@ def convert(files:List[Path], outdir:Optional[Path], outfile:Optional[Path], ran
             out = infile
         elif outdir is not None:
             print(f" Writing converted files to {outdir}")
+            Path(outdir).mkdir()
             if outfile is not None:
                 out = Path(outdir /  outfile.name)
             else:
-                out = Path(outdir / infile.name)
+                out = outdir.joinpath(Path(infile).name)
         elif outfile is not None:
             out = outfile
         print(f" Writing converted file to {Path(out).absolute}")
@@ -454,7 +455,7 @@ def main():
 
 
     merge_parser = subparsers.add_parser('merge', help="Merge full paragraphs (xxx.jsonl.gz files) with or without grades into a single new file.")
-    merge_parser.add_argument(dest='paragraph_file', type=str, metavar='xxx.jsonl.gz', nargs='+'
+    merge_parser.add_argument(dest='paragraph_file', type=Path, metavar='xxx.jsonl.gz', nargs='+'
                         , help='one or more json files with paragraph with or without exam grades.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
     merge_parser.add_argument('-o','--out', type=str, metavar='FILE'
@@ -469,10 +470,10 @@ def main():
     convert_parser.add_argument('--grade-llm', type=str, metavar="NAME", help="Change entry to exam_grades[].llm to NAME")
     convert_parser.add_argument('--grading-prompt', type=str, metavar="NAME", help="Change entry to exam_grades[].llm_info[prompt_class] to NAME, but only when it was previously set to --old-grading-prompt)")
     convert_parser.add_argument('--old-grading-prompt', type=str, metavar="NAME", help="Old value for --grading-prompt.  Can be set to None, to fix legacy configuations.")
-    convert_parser.add_argument('-d','--out-dir', type=str, metavar='DIR'
+    convert_parser.add_argument('-d','--out-dir', type=Path, metavar='DIR'
                         , help=f'output directory that converted files will be written to, using the same basename'
                         )
-    convert_parser.add_argument('-o','--out-file', type=str, metavar='FILE'
+    convert_parser.add_argument('-o','--out-file', type=Path, metavar='FILE'
                         , help=f'output directory that converted file will be written to (only applies when only a single input file is given)'
                         )
 
