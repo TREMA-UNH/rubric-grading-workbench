@@ -430,7 +430,7 @@ def convert(files:List[Path], outdir:Optional[Path], outfile:Optional[Path], ran
             out = infile
         elif outdir is not None:
             print(f" Writing converted files to {outdir}")
-            Path(outdir).mkdir()
+            Path(outdir).mkdir(exist_ok=True)
             if outfile is not None:
                 out = Path(outdir /  outfile.name)
             else:
