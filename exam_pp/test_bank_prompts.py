@@ -170,6 +170,7 @@ class UnanswerableMatcher2():
 
     # inverse logic!  we are scanning for non-answers!!!
     def check_unanswer(self,answer:str)->bool:
+        '''Return false if expressions of inability to answer'''
         return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
 
 
@@ -300,11 +301,16 @@ class AnswerKey2Verifier():
         return None
 
 # ------------ prompt classes ------------
+
+@dataclass
 class Prompt(abc.ABC):
 
     @abstractmethod
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
-        pass
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "is_self_rated":self.has_rating() 
+                }
 
     @abstractmethod
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
@@ -331,6 +337,10 @@ class Prompt(abc.ABC):
     @abstractmethod
     def prompt_type(self)->str:
         return "undefined"
+
+    @abstractmethod
+    def prompt_style(self)->str:
+        return "Is this text relevant for ..."
 
 
 @dataclass
@@ -398,19 +408,38 @@ class QuestionPromptWithChoices(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "context: question:"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": True
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "context: question:"
+    
 
     def has_rating(self):
         return False
 
 
     @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+    def truncate_context(tokenizer, template,  context:str, max_length:int)->str:
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(template, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        return tokenizer.decode(truncated_context_tokens)
+
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context:str, question, max_length:int)->str:
 
         # Tokenize the question
         question_tokens = tokenizer.encode(question, add_special_tokens=False)
@@ -493,12 +522,15 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "How does this text answer this question:"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "How does this text answer this question:"
+    
 
     def has_rating(self):
         return False
@@ -595,12 +627,15 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context."
+    
 
     def has_rating(self):
         return False
@@ -703,12 +738,15 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context"
+    
 
     def has_rating(self):
         return False
@@ -954,12 +992,15 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context"
+    
 
     def has_rating(self):
         return False
@@ -999,18 +1040,21 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     stemmer = PorterStemmer()
 
     def __post_init__(self):
-        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
         self.self_rater = SelfRater(self.unanswerable_matcher2)
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"orig_prompt_class": "unknown"
-                ,"prompt_style": "N/A  (this prompt re-verifies answers produced by \"orig_prompt_class\")"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "Can the question be answered based on the available context? Choose one"
+    
 
     def has_rating(self):
         return True
@@ -1114,12 +1158,16 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "Is the nugget addressed..."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+
+    def prompt_style(self)->str:
+        return  "Is the nugget addressed..."
+    
 
     def has_rating(self):
         return True
@@ -1219,12 +1267,15 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "Is the nugget addressed..."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "Is the nugget addressed..."
+    
 
     def has_rating(self):
         return False
@@ -1290,4 +1341,130 @@ class NuggetExtractionPrompt(NuggetPrompt):
     def check_answer_stemmed(self,answer:str)->bool:
         return self.unanswerable_matcher.check_answer_stemmed(answer)
         
+
+
+## --------------
+@dataclass
+class DirectGradingPrompt(Prompt):
+    query_id:str
+    query_text:str
+    facet_id:Optional[str]
+    facet_text:Optional[str]
+
+    my_prompt_type="direct_grading"
+
+    def __post_init__(self):
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
+        self.true_false_matcher = TrueFalseMatcher2()
+
+    def prompt_id(self)->str:
+        return "direct_grading"
+
+    def prompt_type(self)->str:
+        return DirectGradingPrompt.my_prompt_type
+
+
+    @abstractmethod
+    def prompt_template(self, context:str)->str:
+        pass
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": False
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating() 
+                }
+    def prompt_style(self)->str:
+        return  "Is this passage relevant?"
+    
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        empty_prompt =  self.prompt_template(context="")  # measure tokens in prompt template (without context)
+        truncated_context = QuestionPromptWithChoices.truncate_context(tokenizer=model_tokenizer, template=empty_prompt, context=context, max_length=max_token_len)
+        prompt =  str.format(self.prompt_template(context=truncated_context))
+        return prompt
+    
+
+    def check_answer(self, answer)->bool:
+        if self.unanswerable_matcher2.check_unanswer(answer)==False:
+            return False
+        else:
+            return self.true_false_matcher.check_true_false("True", answer=answer)
+    
+
+    def has_rating(self):
+        return False
+    
+    def check_answer_rating(self,answer:str)->int:
+        if self.check_answer(answer=answer):
+            return 1
+        else:
+            return 0    
+    
+
+
+def SelfRatingDirectGradingPrompt(DirectGradingPrompt):
+
+    def __post_init__(self):
+        super.__post_init__(self)
+        self.self_rater = SelfRater(self.unanswerable_matcher2)
+
+
+    def has_rating(self):
+        return True
+    
+    def check_answer_rating(self,answer:str)->int:
+        return self.self_rater.check_answer_rating(answer)
+    
+    def check_answer(self, answer:str)->bool:
+        return self.self_rater.check_answer(answer)
+
+            # , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
+
+@dataclass
+class FagB(DirectGradingPrompt):
+    # def __init__(self):
+    
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.                                                                                               
+                                                                                                                                                                                             
+Question: {self.query_text}                                                                           
+Passage: {context}                                                                          
+Answer:                                                                                       
+'''
+
+
+class FagB_few(DirectGradingPrompt):
+    # def __init__(self):
+    
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.                                          
+                                               
+Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependen
+t, so this would be at room temperature. Hope this helps.                                                                                                                                    
+Question: how many eye drops per ml 
+Answer: Yes 
+
+Passage: RE: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles should last me 100 days but I run out way before that time when I am using 4 
+drops per day.In the past other pharmacies have given me 3 10-ml bottles for 100 days.E: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles s
+hould last me 100 days but I run out way before that time when I am using 4 drops per day. 
+Question: how many eye drops per ml 
+Answer: No 
+
+Passage: : You can transfer money to your checking account from other Wells Fargo. accounts through Wells Fargo Mobile Banking with the mobile app, online, at any. Wells Fargo ATM, or at a 
+Wells Fargo branch. 1 Money in — deposits. 
+Question: can you open a wells fargo account online 
+Answer: No 
+
+Passage: You can open a Wells Fargo banking account from your home or even online. It is really easy to do, provided you have all of the appropriate documentation. Wells Fargo has so many b
+ank account options that you will be sure to find one that works for you. They offer free checking accounts with free online banking. 
+Question: can you open a wells fargo account online 
+Answer: Yes
+
+Passage: {context}
+Question: {self.query_text}
+Answer:                                                                                
+'''
 

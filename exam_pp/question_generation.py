@@ -147,6 +147,7 @@ def generate_questions_cary3(car_outlines_path:Path
                                  , generation_info= generation_info
                                  , query_id= query_id
                                  , query_facet_id= query_facet_id
+                                 , query_facet_text=section_query
                                  , query_text= query_text
                                  , question_texts =questions
                                  , use_nuggets=use_nuggets)
@@ -194,6 +195,7 @@ def generate_questions_json(query_json:Path
                                  , generation_info= generation_info
                                  , query_id= query_id
                                  , query_facet_id= None
+                                 , query_facet_text=None
                                  , query_text= query_text
                                  , question_texts =questions
                                  , use_nuggets=use_nuggets)

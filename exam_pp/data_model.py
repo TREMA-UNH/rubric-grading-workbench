@@ -21,6 +21,7 @@ class SelfRating(BaseModel):
         elif self.nugget_id is not None:
             return self.nugget_id
         else:
+            ##   TODO   direct grading prompts will have neither
             raise RuntimeError("Neither question_id nor nugget_id is given.")
 
     def __hash__(self):

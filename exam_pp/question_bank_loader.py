@@ -13,7 +13,9 @@ from dataclasses import dataclass
 import gzip
 from pathlib import Path
 
-from .test_bank_prompts import NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
+from .query_loader import direct_grading_prompt
+
+from .test_bank_prompts import DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 from .pydantic_helper import pydantic_dump
 
 
@@ -37,6 +39,7 @@ class Nugget(TestPoint):
 class QueryTestBank(GenericModel, Generic[T]):
     query_id: str
     facet_id: Optional[str]
+    facet_text: Optional[str]
     test_collection: str
     query_text: str
     info: Optional[Any]
@@ -46,22 +49,6 @@ class QueryTestBank(GenericModel, Generic[T]):
 
 class QueryQuestionBank(QueryTestBank[ExamQuestion]):
     hash:int = 1243234 # TODO random
-
-    # def __post_init__(self):
-    #     self.items
-
-    # def __init__(self,  query_id:str
-    #                 , facet_id: Optional[str]
-    #                 , test_collection:str
-    #                 , query_text:str
-    #                 , items:List[ExamQuestion]
-    #                 , info:Optional[Dict]):
-    #     super().__init__(query_id = query_id
-    #                      , facet_id = facet_id
-    #                      , test_collection=test_collection
-    #                      , query_text=query_text
-    #                      , info=info
-    #                      , items = items)
 
     def get_questions(self) -> List[ExamQuestion]:
         return self.items
@@ -153,7 +140,7 @@ def as_exam_test_points(query_id:str, facet_id:Optional[str], test_texts:List[st
     return result
 
 
-def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:Any, query_id:str, query_facet_id:Optional[str], query_text:str, question_texts:List[str], use_nuggets:bool):
+def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:Any, query_id:str, query_facet_id:Optional[str], query_facet_text:Optional[str], query_text:str, question_texts:List[str], use_nuggets:bool):
     test_points:List[TestPoint]
     test_points = as_exam_test_points(query_id=query_id
                                                , facet_id=query_facet_id
@@ -167,6 +154,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
         question_bank = QueryQuestionBank(items=[cast(ExamQuestion, q) for q in test_points]
                                         , query_id=query_id
                                         , facet_id=query_facet_id
+                                        , facet_text=query_facet_text
                                         , test_collection=test_collection
                                         , query_text=query_text
                                         , info=generation_info
@@ -178,6 +166,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
         nugget_bank = QueryNuggetBank(items=[cast(Nugget, n) for n in test_points]
                                         , query_id=query_id
                                         , facet_id=query_facet_id
+                                        , facet_text=query_facet_text
                                         , test_collection=test_collection
                                         , query_text=query_text
                                         , info=generation_info
@@ -189,6 +178,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
         
 
 def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
+    '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
         option_non_answers = set( itertools.chain.from_iterable([[f'{ch})', f'({ch})', f'[{ch}]', f'{ch}.',f'{ch}']   for ch in char_options]) )
@@ -201,77 +191,87 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
     prompt_dict = defaultdict(list)
     prompt:Prompt
 
-    if not use_nuggets:
-        for bank in test_banks:
-            question_bank = cast(QueryQuestionBank, bank)
-            query_id = question_bank.query_id
-            for question in question_bank.get_questions():
-                if not question.query_id == query_id:
-                        raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
-                if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
-                    prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
-                                                                        , question = question.question_text
-                                                                        , query_id = question.query_id
-                                                                        , facet_id = question.facet_id
-                                                                        , query_text = question_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
-                elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
-                    prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
-                                                                        , question = question.question_text
-                                                                        , query_id = question.query_id
-                                                                        , facet_id = question.facet_id
-                                                                        , query_text = question_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
-                elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
-                    prompt = QuestionAnswerablePromptWithChoices(question_id = question.question_id
-                                                                        , question = question.question_text
-                                                                        , query_id = question.query_id
-                                                                        , facet_id = question.facet_id
-                                                                        , query_text = question_bank.query_text
-                                                                        , unanswerable_expressions = option_non_answers
-                                                                        )
-                else:
-                    raise RuntimeError(f"Prompt class {prompt_class} not supported by this question_loader.")\
-            
+    for bank in test_banks:
 
-                prompt_dict[query_id].append(prompt)
+        try:
+            prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
+            prompt_dict[bank.query_id].append(prompt)
+
+        except:
+            # not a direct grading prompt
+            # try question and nugget prompts
 
 
-    if use_nuggets:
-        for bank in test_banks:
-            nugget_bank = cast(QueryNuggetBank, bank)
-            query_id = nugget_bank.query_id
-            for nugget in nugget_bank.get_nuggets():
-                if not nugget.query_id == query_id:
-                        raise RuntimeError(f"query_ids don't match between QueryNuggetBank ({query_id}) and contained ExamNugget ({nugget.query_id}) ")
+            if not use_nuggets:
+                question_bank = cast(QueryQuestionBank, bank)
+                query_id = question_bank.query_id
+                for question in question_bank.get_questions():
+                    if not question.query_id == query_id:
+                            raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
+                    if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
+                        prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
+                                                                            , question = question.question_text
+                                                                            , query_id = question_bank.query_id
+                                                                            , facet_id = question.facet_id
+                                                                            , query_text = question_bank.query_text
+                                                                            , unanswerable_expressions = option_non_answers
+                                                                            )
+                    elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
+                        prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
+                                                                            , question = question.question_text
+                                                                            , query_id = question_bank.query_id
+                                                                            , facet_id = question.facet_id
+                                                                            , query_text = question_bank.query_text
+                                                                            , unanswerable_expressions = option_non_answers
+                                                                            )
+                    elif(prompt_class == "QuestionAnswerablePromptWithChoices"):
+                        prompt = QuestionAnswerablePromptWithChoices(question_id = question.question_id
+                                                                            , question = question.question_text
+                                                                            , query_id = question_bank.query_id
+                                                                            , facet_id = question.facet_id
+                                                                            , query_text = question_bank.query_text
+                                                                            , unanswerable_expressions = option_non_answers
+                                                                            )
+                    else:
+                        raise RuntimeError(f"Prompt class {prompt_class} not supported by this question_loader or direct_grading loader.")\
                 
-                if(prompt_class =="NuggetSelfRatedPrompt"):
-                    prompt = NuggetSelfRatedPrompt(nugget_id = nugget.nugget_id
-                                                , nugget_text = nugget.nugget_text
-                                                , query_id = nugget.query_id
-                                                , facet_id = nugget.facet_id
-                                                , query_text = nugget_bank.query_text
-                                                , unanswerable_expressions = option_non_answers
-                                                )
-                elif(prompt_class =="NuggetExtractionPrompt"):
-                    prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id
-                                                , nugget_text = nugget.nugget_text
-                                                , query_id = nugget.query_id
-                                                , facet_id = nugget.facet_id
-                                                , query_text = nugget_bank.query_text
-                                                , unanswerable_expressions = option_non_answers
-                                                )
-                else:
-                    raise RuntimeError(f"Prompt class {prompt_class} not supported by this nugget_loader.")\
-            
 
-                prompt_dict[query_id].append(prompt)
+                    prompt_dict[query_id].append(prompt)
+
+
+            if use_nuggets:
+                nugget_bank = cast(QueryNuggetBank, bank)
+                query_id = nugget_bank.query_id
+                for nugget in nugget_bank.get_nuggets():
+                    if not nugget.query_id == query_id:
+                            raise RuntimeError(f"query_ids don't match between QueryNuggetBank ({query_id}) and contained ExamNugget ({nugget.query_id}) ")
+                    
+                    if(prompt_class =="NuggetSelfRatedPrompt"):
+                        prompt = NuggetSelfRatedPrompt(nugget_id = nugget.nugget_id
+                                                    , nugget_text = nugget.nugget_text
+                                                    , query_id = nugget.query_id
+                                                    , facet_id = nugget.facet_id
+                                                    , query_text = nugget_bank.query_text
+                                                    , unanswerable_expressions = option_non_answers
+                                                    )
+                    elif(prompt_class =="NuggetExtractionPrompt"):
+                        prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id
+                                                    , nugget_text = nugget.nugget_text
+                                                    , query_id = nugget.query_id
+                                                    , facet_id = nugget.facet_id
+                                                    , query_text = nugget_bank.query_text
+                                                    , unanswerable_expressions = option_non_answers
+                                                    )
+                    else:
+                        raise RuntimeError(f"Prompt class {prompt_class} not supported by this nugget_loader  or direct_grading loader.")\
+                
+
+                    prompt_dict[query_id].append(prompt)
 
 
 
     return list(prompt_dict.items())
+
 
 ## -------------------------------------------        
 
