@@ -1,3 +1,4 @@
+from collections import defaultdict
 import itertools
 import json
 from pathlib import Path
@@ -25,14 +26,14 @@ def direct_grading_prompt(prompt_class:str, query_id:str, query_text:str, facet_
         raise RuntimeError(f"Prompt class {prompt_class} not supported by the direct_grading_prompt loader.")\
 
 
-def direct_grading_prompts(queries:Dict[str,str], prompt_class:str, max_queries:Optional[int])->List[DirectGradingPrompt]:
-    result = list()
+def direct_grading_prompts(queries:Dict[str,str], prompt_class:str, max_queries:Optional[int])->Dict[str,List[DirectGradingPrompt]]:
+    result:Dict[str,List[DirectGradingPrompt]] = defaultdict(list)
 
     for query_id, query_text in itertools.islice(queries.items(), max_queries):
         print(query_id, query_text)
 
         prompt = direct_grading_prompt(prompt_class=prompt_class, query_id = query_id, query_text= query_text, facet_id=None, facet_text=None)
-        result.append(prompt)
+        result[query_id].append(prompt)
 
     return result
 

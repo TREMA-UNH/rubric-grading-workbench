@@ -1,5 +1,7 @@
 from typing import *
 
+from .query_loader import direct_grading_prompts, json_query_loader
+
 from . import question_bank_loader
 from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
@@ -255,7 +257,7 @@ def main(cmdargs=None):
     elif args.question_type == 'question-bank':
         question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
     elif args.question_type == 'direct':
-        question_set = dict()    
+        question_set = direct_grading_prompts(queries=json_query_loader(query_json=args.question_path), prompt_class=args.prompt_class, max_queries=None)
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
