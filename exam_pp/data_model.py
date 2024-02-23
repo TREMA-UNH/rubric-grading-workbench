@@ -68,6 +68,7 @@ class Grades(BaseModel):
     llm_options: Dict[str,Any]               # anything that seems relevant
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
+    prompt_type: Optional[str]
 
     def __hash__(self):
         # Hash a tuple of all field values
