@@ -113,7 +113,9 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
-                    continue # don't have all the data
+                    continue # we don't have judgments
+                if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                    continue # we don't have labels
 
                 hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
                 if min_rating is not None:
@@ -158,7 +160,9 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
-                    continue # don't have all the data
+                    continue # we don't have judgments
+                if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                    continue # we don't have labels
                 if exam_grade.self_ratings is None:
                     raise RuntimeError(f"{query_id} paragraphId: {para.paragraph_id}:  Exam grades have no self ratings!  {exam_grade}")
 
@@ -252,8 +256,12 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
             judg = para.get_any_judgment()
             
             if judg ==None:
-                continue # don't have all the data
+                continue # we don't have judgments
+            if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                continue # we don't have labels
+
             isJudgedRelevant = any (j.relevance in judgments for j in para.paragraph_data.judgments)
+
 
 
             predicted_judgment:int
