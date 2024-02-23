@@ -5,16 +5,6 @@ import re
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from nltk.stem import PorterStemmer
-import nltk
-from fuzzywuzzy import fuzz
-
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import PorterStemmer
-
-nltk.download('stopwords')
-nltk.download('punkt')  
 
 def get_prompt_classes()->List[str]:
     return ['QuestionPromptWithChoices'
@@ -36,13 +26,31 @@ def get_prompt_classes()->List[str]:
 # -------   helpers --------------- 
 
 
+class NltkInitializer():
+    import nltk
+    import nltk.stem #  import PorterStemmer
+    import fuzzywuzzy.fuzz #import fuzz
+    import nltk.corpus # import stopwords
+    import nltk.tokenize # word_tokenize
+
+    x = nltk.download('stopwords')
+    y = nltk.download('punkt')  
+    stemmer = nltk.stem.PorterStemmer()
+
+    word_tokenize = nltk.tokenize.word_tokenize
+    stopwords = nltk.corpus.stopwords
+    fuzzratio = fuzzywuzzy.fuzz.ratio
+    # def fuzz(*kwargs):
+    #     return fuzzywuzzy.fuzz(kwargs)
+
+
+
 class QuestionPromptNormalizer():
-    stemmer = PorterStemmer()
 
     def normalize_answer(self, answer:str)->str:
         # Lowercase, Perform other normalization like removing punctuation, if necessary
         # Stem the answer
-        return self.stemmer.stem(answer.lower())
+        return NltkInitializer.stemmer.stem(answer.lower())
 
 
 
@@ -67,7 +75,7 @@ class QuestionStemmedChecker():
 
     def check_answer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
@@ -141,7 +149,7 @@ class UnanswerableMatcher():
     
     def check_answer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         if len(stemmed_answer)<1:
@@ -181,7 +189,7 @@ class UnanswerableMatcher2():
 
     def check_unanswer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         if len(stemmed_answer)<1:
@@ -260,14 +268,13 @@ class AnswerKey2Verifier():
         text = text.translate(str.maketrans('', '', string.punctuation))
 
         # Tokenize text
-        tokens = word_tokenize(text)
+        tokens = NltkInitializer.word_tokenize(text)
 
         # Remove stopwords
-        tokens = [word for word in tokens if word not in stopwords.words('english')]
+        tokens = [word for word in tokens if word not in NltkInitializer.stopwords.words('english')]
 
         # Stemming
-        stemmer = PorterStemmer()
-        stemmed_tokens = [stemmer.stem(word) for word in tokens]
+        stemmed_tokens = [NltkInitializer.stem(word) for word in tokens]
 
         # Rejoin words
         normalized_text = ' '.join(stemmed_tokens)
@@ -303,7 +310,7 @@ class AnswerKey2Verifier():
                 return is_match
 
         if len(stemmed_answer) >=4:
-            is_fuzzy = any (fuzz.ratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
+            is_fuzzy = any (NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
             return is_fuzzy
         return None
 
@@ -661,7 +668,6 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    # stemmer = PorterStemmer()
     question_prompt_normalizer = QuestionPromptNormalizer()
     prompt_truncater = PromptTruncater()
 
@@ -837,8 +843,6 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    stemmer = PorterStemmer()
-
     def __post_init__(self):
         self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
             
@@ -892,7 +896,6 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     query_text:str
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
@@ -963,7 +966,6 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
@@ -1026,7 +1028,6 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
