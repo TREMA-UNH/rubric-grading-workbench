@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .test_bank_prompts import DirectGradingPrompt, FagB, FagB_few
+from .test_bank_prompts import DirectGradingPrompt, FagB, FagB_few, Sun, Sun_few, HELM, Thomas
 
 
 def json_query_loader(query_json:Path)-> Dict[str,str]:
@@ -22,6 +22,14 @@ def direct_grading_prompt(prompt_class:str, query_id:str, query_text:str, facet_
         return FagB(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
     elif prompt_class == "FagB_few":
         return FagB_few(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
+    elif prompt_class == "Sun":
+        return Sun(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
+    elif prompt_class == "Sun_few":
+        return Sun_few(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
+    elif prompt_class == "HELM":
+        return HELM(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
+    elif prompt_class == "Thomas":
+        return Thomas(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
     else:
         raise RuntimeError(f"Prompt class {prompt_class} not supported by the direct_grading_prompt loader.")\
 
