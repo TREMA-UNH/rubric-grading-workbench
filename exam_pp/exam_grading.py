@@ -1,33 +1,19 @@
+import gzip
 from typing import *
 
 from .query_loader import direct_grading_prompts, json_query_loader
 
-from . import question_bank_loader
+from . import question_bank_loader 
 from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
 from .t5_qa import *
-from .data_model import *
+from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
 
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
-
-
-def runSquadQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    # promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
-    promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt)
-    return answerTuples
-
-def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
-    return answerTuples
 
 
 def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
@@ -106,11 +92,9 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
 def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
-    query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
     for para in itertools.islice(paragraphs, max_paragraphs):
-        paragraph_id = para.paragraph_id
         paragraph_txt = para.text
 
         answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
