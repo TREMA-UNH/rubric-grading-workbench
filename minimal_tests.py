@@ -1,5 +1,6 @@
 
 
+from os import system
 from exam_pp import exam_grading, exam_post_pipeline
 
 
@@ -18,11 +19,41 @@ print("\n\n\n\n\n\n")
 #                            ])
 
 
+dl_ungraded_file = "trecDL2020-qrels-runs-with-text.jsonl.gz"
 
 
 car_graded_file = "./t5-rating-naghmehs-tqa-exam-qrel-runs-result-T0050.jsonl.gz"
 dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 
+
+# direct grading
+
+
+dl_output ="graded-"+dl_ungraded_file
+
+exam_grading.main([dl_ungraded_file
+                           ,"-o",dl_output
+                           ,"--model-pipeline", "text2text"
+                           ,"--model-name","google/flan-t5-base"
+                           ,"--prompt-class","Thomas"
+                           ,"--max-queries","1","--max-paragraphs","100"
+                           ,"--question-type","question-bank"
+                           ,"--use-nuggets"
+                           ,"--question-path","dl20-nuggets.jsonl.gz"])
+
+
+exam_post_pipeline.main(cmdargs=[dl_output,
+                                 "--inter-annotator-out","out.correlation.tex"
+                                 ,"--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices"
+                              , "--question-set", "question-bank"
+                              , "--testset","dl20"
+                              , "--min-relevant-judgment", "2"
+                              ,"--use-ratings"
+                                ])
+
+
+exit(0)
+# Other
 
 exam_post_pipeline.main(cmdargs=[dl_graded_file,
                                  "--inter-annotator-out","out.correlation.tex"
