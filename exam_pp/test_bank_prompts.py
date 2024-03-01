@@ -23,6 +23,14 @@ def get_prompt_classes()->List[str]:
             ]
 
 
+def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
+    clzz = globals().get(prompt_class)
+    if clzz:
+        return clzz.my_prompt_type
+    else:
+        return None
+
+
 # -------   helpers --------------- 
 
 
@@ -30,6 +38,7 @@ class NltkInitializer():
     import nltk
     import nltk.stem #  import PorterStemmer
     import fuzzywuzzy.fuzz #import fuzz
+    import nltk.corpus # import stopwords
     import nltk.corpus # import stopwords
     import nltk.tokenize # word_tokenize
 
@@ -83,6 +92,8 @@ class QuestionStemmedChecker():
 
         return is_match
 
+    def answer_match_info(self)->str:
+        return "lowercase, stopped, stemmed, removed trailing period, fuzz > 0.8 / true-false special handling"
 
 class TrueFalseMatcher():
 
@@ -159,6 +170,13 @@ class UnanswerableMatcher():
                                    for stemmed_gold in self.normalized_unanswerable_expressions)
 
         return not is_match
+
+
+
+    def answer_match_info(self)->str:
+        return "Check for unanswerable expression, all else is deemed correct"
+
+
 
 
 class UnanswerableMatcher2():
@@ -274,7 +292,7 @@ class AnswerKey2Verifier():
         tokens = [word for word in tokens if word not in NltkInitializer.stopwords.words('english')]
 
         # Stemming
-        stemmed_tokens = [NltkInitializer.stem(word) for word in tokens]
+        stemmed_tokens = [NltkInitializer.stemmer.stem(word) for word in tokens]
 
         # Rejoin words
         normalized_text = ' '.join(stemmed_tokens)
@@ -313,6 +331,11 @@ class AnswerKey2Verifier():
             is_fuzzy = any (NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
             return is_fuzzy
         return None
+    
+
+    def answer_match_info(self):
+        return "AnswerKey2Verifier: use fuzzy on normalized answers >80;   normalize by lowercasing, remove punctuation,  tokenize, stemming using NLTK"
+    
 
 # ------------ prompt classes ------------
 
@@ -586,7 +609,8 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         return self.unanswerable_matcher.check_answer_stemmed(answer)
 
 
-
+    def answer_match_info(self):
+        return self.unanswerable_matcher.answer_match_info()
 
 @dataclass
 class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
@@ -654,6 +678,8 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         
 
 
+    def answer_match_info(self)->str:
+        return self.unanswerable_matcher.answer_match_info()
 
 
 
@@ -715,9 +741,26 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     def check_answer_stemmed(self,answer:str)->bool:
         return self.question_stemmed_checker.check_answer_stemmed(answer)
 
+    def answer_match_info(self)->str:
+        return self.question_stemmed_checker.answer_match_info
 
 @dataclass
-class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
+class QuestionCompleteConcisePromptWithAnswerKey2(QuestionCompleteConcisePromptWithAnswerKey):
+    def __post_init__(self):
+        QuestionCompleteConcisePromptWithAnswerKey.__post_init__(self)
+        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
+
+    
+    def check_answer(self,answer:str)->bool:
+        return self.answer_key2_verifier.check_answer(answer)
+
+
+    def answer_match_info(self):
+        return self.answer_key2_verifier.answer_match_info()
+    
+
+@dataclass
+class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionCompleteConcisePromptWithAnswerKey):
     '''This is an answer-verifier to be used to regrade any QA prompt with explicit answers.'''
     question_id:str
     question:str
@@ -745,11 +788,15 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
         return info
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        return ""
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
 
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        return {}
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
+
+    def prompt_style(self)->str:
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
+    
 
 
     def check_answer(self,answer:str)->bool:
@@ -767,68 +814,6 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
     def answer_match_info(self):
         return "Using FLAN-T5-Large with this prompt: For the question \"{question}\" the correct answer is \"{correct_answer}\". Is \"{answer}\" an equally correct response to this question? Answer yes or no."
     
-
-
-@dataclass
-class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
-    question_id:str
-    question:str
-    choices:Dict[str,str]
-    correct:str
-    correctKey:Optional[str]
-    query_id:str
-    facet_id:Optional[str]
-    query_text:str
-
-    prompt_truncater = PromptTruncater()
-
-    def __post_init__(self):
-        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
-
-
-    def answer_match_info(self)->str:
-        return "lowercase, stopped, stemmed, removed trailing period, fuzz > 0.8 / true-false special handling"
-
-        
-    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
-        def old_prompt(key, default):
-            if old_prompt_info is None:
-                return default
-            return old_prompt_info.get(key, default)
-        
-        info =  {"prompt_class": self.__class__.__name__
-                , "orig_prompt_class": old_prompt("prompt_class", "")
-                , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
-                , "context_first": old_prompt("context_first", False)
-                , "check_unanswerable": False
-                , "check_answer_key": True
-                , "is_self_rated":self.has_rating()
-                }
-        return info
-
-    def has_rating(self):
-        return False
-
-
-
-
-
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
-        question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
-        context_prompt = f"Context: {context}"
-        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
-        return prompt
-
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
-        context_prompt = f"Context: {context}"
-        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
-        return prompt
-
-
-    def check_answer(self,answer:str)->bool:
-        return self.answer_key2_verifier.check_answer(answer)
 
 
 
