@@ -109,25 +109,26 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
-                judg = para.get_any_judgment()
-                
-                if judg ==None:
-                    continue # we don't have judgments
-                if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
-                    continue # we don't have labels
+            judg = para.get_any_judgment()
+            
+            if judg ==None:
+                pass # we don't have judgments
+            elif not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                pass # we don't have labels
+            else:
+                # both judgments and relevance labels
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
+                    hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
+                    if min_rating is not None:
+                        if exam_grade.self_ratings is None: 
+                            raise RuntimeError("These grades don't have self-ratings.")
+                        filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                        hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
+                    isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
 
-                hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
-                if min_rating is not None:
-                    if exam_grade.self_ratings is None: 
-                        raise RuntimeError("These grades don't have self-ratings.")
-                    filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
-                    hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
-                isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
+                    globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
-                globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
-
-                examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+                    examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
         # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
         perQueryStats[query_id]=examVsJudged

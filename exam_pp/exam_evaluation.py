@@ -12,7 +12,7 @@ from .exam_to_qrels import exam_to_qrels_files
 from . import exam_to_qrels
 
 
-from .test_bank_prompts import get_prompt_classes
+from .test_bank_prompts import get_prompt_classes, get_prompt_type_from_prompt_class
 from .data_model import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 from .exam_cover_metric import ExamCoverEvals, ExamCoverScorerFactory, compute_exam_cover_scores
 # from . import exam_to_qrels
@@ -133,7 +133,7 @@ def main(cmdargs=None):
     # Parse the arguments
     args = parser.parse_args(args=cmdargs)    
         
-    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set)
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
 
 
     exam_input_file=args.exam_graded_file

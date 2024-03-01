@@ -1,6 +1,8 @@
 
 from typing import *
 
+from test_bank_prompts import get_prompt_type_from_prompt_class
+
 from .exam_judgment_correlation import ConfusionStats
 from . import exam_judgment_correlation
 from .data_model import GradeFilter, QueryWithFullParagraphList, parseQueryWithFullParagraphs
@@ -11,7 +13,7 @@ def main_other():
     exam_input_file = "./t5-cc-rating-exam-qrel-result.jsonl.gz"
 
 
-    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa")
+    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class))
 
     print('other', grade_filter)
 
@@ -60,7 +62,7 @@ def main_rating():
     exam_input_file = "./t5-cc-rating-exam-qrel-result.jsonl.gz"
 
 
-    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa")
+    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class))
 
     print('rating', grade_filter)
 

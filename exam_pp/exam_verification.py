@@ -4,7 +4,7 @@ from .data_model import *
 from .question_bank_loader import *
 from . import question_bank_loader
 
-def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank]):
+def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], grade_filter: GradeFilter):
     # graded_dict={q.queryId: q for q in graded}
     questions_dict= {q.query_id:cast(QueryQuestionBank, q)  for q in question_bank } 
 
@@ -19,7 +19,7 @@ def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_ba
 
                 for paragraph in entry.paragraphs:
                     myanswers = list()
-                    for exam_grade in paragraph.exam_grades_iterable():
+                    for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
                         ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
                         myanswers.extend(ans)
 
@@ -37,7 +37,7 @@ def questions_to_dict(question_bank:Sequence[QueryTestBank])->dict[str,ExamQuest
     return question_by_id
 
 
-def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], min_judgment:int=1, min_rating:int=4):
+def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], grade_filter:GradeFilter, min_judgment:int=1, min_rating:int=4):
     print("relevant passages without any high self-ratings:")
     for entry in graded:
         print(f"query_id: {entry.queryId}")
@@ -46,15 +46,14 @@ def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], questio
             if (judgments is not None):
                if any ([j.relevance >= min_judgment for j in judgments if j is not None]): # we have positive judgments
 
-                for exam_grade in paragraph.exam_grades_iterable():
+                for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
                     if any ( [ rating.self_rating < min_rating for rating in exam_grade.self_ratings_as_iterable()]):
                         # no good self-rating
                         print(f"{paragraph.paragraph_id}\t{paragraph.text}")
-                        
 
 
 
-def identify_bad_question(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], min_judgment:int=1, min_rating:int=4):
+def identify_bad_question(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], grade_filter:GradeFilter, min_judgment:int=1, min_rating:int=4):
     questions_dict= questions_to_dict(question_bank=question_bank)
 
     question:ExamQuestion
@@ -65,7 +64,7 @@ def identify_bad_question(graded:List[QueryWithFullParagraphList], question_bank
             judgments = paragraph.paragraph_data.judgments
             if (judgments is not None):
                if any ([j.relevance < min_judgment for j in judgments if j is not None]): # we have negative judgments
-                for exam_grade in paragraph.exam_grades_iterable():
+                for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
                     for rating in exam_grade.self_ratings_as_iterable():
                         if rating.self_rating >= min_rating:
                             if rating.nugget_id is not None:

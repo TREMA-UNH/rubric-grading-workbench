@@ -168,14 +168,14 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
             else:
 
                 any_prompt = grading_prompts[0]
-                if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type == NuggetPrompt.my_prompt_type:
+                if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
                     noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
-                elif any_prompt.prompt_type() is DirectGradingPrompt.my_prompt_type:
+                elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
                         noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
                 else:
-                    raise RuntimeError("unknown grading prompt type {any_prompt.prompt_type()}")
+                    raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
             
             file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             # out_file.write('\n')
