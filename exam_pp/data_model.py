@@ -1,4 +1,5 @@
 from collections import defaultdict
+import itertools
 from pydantic import BaseModel
 from typing import Iterable, List, Any, Optional, Dict, Tuple, Union
 from dataclasses import dataclass
@@ -6,6 +7,8 @@ import gzip
 import json
 from pathlib import Path
 import pathlib
+
+from .test_bank_prompts import DirectGradingPrompt
 
 
 
@@ -70,6 +73,12 @@ class Grades(BaseModel):
     self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
     prompt_type: Optional[str]
 
+    def self_ratings_as_iterable(self):
+        if self.self_ratings is None:
+            return []
+        else:
+            return [self.self_ratings]
+
     def __hash__(self):
         # Hash a tuple of all field values
         return hash(tuple(self.__dict__.values()))
@@ -87,6 +96,31 @@ class Grades(BaseModel):
             #     , "is_self_rated": false # false if not self-rated, otherwise true
             #     }
 
+    def as_exam_grades(self)-> ExamGrades:
+
+        if self.correctAnswered:
+            correctAnswered = ["direct"]
+            wrongAnswered = []
+            exam_ratio=1.0
+        else:
+            wrongAnswered = ["direct"]
+            correctAnswered = []
+            exam_ratio=0.0
+
+        self_ratings = None
+        if self.self_ratings is not None:
+            self_ratings = [SelfRating(question_id="direct",nugget_id="direct",self_rating=self.self_ratings)]
+
+        return ExamGrades(correctAnswered=correctAnswered
+                          , wrongAnswered=wrongAnswered
+                          , answers=[("direct",self.answer)]
+                          , exam_ratio=exam_ratio
+                          , self_ratings=self_ratings
+                          , llm=self.llm
+                          , llm_options=self.llm_options
+                          , prompt_info=self.prompt_info
+                          , prompt_type=DirectGradingPrompt.my_prompt_type
+        )
 @dataclass
 class GradeFilter():
     model_name: Optional[str]
@@ -94,10 +128,11 @@ class GradeFilter():
     is_self_rated: Optional[bool]
     min_self_rating: Optional[int]
     question_set:Optional[str]
+    prompt_type:Optional[str]
 
     @staticmethod
     def noFilter():
-        return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None)
+        return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None, prompt_type=None)
 
     @staticmethod
     def question_type(grade:Union[ExamGrades,Grades]):
@@ -111,20 +146,27 @@ class GradeFilter():
         else:
             "direct"
 
+
+    @staticmethod
+    def get_prompt_type(grade:Union[ExamGrades,Grades])->str:
+        return grade.prompt_type if grade.prompt_type is not None else ""
+
+        
+
     @staticmethod
     def key_dict(grade:Union[ExamGrades,Grades])->Dict[str,Any]:
         return  { "llm": grade.llm
                 , "prompt_class": grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
                 , "is_self_rated": grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
                 , "question_set": GradeFilter.question_type(grade)
-                , "prompt_type": grade.prompt_type if isinstance(grade, ExamGrades) else ""
+                , "prompt_type": GradeFilter.get_prompt_type(grade)
                 }
     
     @staticmethod
     def key(grade:Union[ExamGrades,Grades])->str:
         is_self_rated = grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
         prompt_class =grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
-        prompt_type = grade.prompt_type if isinstance(grade, ExamGrades) else ""
+        prompt_type = GradeFilter.get_prompt_type(grade)
         return f"llm={grade.llm} prompt_class={prompt_class} is_self_rated={is_self_rated}  question_set={GradeFilter.question_type(grade)} prompt_type={prompt_type}"
                 
 
@@ -164,6 +206,11 @@ class GradeFilter():
                     if not grade_is_self_rated == self.is_self_rated:
                         return False
 
+        # prompt type (question, nugget, direct)
+        if self.prompt_type is not None:
+            if grade.prompt_type is not None:
+                if not self.prompt_type == grade.prompt_type:
+                    return False
 
         if isinstance(grade, ExamGrades):
             # for at least one question, the self_rating is at least self.min_self_rating
@@ -189,7 +236,9 @@ class GradeFilter():
                            , prompt_class=self.prompt_class
                            , is_self_rated=self.is_self_rated
                            , min_self_rating=min_self_rating
-                           , question_set=self.question_set)
+                           , question_set=self.question_set
+                           , prompt_type= self.prompt_type
+                           )
 
 class Judgment(BaseModel):
     paragraphId : str
@@ -237,24 +286,51 @@ class FullParagraphData(BaseModel):
     grades: Optional[List[Grades]]
 
     def retrieve_exam_grade_any(self, grade_filter:GradeFilter) -> List[ExamGrades]:
-        if self.exam_grades is None:
-            return []
-        
-        found = next((g for g in self.exam_grades if grade_filter.filter(g)), None)
-        if found is not None:
-            return [found]
-        else: 
-            return []
+        if grade_filter.prompt_type == DirectGradingPrompt.my_prompt_type:
+            if self.grades is None:
+                return []
+            
+            found = next((g.as_exam_grades() for g in self.grades if grade_filter.filter(g)), None)
+            if found is not None:
+                return [found]
+            else: 
+                return []
+        else:
+
+
+            if self.exam_grades is None:
+                return []
+            
+            found = next((g for g in self.exam_grades if grade_filter.filter(g)), None)
+            if found is not None:
+                return [found]
+            else: 
+                return []
         
 
     def retrieve_exam_grade_all(self, grade_filter:GradeFilter) -> List[ExamGrades]:
-        if self.exam_grades is None:
-            return []
+        if grade_filter.prompt_type == DirectGradingPrompt.my_prompt_type:
+            if self.grades is None:
+                return []
+            return [g.as_exam_grades() for g in self.grades if grade_filter.filter(g)]
+            
+        else:
+            if self.exam_grades is None:
+                return []
+            
+            return [g for g in self.exam_grades if grade_filter.filter(g)]
         
-        # result = list(g for g in self.exam_grades if grade_filter.filter(g))
-        # return result
-        return [g for g in self.exam_grades if grade_filter.filter(g)]
-        
+
+    def exam_grades_iterable(self)-> List[ExamGrades]:
+        return [] if self.exam_grades is None else self.exam_grades
+    
+    def grades_iterable(self)-> List[Grades]:
+        return [] if self.grades is None else self.grades
+
+    # def both_grades_iterable_as_exam_grades(self)->List[ExamGrades]:
+    #     grades_iter = [] if self.grades is None else [g.as_exam_grades() for g in self.grades]
+    #     return grades_iter + self.exam_grades_iterable()
+
 
     def retrieve_grade_any(self, grade_filter:GradeFilter) -> List[Grades]:
         if self.grades is None:
@@ -268,8 +344,6 @@ class FullParagraphData(BaseModel):
         
 
 
-    def exam_grades_iterable(self)-> List[ExamGrades]:
-        return [] if self.exam_grades is None else self.exam_grades
 
        
     def get_any_judgment(self)->Optional[Judgment]:
