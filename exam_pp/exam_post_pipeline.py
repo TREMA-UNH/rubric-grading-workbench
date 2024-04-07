@@ -152,13 +152,13 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
         file.close()
 
-def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int]):
+def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20"):
     with open(leaderboard_out, 'wt') as file:
         file.write("based on Exam-Qrels\n")
 
 
         print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level}')
-        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level)
+        methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
 
         examScores = [
             exam_leaderboard_correlation.ExamCoverEvals(method=method
@@ -173,7 +173,7 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
         lines = exam_leaderboard_correlation.leaderboard_qrel(evals =examScores, header="exam-P@20")
         file.write(lines+'\n')
         file.write('\n'.join([""
-                                ,(f"min_rating\t{min_level:.0f}" if min_level is not None else "\t")
+                            ,(f"min_rating\t{min_level:.0f}" if min_level is not None else "\t")
                             , f"qrel_file\t{qrels_file}"
                             , "\n"]))
     
@@ -185,7 +185,51 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str ="P.20"):
+def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_leaderboard:Dict[str,int], analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str]):
+
+    def f2s(x:Optional[float])->str:
+        if x is None:
+            return ' '
+        else:
+            return f'{x:.3f}'
+    
+    print(f'run_dir={run_dir}')
+
+    with open(analysis_out, 'wt') as file:
+        file.write("Leaderboard Rank Correlation Analysis Exam-Qrels\n")
+        file.write(f"run_dir\t{run_dir}\n")
+
+
+        file.write('\t'.join(["method"
+                            , "min_rating"
+                            , "trec_eval_metric"
+                            , "spearman"
+                            , "kendall"
+                    ]))
+        file.write('\n')
+
+        for trec_eval_metric in trec_eval_metrics:
+            for qrels_file in qrels_files:
+                for min_level in min_levels:
+                    methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
+                    correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=official_leaderboard)
+
+                    file.write('\t'.join([f"{qrels_file}"
+                                        , f"{min_level:.0f}"
+                                        , trec_eval_metric
+                                        , f2s(correlationStats.spearman_correlation)
+                                        , f2s(correlationStats.kendall_correlation)
+                                        ]))
+                    file.write('\n')
+
+
+        file.writelines(["\n","\n"])
+        file.close()
+    print(f"exam-qrels leaderboard written to {analysis_out}")
+
+
+
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level: Optional[int], trec_eval_metric:str ="P.20"):
     with open(leaderboard_out, 'wt') as file:
         file.write("based on Exam-Qrels\n")
 
@@ -217,13 +261,6 @@ def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Di
                                 , "\n"]))
         
             print(f'min_level\t{min_level_x}\tcorrelation\t{correlationStats.pretty_print()}\n')
-            # file.writelines("\n".join(table))
-            # file.writelines( ["\n"
-            #                 # , f' EXAM scores produced with {grade_filter}\n'
-            #                 # , f' min_rating\t{str(min_rating)}\n'
-            #                 , f' nExam\t{nExamCorrelation.pretty_print()}\n'
-            #                 , f' exam\t{examCorrelation.pretty_print()}\n'
-            #                 ,'\n'])
 
         file.writelines(["\n","\n"])
         file.close()

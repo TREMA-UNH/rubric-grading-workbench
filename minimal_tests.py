@@ -1,7 +1,8 @@
 
 
 from os import system
-from exam_pp import exam_grading, exam_post_pipeline
+import sys
+from exam_pp import exam_grading, exam_post_pipeline, exam_leaderboard_analysis
 
 
 #python -m exam_pp.exam_grading  -o result.jsonl.gz  ./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz--model-pipeline text2text --model-name google/flan-t5-large --prompt-class QuestionCompleteConcisePromptWithAnswerKey tqa --question-path ./tqa_train_val_test --question-type tqa
@@ -28,8 +29,26 @@ dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 
 # direct grading
 
-
 dl_output ="graded-"+dl_ungraded_file
+
+exam_leaderboard_analysis.main(cmdargs=[dl_graded_file
+                               , "--qrel-analysis-out", "analysis-out.tsv"         
+                              # ,"-q","out.qrel"
+                              ,"--run-dir","./run-dl","--qrel-query-facets", "--use-ratings"
+                              , "--model","google/flan-t5-large"
+                              ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices","QuestionSelfRatedUnanswerablePromptWithChoices" 
+                              , "--question-set", "question-bank"
+                            #  , "--leaderboards-out", "dl.cover.tsv"
+                            #  , "--qrel-leaderboard-out", "dl.qrel.tsv"
+                            #   , "--testset","dl19"
+                              ,"--use-ratings"
+                              , "--min-relevant-judgment", "2"
+                              , '--official-leaderboard', 'faux-leaderboard.json'
+                              , "--trec-eval-metric", "map", "P.20", "ndcg_cut.10"
+                              ])
+
+sys.exit(1)
+
 
 exam_grading.main([dl_ungraded_file
                            ,"-o",dl_output
