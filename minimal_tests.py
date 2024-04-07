@@ -52,7 +52,6 @@ exam_post_pipeline.main(cmdargs=[dl_output,
                                 ])
 
 
-exit(0)
 # Other
 
 exam_post_pipeline.main(cmdargs=[dl_graded_file,

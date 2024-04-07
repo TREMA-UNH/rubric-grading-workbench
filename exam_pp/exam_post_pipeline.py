@@ -185,14 +185,14 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level = Optional[int]):
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str ="P.20"):
     with open(leaderboard_out, 'wt') as file:
         file.write("based on Exam-Qrels\n")
 
         for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
 
             print(f'run_dir={run_dir}\n qrels_file={qrels_file}\nmin_level={min_level_x}')
-            methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x)
+            methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x, trec_eval_metric=trec_eval_metric)
             correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=official_leaderboard)
 
             examScores = [
@@ -526,6 +526,7 @@ def main(cmdargs=None):
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard. (applies only to -q)', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval (applies only to -q)', default=None)
     parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried (applies only to -q)', default=None)
+    parser.add_argument('--trec-eval-metric', type=str, metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Cover Leaderboard to this file (alternative to -q)', default=None)
 
@@ -590,6 +591,7 @@ def main(cmdargs=None):
                                  , min_level=args.min_trec_eval_level
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
+                                 , trec_eval_metric=args.trec_eval_metric
                                  )
 
 
@@ -608,6 +610,7 @@ def main(cmdargs=None):
                                  , min_level=args.min_trec_eval_level
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
+                                 , trec_eval_metric=args.trec_eval_metric
                                  )
 
     if args.inter_annotator_out is not None or args.correlation_out is not None:
