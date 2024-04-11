@@ -124,6 +124,7 @@ where prompt_class = 'NuggetSelfRatedPrompt'
 -- Looking at self_rating, how often do we have a negative judgement and positive self-rating?
 -- output: question id, frequency, question text
 
+prepare bad_questions as
 select
     x.*,
     questions.text
@@ -139,13 +140,54 @@ from (
     inner join judgements
         on judgements.paragraph_id = self_ratings.paragraph_id
         and judgements.query_id = self_ratings.query_id
-    where judgements.relevance = 0 and self_ratings.rating >= 4
+    where judgements.relevance = $min_relevance
+      and self_ratings.rating >= $min_pos_rating
     group by self_ratings.question_id, exam_grades.prompt_class
 ) as x
 inner join questions
     on questions.question_id = x.question_id
-where x.prompt_class = 'QuestionSelfRatedUnanswerablePromptWithChoices'
+where x.prompt_class = $prompt_class
     and query_id like '940547%'
 order by x.frequency desc
 ;
+
+execute bad_questions(
+    min_relevance := 0,
+    min_pos_rating := 4,
+    prompt_class := 'QuestionSelfRatedUnanswerablePromptWithChoices'
+);
+
+prepare uncovered_passages as
+select
+    x.*,
+from (
+    select
+        exam_grades.prompt_class,
+        exam_grades.query_id,
+        exam_grades.paragraph_id,
+        query_paragraphs.text,
+    from exam_grades
+    inner join judgements
+        on judgements.paragraph_id = exam_grades.paragraph_id
+        and judgements.query_id = exam_grades.query_id
+    inner join query_paragraphs
+        on query_paragraphs.paragraph_id = exam_grades.paragraph_id
+        and query_paragraphs.query_id = exam_grades.query_id
+    where judgements.relevance >= $min_relevance
+      and not exists (
+        select *
+        from self_ratings
+        where self_ratings.rating > $min_pos_rating
+        and self_ratings.paragraph_id = exam_grades.paragraph_id
+        and self_ratings.query_id = exam_grades.query_id
+      and (exam_grades.prompt_info->'$.is_self_rated') :: boolean
+    )
+    order by exam_grades.query_id
+) as x
+;
+
+execute uncovered_passages(
+    min_relevance := 0,
+    min_pos_rating := 4
+);
 
