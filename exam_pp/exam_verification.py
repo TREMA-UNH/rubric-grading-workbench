@@ -44,6 +44,7 @@ def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], questio
     print("relevant passages without any high self-ratings:")
     for entry in graded:
         print(f"query_id: {entry.queryId}")
+        print("paragraphId worst_judgment best_rating text")
         for paragraph in entry.paragraphs:
             judgments = paragraph.paragraph_data.judgments
             if (judgments is not None):
