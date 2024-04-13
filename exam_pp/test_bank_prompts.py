@@ -30,6 +30,10 @@ def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
     else:
         return None
 
+def get_prompt_types()->List[str]:
+    set_of_types =  {get_prompt_type_from_prompt_class(prompt_class) for prompt_class in get_prompt_classes() if get_prompt_type_from_prompt_class(prompt_class) is not None}
+    return list(set_of_types)
+
 
 # -------   helpers --------------- 
 

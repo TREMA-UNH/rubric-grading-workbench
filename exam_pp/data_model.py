@@ -48,7 +48,7 @@ class ExamGrades(BaseModel):
     self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
     prompt_type: Optional[str]
 
-    def self_ratings_as_iterable(self):
+    def self_ratings_as_iterable(self)->List[SelfRating]:
         if self.self_ratings is None:
             return []
         else:

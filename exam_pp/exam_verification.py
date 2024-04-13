@@ -1,13 +1,13 @@
 from collections import defaultdict
 import itertools
 import math
-from typing import Sequence, cast, Dict, List
-from .test_bank_prompts import get_prompt_classes
+from typing import Sequence, cast, Dict, List, Tuple
+from .test_bank_prompts import get_prompt_classes, get_prompt_types
 from . data_model import QueryWithFullParagraphList, GradeFilter, parseQueryWithFullParagraphs
 from . question_bank_loader import QueryQuestionBank, ExamQuestion, QueryTestBank
 from . import question_bank_loader
 
-def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], grade_filter: GradeFilter):
+def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
     # graded_dict={q.queryId: q for q in graded}
     questions_dict= {q.query_id:cast(QueryQuestionBank, q)  for q in question_bank } 
 
@@ -20,14 +20,32 @@ def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_ba
                 question_text = question.question_text
                 print("\n{qid}\n{question_text}")
 
+                answer_pairs: List[Tuple[int,str]] = list()
+
                 for paragraph in entry.paragraphs:
                     myanswers = list()
-                    for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
+                    # examGrade_tmp = paragraph.retrieve_exam_grade_all(grade_filter=grade_filter)
+                    rate = -1
+                    extracted_anwer = []
+                    for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=rate_grade_filter):
+                        rate = max ([rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == qid])
                         ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
                         myanswers.extend(ans)
 
-                    myanswer_str = "\t".join(myanswers)
-                    print(f"{question_text}\t {paragraph.paragraph_id}\t {myanswer_str}")
+                    for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=answer_grade_filter):
+                        ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
+                        extracted_anwer = ans
+                        myanswers.extend(ans)
+
+                    if extracted_anwer:
+                        myanswer_str = "\t".join(extracted_anwer)
+                        # print(f"{question_text}\t {paragraph.paragraph_id}\t {myanswer_str}")
+                        info_str = f"{question_text}\t {paragraph.paragraph_id}\t {rate} \t {myanswer_str}"
+                        answer_pairs.append(  (rate, info_str) ) 
+                
+                answer_pairs = sorted(answer_pairs, key= lambda x: x[0], reverse=True ) # most confident answers first
+                print('\n'.join( (answer for _rate, answer in answer_pairs ) ))
+                print("")
         print("")
 
 def questions_to_dict(question_bank:Sequence[QueryTestBank])->dict[str,ExamQuestion]:
@@ -123,6 +141,10 @@ def main(cmdargs=None):
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=False, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    parser.add_argument('--prompt-class-answer', type=str, choices=get_prompt_classes(), required=False, default="QuestionPromptWithChoices", metavar="CLASS"
+                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    parser.add_argument('--prompt-type', type=str, choices=get_prompt_types(), required=False, default="question", metavar="CLASS"
+                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or file)')
     parser.add_argument('--question-type', type=str, choices=['question-bank'], required=False, metavar='PATH', help='Question type to read from question-path')
     parser.add_argument('--use-nuggets', action='store_true', help="if set uses nuggets instead of questions")
@@ -152,7 +174,9 @@ def main(cmdargs=None):
     grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
     
     if args.verify_grading:
-        verify_grade_extraction(graded= graded, question_bank= question_set, grade_filter= grade_filter)
+        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        verify_grade_extraction(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
     if args.uncovered_passages:
         identify_uncovered_passages(graded=graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)
     if args.bad_question:

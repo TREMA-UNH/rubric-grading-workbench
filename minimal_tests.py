@@ -3,6 +3,7 @@
 from os import system
 import sys
 from exam_pp import exam_grading, exam_post_pipeline, exam_leaderboard_analysis, exam_verification
+from exam_pp.test_bank_prompts import QuestionPrompt
 
 
 #python -m exam_pp.exam_grading  -o result.jsonl.gz  ./benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz--model-pipeline text2text --model-name google/flan-t5-large --prompt-class QuestionCompleteConcisePromptWithAnswerKey tqa --question-path ./tqa_train_val_test --question-type tqa
@@ -28,16 +29,40 @@ dl_graded_file = "dl19-exam-qrels-with-text.jsonl.gz"
 
 
 
+# exam_verification.main(cmdargs=[dl_graded_file
+#                               , "--uncovered-passages"
+#                               , "--model","google/flan-t5-large"
+#                               ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
+#                               , "--question-type", "question-bank"
+#                               , "--question-path", "dl20-questions.jsonl.gz"
+#                               , "--min-judgment", "2"
+#                               , "--min-rating", "1"
+#                                ])
+
+
+# exam_verification.main(cmdargs=[dl_graded_file
+#                               , "--bad-question"
+#                               , "--model","google/flan-t5-large"
+#                               ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
+#                               , "--question-type", "question-bank"
+#                               , "--question-path", "dl19-questions.jsonl.gz"
+#                               , "--min-judgment", "2"
+#                               , "--min-rating", "1"
+#                                ])
+
+
+
 exam_verification.main(cmdargs=[dl_graded_file
+                              , "--verify-grading"
                               , "--model","google/flan-t5-large"
                               ,"--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
+                              ,"--prompt-class-answer","QuestionCompleteConciseUnanswerablePromptWithChoices" 
+                              ,"--prompt-type",QuestionPrompt.my_prompt_type
                               , "--question-type", "question-bank"
-                              , "--question-path", "dl20-questions.jsonl.gz"
-                              , "--min-judgment", "2"
-                              , "--min-rating", "1"
-                              , "--uncovered-passages"
+                              , "--question-path", "dl19-questions.jsonl.gz"
+                              # , "--min-judgment", "2"
+                              # , "--min-rating", "1"
                                ])
-
 sys.exit(1)
 # direct grading
 
