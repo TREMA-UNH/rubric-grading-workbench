@@ -1,7 +1,10 @@
-from typing import Sequence
+from collections import defaultdict
+import itertools
+import math
+from typing import Sequence, cast, Dict, List
 from .test_bank_prompts import get_prompt_classes
-from .data_model import *
-from .question_bank_loader import *
+from . data_model import QueryWithFullParagraphList, GradeFilter, parseQueryWithFullParagraphs
+from . question_bank_loader import QueryQuestionBank, ExamQuestion, QueryTestBank
 from . import question_bank_loader
 
 def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], grade_filter: GradeFilter):
@@ -10,9 +13,9 @@ def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_ba
 
     question:ExamQuestion
     for entry in graded:
-        question_bank = questions_dict.get(entry.queryId)
-        if question_bank is not None:
-            for question in question_bank.get_questions():
+        question_bank_entry = questions_dict.get(entry.queryId)
+        if question_bank_entry is not None:
+            for question in question_bank_entry.get_questions():
                 qid = question.question_id
                 question_text = question.question_text
                 print("\n{qid}\n{question_text}")
@@ -44,12 +47,15 @@ def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], questio
         for paragraph in entry.paragraphs:
             judgments = paragraph.paragraph_data.judgments
             if (judgments is not None):
-               if any ([j.relevance >= min_judgment for j in judgments if j is not None]): # we have positive judgments
+                worst_judgment = min ( (j.relevance  for j in judgments if j is not None) )
+                if worst_judgment >= min_judgment:  # we have positive judgments
 
-                for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
-                    if any ( [ rating.self_rating < min_rating for rating in exam_grade.self_ratings_as_iterable()]):
-                        # no good self-rating
-                        print(f"{paragraph.paragraph_id}\t{paragraph.text}")
+                    for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
+                        best_rating = max( (rating.self_rating for rating in exam_grade.self_ratings_as_iterable()) )
+
+                        if best_rating < min_rating: # not a single decent self-rating
+                            # no good self-rating
+                            print(f"{paragraph.paragraph_id}\t{worst_judgment}\t{best_rating}\t{paragraph.text}")
 
 
 
@@ -93,7 +99,7 @@ def identify_bad_question(graded:List[QueryWithFullParagraphList], question_bank
 
 
 
-def main():
+def main(cmdargs=None):
     import argparse
 
     desc = r'''Three analyses for manual verification and supervision:   
@@ -129,7 +135,11 @@ def main():
 
 
     # Parse the arguments
-    args = parser.parse_args()           
+    if cmdargs is not None:
+        args = parser.parse_args(args=cmdargs)    
+    else:
+        args = parser.parse_args()
+
 
     if args.question_type == 'question-bank':
         question_set = question_bank_loader.parseTestBank(args.question_path,  use_nuggets=args.use_nuggets)
@@ -137,13 +147,15 @@ def main():
         raise f"args.question_type \'{args.question_type}\' undefined"
 
     graded = parseQueryWithFullParagraphs(args.exam_graded_file)
+
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
     
     if args.verify_grading:
-        verify_grade_extraction(graded, question_set)
+        verify_grade_extraction(graded= graded, question_bank= question_set, grade_filter= grade_filter)
     if args.uncovered_passages:
-        identify_uncovered_passages(graded, question_set, args.min_judgment, args.min_rating)
+        identify_uncovered_passages(graded=graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)
     if args.bad_question:
-        identify_bad_question(graded, question_set, args.min_judgment, args.min_rating)
+        identify_bad_question(graded= graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)
 
 if __name__ == "__main__":
     main()
