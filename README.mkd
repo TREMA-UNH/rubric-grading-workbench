@@ -41,7 +41,7 @@ Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. First, cl
 $ git clone <this repository>
 $ cd <cloned directory>
 $ poetry install
-$ wget https://shorturl.at/nHOZ8  # will download data-dl20.tar.xz
+$ wget [https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz)  # graded runs, questions, and nuggets
 $ tar -x -C data/dl20 data-dl20.tar.xz
 ```
 
