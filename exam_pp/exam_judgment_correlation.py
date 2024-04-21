@@ -189,7 +189,7 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
 
 def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
     for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
-        if len(exam_grade.correctAnswered) > min_answers:
+        if len(exam_grade.correctAnswered) >= min_answers:
             return 1
         else:
             return 0

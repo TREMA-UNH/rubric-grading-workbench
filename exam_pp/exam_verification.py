@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 import itertools
 import math
 from typing import Sequence, cast, Dict, List, Tuple
@@ -66,7 +67,8 @@ def identify_uncovered_passages(graded:List[QueryWithFullParagraphList], questio
         for paragraph in entry.paragraphs:
             judgments = paragraph.paragraph_data.judgments
             if (judgments is not None):
-                worst_judgment = min ( (j.relevance  for j in judgments if j is not None) )
+                judgments_ = [j.relevance  for j in judgments if j is not None]
+                worst_judgment = min ( judgments_ ) if judgments_ else 0
                 if worst_judgment >= min_judgment:  # we have positive judgments
 
                     for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=grade_filter):
@@ -116,6 +118,110 @@ def identify_bad_question(graded:List[QueryWithFullParagraphList], question_bank
 
 
 
+@dataclass
+class DisplayEntry():
+    query_id:str
+    question_id:str
+    question_text:str
+    paragraph_id:str
+    paragraph_text:str
+    self_rating:int
+    extracted_answer:str
+
+
+def display(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
+
+
+    # print('\n'.join( (answer for _rate, answer in answer_pairs ) ))
+    # print("")
+    import csv
+
+    # Define the file path
+    file_path = 'output.csv'
+
+    # Open the file in write mode
+    with open(file_path, 'w', newline='') as file:
+        writer = csv.writer(file, dialect=csv.excel)
+            
+        # graded_dict={q.queryId: q for q in graded}
+        questions_dict= {q.query_id:cast(QueryQuestionBank, q)  for q in question_bank } 
+
+
+        question:ExamQuestion
+        for entry in graded:
+            question_bank_entry = questions_dict.get(entry.queryId)
+            if question_bank_entry is not None:
+                display_entries:List[List[DisplayEntry]] = list()
+                question_ids = [q.question_id for q in question_bank_entry.get_questions()]
+                question_texts = {q.question_id:q.question_text for q in question_bank_entry.get_questions()} 
+
+                for paragraph in entry.paragraphs:
+                    pargraph_display_entries: List[DisplayEntry] = list()
+
+                    for question in question_bank_entry.get_questions():
+                        qid = question.question_id
+                        question_text = question.question_text
+                        print("\n{qid}\n{question_text}")
+
+                        answer_pairs: List[Tuple[int,str]] = list()
+
+                        myanswers = list()
+                        # examGrade_tmp = paragraph.retrieve_exam_grade_all(grade_filter=grade_filter)
+                        rate = -1
+                        extracted_anwer = []
+                        for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=rate_grade_filter):
+                            rate = max ([rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == qid])
+                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
+                            myanswers.extend(ans)
+
+                        for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=answer_grade_filter):
+                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
+                            extracted_anwer = ans
+                            myanswers.extend(ans)
+
+                        if extracted_anwer:
+                            myanswer_str = "\t".join(extracted_anwer)
+                            # print(f"{question_text}\t {paragraph.paragraph_id}\t {myanswer_str}")
+                            # info_str = f"{question_text}\t {paragraph.paragraph_id}\t {rate} \t {myanswer_str}"
+                            # answer_pairs.append(  (rate, info_str) ) 
+                            dp =  DisplayEntry(query_id=entry.queryId
+                                                , question_id=question.question_id
+                                                , question_text= question.question_text
+                                                , paragraph_id= paragraph.paragraph_id
+                                                , paragraph_text= paragraph.text
+                                                , self_rating=rate
+                                                , extracted_answer=myanswer_str 
+                                                )  
+                            pargraph_display_entries.append(dp)
+
+                    display_entries.append(pargraph_display_entries)        
+
+
+                def rankscore(entries:List[DisplayEntry])->int:
+                    return sum( (e.self_rating for e in entries) )
+
+                display_entries = sorted(display_entries, key= lambda x: rankscore(x), reverse=True ) # most confident answers first
+
+
+                writer.writerow([])
+                writer.writerow(['queryid',entry.queryId, 'query_text', questions_dict[entry.queryId].query_text])
+                
+                # Write the header row
+                writer.writerow(flatten(['',''] ,[[qid, ''] for qid in question_ids]))  # Empty string for the top-left corner cell
+                writer.writerow(flatten(['',''],  [[question_texts[qid], ''] for qid in question_ids]))  # Empty string for the top-left corner cell
+
+                # Write each row
+                for paragraph_display_entries  in display_entries:
+                    p = paragraph_display_entries[0]
+
+                    row = flatten([p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
+                    writer.writerow(row)
+
+
+        print(f"output written to {file_path}")
+
+def flatten(lst, lst_of_lsts):
+    return list(itertools.chain(lst, itertools.chain.from_iterable(lst_of_lsts)))
 
 
 def main(cmdargs=None):
@@ -154,6 +260,7 @@ def main(cmdargs=None):
     parser.add_argument('--bad-question', action='store_true', help="If set, will identify questions/nuggets that are not indicating relevance")
     parser.add_argument('--min-judgment', type=int, required=False, metavar='PATH', help='Minimum judgment level for a paragraph to be judged relevant')
     parser.add_argument('--min-rating', type=int, required=False, metavar='PATH', help='Minimum self-rating level for a paragraph to be predicted relevant')
+    parser.add_argument('--display', action='store_true', help="If set, will verify that extracted answers correlate with self-ratings.")
 
 
 
@@ -177,6 +284,10 @@ def main(cmdargs=None):
         grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
         answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
         verify_grade_extraction(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
+    if args.display:
+        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        display(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
     if args.uncovered_passages:
         identify_uncovered_passages(graded=graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)
     if args.bad_question:

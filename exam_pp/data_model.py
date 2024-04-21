@@ -1,7 +1,7 @@
 from collections import defaultdict
 import itertools
 from pydantic import BaseModel
-from typing import Iterable, List, Any, Optional, Dict, Tuple, Union
+from typing import Iterable, List, Any, Optional, Dict, Tuple, Union, cast
 from dataclasses import dataclass
 import gzip
 import json
@@ -170,6 +170,20 @@ class GradeFilter():
         return f"llm={grade.llm} prompt_class={prompt_class} is_self_rated={is_self_rated}  question_set={GradeFilter.question_type(grade)} prompt_type={prompt_type}"
                 
 
+    def fetch_any(self, exam_grades: Optional[List[ExamGrades]], grades: Optional[List[Grades]])-> List[ExamGrades]:
+        gs = [cast(ExamGrades, g) for g in self.fetch(exam_grades)]
+        gs2 = [cast(Grades, g).as_exam_grades() for g in self.fetch(grades)]
+        gs.extend( gs2 )
+        return gs
+
+
+    def fetch(self, grades:Optional[Union[List[ExamGrades],List[Grades]]])-> List[Union[ExamGrades,Grades]]:
+        if grades is None:
+            return []
+        else:
+            res=  [ g for g in grades if self.filter(g) ]
+            return res
+    
     def filter_grade(self, grade:Grades)-> bool:
         return self.filter(grade)
 
@@ -220,15 +234,24 @@ class GradeFilter():
                         return False
 
             if self.question_set is not None:
+                is_tqa_question = grade.answers[0][0].startswith("NDQ_")
+                is_genq_question = grade.answers[0][0].startswith("tqa2:")
+
                 if self.question_set == "tqa":
-                    is_tqa_question = grade.answers[0][0].startswith("NDQ_")
                     if not is_tqa_question:
                         return False
                     
                 if self.question_set == "genq":
-                    is_genq_question = grade.answers[0][0].startswith("tqa2:")
                     if not is_genq_question:
                         return False
+
+                # Todo need a better way to identify the question set. Maybe load from file?
+                if self.question_set == "question-bank":
+                    if is_tqa_question:
+                        return False
+
+                    
+
         return True
 
     def get_min_grade_filter(self, min_self_rating:int):
@@ -290,7 +313,12 @@ class FullParagraphData(BaseModel):
             if self.grades is None:
                 return []
             
-            found = next((g.as_exam_grades() for g in self.grades if grade_filter.filter(g)), None)
+            # gs = grade_filter.fetch(self.exam_grades)
+            # print(gs)
+            # gs = grade_filter.fetch(self.grades)
+            # print(gs)
+            # found = next((g.as_exam_grades() for g in self.grades if grade_filter.filter(g)), None)
+            found = grade_filter.fetch_any(self.exam_grades, self.grades)[0]
             if found is not None:
                 return [found]
             else: 
@@ -383,7 +411,7 @@ def parseQueryWithFullParagraphs(file_path:Path) -> List[QueryWithFullParagraphL
             for line in file:
                 result.append(parseQueryWithFullParagraphList(line))
     except  EOFError as e:
-        print("Warning: Gzip EOFError on {file_path}. Use truncated data....\nFull Error:\n{e}")
+        print(f"Warning: Gzip EOFError on {file_path}. Use truncated data....\nFull Error:\n{e}")
     return result
 
 

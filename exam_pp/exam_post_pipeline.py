@@ -89,7 +89,7 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
     print("ignoring rating levels")
 
     non_relevant_grade_set = {0}
-    relevant_grade_set = {1,2,3}
+    relevant_grade_set = {1,2,3,4,5}
 
     if non_relevant_grades is not None:
         non_relevant_grade_set = non_relevant_grades
