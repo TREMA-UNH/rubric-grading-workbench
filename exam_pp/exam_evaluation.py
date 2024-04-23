@@ -146,8 +146,7 @@ def main(cmdargs=None):
     
 
     # Parse the arguments
-    args = parser.parse_args(args=cmdargs)    
-        
+    args = parser.parse_args(args=cmdargs)
     grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
 
 

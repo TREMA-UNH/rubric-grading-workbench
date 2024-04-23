@@ -197,7 +197,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
             prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=None, facet_text=None)
             # hack to only include one direct prompt for each query.
 
-            if bank.query_id not in prompt_dict:
+            if bank.query_id not in prompt_dict:  # ONLY one direct grading prompt per query!!! 
                 prompt_dict[bank.query_id].append(prompt)
             else:
                 pass # if we had direct grading prompts that would use facets those could be added here.

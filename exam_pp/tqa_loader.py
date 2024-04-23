@@ -6,6 +6,8 @@ from typing import Tuple, List, Any, Dict, Optional
 from pydantic import BaseModel
 import json
 
+from .query_loader import direct_grading_prompt
+
 from .pydantic_helper import pydantic_dump
 from .test_bank_prompts import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
 from .test_bank_prompts import *
@@ -184,15 +186,33 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                  , query_text=query_text
                                                                  )     
     else:
+
         raise RuntimeError(f"Prompt class {prompt_class} not supported by tqa_loader.")
     return qpc
             
 
-def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
+def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     query_questions = load_TQA_questions(tqa_file)
-    return [(query,  [question_obj_to_prompt(prompt_class, q=question)  
+
+    if get_prompt_type_from_prompt_class(prompt_class) == DirectGradingPrompt.my_prompt_type:
+        # Direct grading prompt
+
+        # hack to only include one direct prompt for each query.
+        # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
+        return [(query_id,  [
+                             direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None)
+                            ])  
+                for query_id, questions in query_questions if len(questions)>0]
+
+
+    if get_prompt_type_from_prompt_class(prompt_class) == QuestionPrompt.my_prompt_type:
+        # Question Prompt
+        return [(query,  [question_obj_to_prompt(prompt_class, q=question)  
                          for question in questions])  
                                 for query, questions in query_questions]
+
+    else:
+        raise RuntimeError(f"prompt {prompt_class} not supported by TQA")
 
 
 def load_all_tqa_data(tqa_path:Path = Path("./tqa_train_val_test"), prompt_class:str="QuestionPromptWithChoices"):
