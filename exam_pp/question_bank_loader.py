@@ -62,7 +62,6 @@ class QueryNuggetBank(QueryTestBank[Nugget]):
 
 
 
-# Path to the benchmarkY3test-qrels-with-text.jsonl.gz file
 def parseTestBank(file_path:Path, use_nuggets:bool) -> typing.Sequence[QueryTestBank] :
     '''Load QueryTestBank (exam questions or nuggets)'''
     # Open the gzipped file
