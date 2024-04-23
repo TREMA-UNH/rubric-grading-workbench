@@ -645,7 +645,6 @@ def main(cmdargs=None):
         print("Loading query facets for direct grading qrels")
 
         if args.question_set == "tqa":
-            question_set = dict(exam_grading.fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
             tqabank = tqa_loader.load_TQA_questions(tqa_file=args.question_path)
             for query_id, tqa_questions in tqabank:
                 if not query_id in query_facets:
