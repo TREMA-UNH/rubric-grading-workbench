@@ -22,13 +22,31 @@ def get_prompt_classes()->List[str]:
             , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
             ]
 
-
 def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
-    clzz = globals().get(prompt_class)
-    if clzz:
-        return clzz.my_prompt_type
-    else:
-        return None
+    if prompt_class in {'QuestionPromptWithChoices'
+            , 'QuestionAnswerablePromptWithChoices'
+            , 'QuestionCompleteConciseUnanswerablePromptWithChoices'
+            , 'QuestionCompleteConcisePromptWithAnswerKey'
+            , 'QuestionCompleteConcisePromptWithAnswerKey2'
+            , 'QuestionSelfRatedUnanswerablePromptWithChoices'
+            , 'QuestionSelfRatedExplainPrompt'
+            , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'}:
+            return QuestionPrompt.my_prompt_type
+    if prompt_class in {'NuggetSelfRatedPrompt'
+                        , 'NuggetExtractionPrompt'}:
+        return NuggetPrompt.my_prompt_type
+    if prompt_class in {"FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"}:
+        return DirectGradingPrompt.my_prompt_type
+    return None
+
+    
+# this version is not compatible with all python interpreters.
+# def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
+#     clzz = globals().get(prompt_class)
+#     if clzz:
+#         return clzz.my_prompt_type
+#     else:
+#         return None
 
 def get_prompt_types()->List[str]:
     set_of_types =  {get_prompt_type_from_prompt_class(prompt_class) for prompt_class in get_prompt_classes() if get_prompt_type_from_prompt_class(prompt_class) is not None}
