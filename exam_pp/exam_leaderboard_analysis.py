@@ -134,7 +134,7 @@ def main(cmdargs=None):
                     , use_query_facets=args.qrel_query_facets
                     , use_ratings=args.use_ratings
                     , query_facets=query_facets
-                    , direct_grading= args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type
+                    , direct_grading= args.qrel_query_facets and get_prompt_type_from_prompt_class(prompt_class)==DirectGradingPrompt.my_prompt_type
                     )
         qrel_files.append(Path(qrel_file_name))
 
