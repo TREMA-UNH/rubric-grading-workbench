@@ -90,10 +90,12 @@ def main(cmdargs=None):
 
 
 
+    # NOTE
+    # args.prompt_class will be a list of classes.
 
     # hack: for direct grading prompts with query facets, we need to emit the grade per facet
     query_facets:Dict[str,Set[str]] = {}
-    if args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type:
+    if args.qrel_query_facets and any ( get_prompt_type_from_prompt_class(prompt_class)==DirectGradingPrompt.my_prompt_type for prompt_class in args.prompt_class  ):
         # we have to load the questions and get facets for each query
         # so we can emit facet-based query information with the qrel file
 
