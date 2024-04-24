@@ -120,7 +120,7 @@ def main(cmdargs=None):
                 query_facets[bank.query_id].add(bank.facet_id)
 
         else:
-            raise f"loading of facets for question set {args.question_path_for_facets} is not implemented"
+            raise RuntimeError(f"loading of facets for question set {args.question_set_for_facets} is not implemented")
 
 
     # for each method, produce qrels
