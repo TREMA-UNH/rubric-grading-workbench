@@ -256,9 +256,10 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
         for para in paragraphs:
             judg = para.get_any_judgment()
             
-            if judg ==None:
+            if judg == None:
                 continue # we don't have judgments
-            if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+            filtered_grades = para.retrieve_exam_grade_any(grade_filter=grade_filter)
+            if not any(filtered_grades):
                 continue # we don't have labels
 
             isJudgedRelevant = any (j.relevance in judgments for j in para.paragraph_data.judgments)
@@ -267,12 +268,12 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
 
             predicted_judgment:int
             if use_exam_grades:
-                if use_ratings:
+                if use_ratings and filtered_grades[0].self_ratings:
                     predicted_judgment = predict_labels_from_exam_ratings(para=para, grade_filter=grade_filter, min_answers=min_answers)
                 else:
                     predicted_judgment = predict_labels_from_answers(para=para, grade_filter=grade_filter, min_answers=min_answers)
             else: # use relevance-label prompts
-                if use_ratings:
+                if use_ratings and filtered_grades[0].self_ratings:
                     predicted_judgment = predict_labels_from_grade_rating(para=para, grade_filter=grade_filter)
                 else:
                     predicted_judgment = predict_labels_from_grades(para=para, grade_filter=grade_filter)
