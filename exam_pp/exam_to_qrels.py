@@ -171,10 +171,18 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
     def count_by_facet(correctAnswered:List[str])->Dict[str,int]:
         grouped:Dict[str,int] = defaultdict(int) # default: 0
         for question_id in correctAnswered:
-            match = re.search(beforeLastSlashpattern, question_id)            
-            if match:
-                facet_id = match.group(1)
-                grouped[facet_id]+=1
+
+            if question_id.startswith("NDQ"):
+                # tqa question ID, not facet specific
+                for facet in query_facets[query_id]:
+                    grouped[f"{query_id}/{facet}"]+=1
+            else:
+                # question bank, parse out the facet
+
+                match = re.search(beforeLastSlashpattern, question_id)            
+                if match:
+                    facet_id = match.group(1)
+                    grouped[facet_id]+=1
         return grouped
 
 
