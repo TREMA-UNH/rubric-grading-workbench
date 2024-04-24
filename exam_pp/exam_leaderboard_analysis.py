@@ -102,7 +102,7 @@ def main(cmdargs=None):
         print(f"Loading query facets for direct grading qrels from the question-path \"{args.question_path}\"")
 
         if args.question_set == "tqa":
-            tqabank = tqa_loader.load_all_tqa_questions(tqa_path=args.question_path)
+            tqabank = tqa_loader.load_all_tqa_questions(tqa_path=Path(args.question_path))
             for query_id, tqa_questions in tqabank:
                 if not query_id in query_facets:
                     query_facets[query_id]=set()
