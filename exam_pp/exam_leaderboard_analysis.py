@@ -6,8 +6,11 @@ from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
 
+from . import question_bank_loader
+from . import tqa_loader
 
-from .test_bank_prompts import get_prompt_classes, get_prompt_type_from_prompt_class
+
+from .test_bank_prompts import DirectGradingPrompt, get_prompt_classes, get_prompt_type_from_prompt_class
 from .data_model import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 from .exam_cover_metric import ExamCoverEvals, ExamCoverScorerFactory, compute_exam_cover_scores
 from .exam_judgment_correlation import ConfusionStats
@@ -51,6 +54,7 @@ def main(cmdargs=None):
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
     
     parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
+    parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     parser.add_argument('--min-relevant-judgment', type=int, default=1, metavar="LEVEL", help='Minimum judgment levelfor relevant passages. (Set to 2 for TREC DL)')
     parser.add_argument('--testset', type=str, choices=["cary3","dl19","dl20"], metavar="SET", help='Offers hard-coded defaults for --official-leaderboard and --min-relevant-judgment for some test sets. Options: cary3, dl19, or dl20 ')
@@ -75,25 +79,44 @@ def main(cmdargs=None):
 
 
     official_leaderboard:Dict[str,float]
-    non_relevant_grades = None
-    relevant_grades = None
     if args.official_leaderboard is not None:
         official_leaderboard = exam_leaderboard_correlation.load_leaderboard(args.official_leaderboard)
     elif args.testset == "cary3":
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":
         official_leaderboard = exam_leaderboard_correlation.official_DL19_Leaderboard
-        non_relevant_grades = {0,1}
-        relevant_grades = {2,3}
     elif args.testset == "dl20":
         official_leaderboard = exam_leaderboard_correlation.official_DL20_Leaderboard
-        non_relevant_grades = {0,1}
-        relevant_grades = {2,3}
 
-    relevant_grades = set(range(args.min_relevant_judgment, 4))
-    non_relevant_grades = set(range(-2, args.min_relevant_judgment))
 
-    # if args.qrel_analysis_out is not None and args.run_dir is not None:
+
+
+    # hack: for direct grading prompts with query facets, we need to emit the grade per facet
+    query_facets:Dict[str,Set[str]] = {}
+    if args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type:
+        # we have to load the questions and get facets for each query
+        # so we can emit facet-based query information with the qrel file
+
+        print(f"Loading query facets for direct grading qrels from the question-path \"{args.question_path}\"")
+
+        if args.question_set == "tqa":
+            tqabank = tqa_loader.load_TQA_questions(tqa_file=args.question_path)
+            for query_id, tqa_questions in tqabank:
+                if not query_id in query_facets:
+                    query_facets[query_id]=set()
+                for tqa_question in tqa_questions:
+                    query_facets[query_id].add(tqa_question.facet_id)
+
+        elif args.question_set == 'question-bank':
+            testbank = question_bank_loader.parseTestBank(file_path=args.question_path, use_nuggets=False)
+            for bank in testbank:
+                if not bank.query_id in query_facets:
+                    query_facets[bank.query_id]=set()
+                query_facets[bank.query_id].add(bank.facet_id)
+
+        else:
+            raise f"loading of facets for question set {args.question_path} is not implemented"
+
 
     # for each method, produce qrels
     qrel_files:List[Path] = list()
@@ -102,11 +125,14 @@ def main(cmdargs=None):
         grade_filter = GradeFilter(model_name=args.model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(prompt_class))
         qrel_file_name = f"{args.qrel_dir}/{prompt_class}.qrel"
 
+        # no need to worry about min_judgment grade, as that is reflected in the official leaderboard.
         export_qrels(query_paragraphs=query_paragraphs
                     , qrel_out_file=qrel_file_name
                     , grade_filter=grade_filter
                     , use_query_facets=args.qrel_query_facets
                     , use_ratings=args.use_ratings
+                    , query_facets=query_facets
+                    , direct_grading= args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type
                     )
         qrel_files.append(Path(qrel_file_name))
 
