@@ -81,9 +81,9 @@ def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter
 
         else:
             if use_ratings:
-                qrel_entries = exam_to_qrels.convert_exam_to_rated_facet_qrels(query_paragraphs,grade_filter=grade_filter)
+                qrel_entries = exam_to_qrels.convert_exam_to_rated_facet_qrels(query_paragraphs,grade_filter=grade_filter, query_facets=query_facets)
             else:
-                qrel_entries = exam_to_qrels.convert_exam_to_facet_qrels(query_paragraphs,grade_filter=grade_filter)
+                qrel_entries = exam_to_qrels.convert_exam_to_facet_qrels(query_paragraphs,grade_filter=grade_filter, query_facets=query_facets)
     else:
         if use_ratings:
             qrel_entries = exam_to_qrels.convert_exam_to_rated_qrels(query_paragraphs,grade_filter=grade_filter)
@@ -593,7 +593,8 @@ def main(cmdargs=None):
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
     
     parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
-    parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
+    parser.add_argument('--question-set-for-facets', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
+    parser.add_argument('--question-path-for-facets', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
 
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     parser.add_argument('--min-relevant-judgment', type=int, default=1, metavar="LEVEL", help='Minimum judgment levelfor relevant passages. (Set to 2 for TREC DL)')
@@ -638,29 +639,29 @@ def main(cmdargs=None):
 
 
     query_facets:Dict[str,Set[str]] = {}
-    if args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type:
+    if args.qrel_query_facets: # and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type:
         # we have to load the questions and get facets for each query
         # so we can emit facet-based query information with the qrel file
 
         print("Loading query facets for direct grading qrels")
 
-        if args.question_set == "tqa":
-            tqabank = tqa_loader.load_TQA_questions(tqa_file=args.question_path)
+        if args.question_set_for_facets == "tqa":
+            tqabank = tqa_loader.load_TQA_questions(tqa_file=args.question_path_for_facets)
             for query_id, tqa_questions in tqabank:
                 if not query_id in query_facets:
                     query_facets[query_id]=set()
                 for tqa_question in tqa_questions:
                     query_facets[query_id].add(tqa_question.facet_id)
 
-        elif args.question_set == 'question-bank':
-            testbank = question_bank_loader.parseTestBank(file_path=args.question_path, use_nuggets=False)
+        elif args.question_set_for_facets == 'question-bank':
+            testbank = question_bank_loader.parseTestBank(file_path=args.question_path_for_facets, use_nuggets=False)
             for bank in testbank:
                 if not bank.query_id in query_facets:
                     query_facets[bank.query_id]=set()
                 query_facets[bank.query_id].add(bank.facet_id)
 
         else:
-            raise f"loading of facets for question set {args.question_path} is not implemented"
+            raise f"loading of facets for question set {args.question_path_for_facets} is not implemented"
 
 
 

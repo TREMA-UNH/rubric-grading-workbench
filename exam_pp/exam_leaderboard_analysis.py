@@ -6,6 +6,8 @@ from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
 
+from . exam_grading import fix_car_query_id
+
 from . import question_bank_loader
 from . import tqa_loader
 
@@ -54,7 +56,8 @@ def main(cmdargs=None):
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
     
     parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
-    parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
+    parser.add_argument('--question-set-for-facets', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
+    parser.add_argument('--question-path-for-facets', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     parser.add_argument('--min-relevant-judgment', type=int, default=1, metavar="LEVEL", help='Minimum judgment levelfor relevant passages. (Set to 2 for TREC DL)')
     parser.add_argument('--testset', type=str, choices=["cary3","dl19","dl20"], metavar="SET", help='Offers hard-coded defaults for --official-leaderboard and --min-relevant-judgment for some test sets. Options: cary3, dl19, or dl20 ')
@@ -95,29 +98,29 @@ def main(cmdargs=None):
 
     # hack: for direct grading prompts with query facets, we need to emit the grade per facet
     query_facets:Dict[str,Set[str]] = {}
-    if args.qrel_query_facets and any ( get_prompt_type_from_prompt_class(prompt_class)==DirectGradingPrompt.my_prompt_type for prompt_class in args.prompt_class  ):
+    if args.qrel_query_facets: # and any ( get_prompt_type_from_prompt_class(prompt_class)==DirectGradingPrompt.my_prompt_type for prompt_class in args.prompt_class  ):
         # we have to load the questions and get facets for each query
         # so we can emit facet-based query information with the qrel file
 
-        print(f"Loading query facets for direct grading qrels from the question-path \"{args.question_path}\"")
+        print(f"Loading query facets for direct grading qrels from the question-path \"{args.question_path_for_facets}\"")
 
-        if args.question_set == "tqa":
-            tqabank = tqa_loader.load_all_tqa_questions(tqa_path=Path(args.question_path))
+        if args.question_set_for_facets == "tqa":
+            tqabank = fix_car_query_id(tqa_loader.load_all_tqa_questions(tqa_path=Path(args.question_path_for_facets)))
             for query_id, tqa_questions in tqabank:
                 if not query_id in query_facets:
                     query_facets[query_id]=set()
                 for tqa_question in tqa_questions:
                     query_facets[query_id].add(tqa_question.facet_id)
 
-        elif args.question_set == 'question-bank':
-            testbank = question_bank_loader.parseTestBank(file_path=args.question_path, use_nuggets=False)
+        elif args.question_set_for_facets == 'question-bank':
+            testbank = question_bank_loader.parseTestBank(file_path=args.question_path_for_facets, use_nuggets=False)
             for bank in testbank:
                 if not bank.query_id in query_facets:
                     query_facets[bank.query_id]=set()
                 query_facets[bank.query_id].add(bank.facet_id)
 
         else:
-            raise f"loading of facets for question set {args.question_path} is not implemented"
+            raise f"loading of facets for question set {args.question_path_for_facets} is not implemented"
 
 
     # for each method, produce qrels

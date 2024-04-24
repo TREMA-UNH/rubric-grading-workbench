@@ -51,7 +51,7 @@ def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grad
                     qrel_entries.append(QrelEntry(query_id=query_id, paragraph_id=para.paragraph_id, grade=numCorrect))
     return qrel_entries
 
-def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter, query_facets: Dict[str,Set[str]]=dict())->List[QrelEntry]:
     '''workhorse to convert exam-annotated paragraphs into qrel entries.
     load input file with `parseQueryWithFullParagraphs`
     write qrels file with `write_qrel_file`
@@ -63,10 +63,15 @@ def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList
     def count_by_facet(correctAnswered:List[str])->Dict[str,int]:
         grouped:Dict[str,int] = defaultdict(int) # default: 0
         for question_id in correctAnswered:
-            match = re.search(beforeLastSlashpattern, question_id)            
-            if match:
-                facet_id = match.group(1)
-                grouped[facet_id]+=1
+            if question_id.startswith("NDQ"):
+                # tqa question ID, not facet specific
+                for facet in query_facets[query_id]:
+                    grouped[facet]+=1
+            else:
+                match = re.search(beforeLastSlashpattern, question_id)            
+                if match:
+                    facet_id = match.group(1)
+                    grouped[facet_id]+=1
         return grouped
     
     for queryWithFullParagraphList in query_paragraphs:
@@ -133,7 +138,7 @@ def convert_direct_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParag
     return qrel_entries
 
 
-def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter, query_facets: Dict[str,Set[str]]=dict())->List[QrelEntry]:
     '''workhorse to convert exam-annotated paragraphs into qrel entries.
     load input file with `parseQueryWithFullParagraphs`
     write qrels file with `write_qrel_file`
@@ -147,13 +152,32 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
         for self_rating in self_ratings:
             question_id = self_rating.get_id()
             rating = self_rating.self_rating
+
+            if question_id.startswith("NDQ"):
+                # tqa question ID, not facet specific
+                for facet in query_facets[query_id]:
+                    grouped[f"{query_id}/{facet}"].add(rating)
+            else:
+                # question bank, parse out the facet
+
+                match = re.search(beforeLastSlashpattern, question_id)            
+                if match:
+                    facet_id = match.group(1)
+                    grouped[facet_id].add(rating)
+        best_rating = {facet_id:max(ratings)  for facet_id, ratings in grouped.items()}
+        return best_rating
+
+   
+    def count_by_facet(correctAnswered:List[str])->Dict[str,int]:
+        grouped:Dict[str,int] = defaultdict(int) # default: 0
+        for question_id in correctAnswered:
             match = re.search(beforeLastSlashpattern, question_id)            
             if match:
                 facet_id = match.group(1)
-                grouped[facet_id].add(rating)
-        best_rating = {facet_id:max(ratings)  for facet_id, ratings in grouped.items()}
-        return best_rating
-    
+                grouped[facet_id]+=1
+        return grouped
+
+
     for queryWithFullParagraphList in query_paragraphs:
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
@@ -162,10 +186,16 @@ def convert_exam_to_rated_facet_qrels(query_paragraphs:List[QueryWithFullParagra
             if para.exam_grades:
                 for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
                     if exam_grade.self_ratings is None:
-                        raise RuntimeError(f"Qrels from self-ratings asked on exam grades without self-ratings.\ngrade_filter {grade_filter}\nOffending grade {exam_grade}")
-                    best_rating:Dict[str,int] = best_rating_by_facet(exam_grade.self_ratings)
-                    for facet_id, rating in best_rating.items():
-                        qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=rating))
+                        # Fall back on binary grades
+                        # raise RuntimeError(f"Qrels from self-ratings asked on exam grades without self-ratings.\ngrade_filter {grade_filter}\nOffending grade {exam_grade}")
+                        grouped:Dict[str,int] = count_by_facet(exam_grade.correctAnswered)
+                        for facet_id, count in grouped.items():
+                            qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=count))
+
+                    else:
+                        best_rating:Dict[str,int] = best_rating_by_facet(exam_grade.self_ratings)
+                        for facet_id, rating in best_rating.items():
+                            qrel_entries.append(QrelEntry(query_id=facet_id, paragraph_id=para.paragraph_id, grade=rating))
 
     return qrel_entries
 
