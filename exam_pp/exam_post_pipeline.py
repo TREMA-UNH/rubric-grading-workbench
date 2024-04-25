@@ -697,8 +697,9 @@ def main(cmdargs=None):
         # so we can emit facet-based query information with the qrel file
 
         print("Loading query facets for direct grading qrels")
+        question_set_for_facets = args.question_set_for_facets if args.question_set_for_facets  else args.question_set
 
-        if args.question_set_for_facets == "tqa":
+        if question_set_for_facets == "tqa":
             tqabank = tqa_loader.load_TQA_questions(tqa_file=args.question_path_for_facets)
             for query_id, tqa_questions in tqabank:
                 if not query_id in query_facets:
@@ -706,7 +707,7 @@ def main(cmdargs=None):
                 for tqa_question in tqa_questions:
                     query_facets[query_id].add(tqa_question.facet_id)
 
-        elif args.question_set_for_facets == 'question-bank':
+        elif question_set_for_facets == 'question-bank':
             testbank = question_bank_loader.parseTestBank(file_path=args.question_path_for_facets, use_nuggets=False)
             for bank in testbank:
                 if not bank.query_id in query_facets:
@@ -714,7 +715,7 @@ def main(cmdargs=None):
                 query_facets[bank.query_id].add(bank.facet_id)
 
         else:
-            raise f"loading of facets for question set {args.question_path_for_facets} is not implemented"
+            raise RuntimeError(f"loading of facets for question set {question_set_for_facets} from path {args.question_path_for_facets} is not implemented")
 
 
 
