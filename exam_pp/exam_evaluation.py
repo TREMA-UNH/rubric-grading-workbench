@@ -6,9 +6,9 @@ from typing import Set, List, Tuple, Dict, Optional, Any
 from pathlib import Path
 from collections import defaultdict
 
-import exam_grading
-import question_bank_loader
-import tqa_loader
+from . import exam_grading
+from . import question_bank_loader
+from . import tqa_loader
 
 from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard
 

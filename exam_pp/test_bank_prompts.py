@@ -1202,7 +1202,8 @@ Answer:
 @dataclass
 class HELM(DirectGradingPrompt):
     def prompt_template(self, context:str)->str:
-        return f'''Instruction: Does the passage answer the query? Respond with 'Yes' or 'No'.
+        return f'''Instruction: Does the passage answer the que
+        ry? Respond with 'Yes' or 'No'.
 
 Query: {self.query_text}
 Passage: {context}
