@@ -66,7 +66,7 @@ def convert_exam_to_facet_qrels(query_paragraphs:List[QueryWithFullParagraphList
             if question_id.startswith("NDQ"):
                 # tqa question ID, not facet specific
                 for facet in query_facets[query_id]:
-                    grouped[facet]+=1
+                    grouped[f"{query_id}/{facet}"]+=1
             else:
                 match = re.search(beforeLastSlashpattern, question_id)            
                 if match:
