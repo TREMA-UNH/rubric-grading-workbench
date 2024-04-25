@@ -22,6 +22,7 @@ from . import exam_judgment_correlation
 from .exam_judgment_correlation import ConfusionStats
 from .exam_run_trec_eval import trec_eval_leaderboard
 from . import print_correlation_table
+from . import exam_cover_metric
 
 # for correlation table formatting
 def fmt_judgments(js:Set[int])->str:
@@ -132,6 +133,58 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
     for query_id, corr in corrPerQuery.items():
         print(f'{query_id}: examVsJudged {corr.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
     print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
+
+
+
+
+def cover_leaderboard_analysis(grade_filter_list:List[GradeFilter], query_paragraphs:List[QueryWithFullParagraphList], official_leaderboard:Dict[str,int], analysis_out:Path, min_levels: List[int]):
+
+    def f2s(x:Optional[float])->str:
+        if x is None:
+            return ' '
+        else:
+            return f'{x:.3f}'
+    
+
+
+    with open(analysis_out, 'wt') as file:
+        file.write("Leaderboard Rank Correlation Analysis Exam-Cover\n")
+        # file.write(f"run_dir\t{run_dir}\n")
+
+
+        file.write('\t'.join(["method"
+                            , "min_rating"
+                            , "trec_eval_metric"
+                            , "spearman"
+                            , "kendall"
+                    ]))
+        file.write('\n')
+
+        for grade_filter in grade_filter_list:
+            for min_level in min_levels:
+                exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter, min_self_rating=min_level)
+                resultsPerMethod:Dict[str, ExamCoverEvals] = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
+                resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
+                # exam_leaderboard_correlation.print_leaderboard_eval(list(resultsPerMethod__.values()), grade_filter=grade_filter)
+
+                nExamCorrelation,correlationStats=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod__, official_leaderboard=official_leaderboard)
+                pretty_min_level = f"{min_level:.0f}" if min_level else "bool"
+
+                file.write('\t'.join([grade_filter.print_name()
+                                    , f"{pretty_min_level}"
+                                    , "cover"
+                                    , f2s(correlationStats.spearman_correlation)
+                                    , f2s(correlationStats.kendall_correlation)
+                                    ]))
+                file.write('\n')
+
+
+        file.writelines(["\n","\n"])
+        file.close()
+    print(f"exam-cover leaderboard written to {analysis_out}")
+
+
+
 
 def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   official_leaderboard:Dict[str,int], min_self_rating = Optional[int]):
     with open(leaderboard_file, 'wt') as file:

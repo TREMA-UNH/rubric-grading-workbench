@@ -130,6 +130,9 @@ class GradeFilter():
     question_set:Optional[str]
     prompt_type:Optional[str]
 
+    def print_name(self)->str:
+        return f"{self.prompt_class} {self.model_name} {self.question_set}"
+
     @staticmethod
     def noFilter():
         return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None, prompt_type=None)
