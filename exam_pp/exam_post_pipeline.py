@@ -236,7 +236,7 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
                                                     , nExamCoverPerQuery={} 
                                                     ) 
                     for method, score in methodScores.items()]
-        lines = exam_leaderboard_correlation.leaderboard_qrel(evals =examScores, header="exam-P@20")
+        lines = exam_leaderboard_correlation.leaderboard_qrel(evals =examScores, header=f"exam-qrel-{trec_eval_metric}")
         file.write(lines+'\n')
         file.write('\n'.join([""
                             ,(f"min_rating\t{min_level:.0f}" if min_level is not None else "\t")
