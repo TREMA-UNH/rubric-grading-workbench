@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import itertools
 import math
+from pathlib import Path
 from typing import Sequence, cast, Dict, List, Tuple
 from .test_bank_prompts import get_prompt_classes, get_prompt_types
 from . data_model import QueryWithFullParagraphList, GradeFilter, parseQueryWithFullParagraphs
@@ -129,15 +130,10 @@ class DisplayEntry():
     extracted_answer:str
 
 
-def display(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
+def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], file_path:Path, rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
 
-
-    # print('\n'.join( (answer for _rate, answer in answer_pairs ) ))
-    # print("")
     import csv
 
-    # Define the file path
-    file_path = 'output.csv'
 
     # Open the file in write mode
     with open(file_path, 'w', newline='') as file:
@@ -258,9 +254,9 @@ def main(cmdargs=None):
     parser.add_argument('--verify-grading', action='store_true', help="If set, will verify that extracted answers correlate with self-ratings.")
     parser.add_argument('--uncovered-passages', action='store_true', help="If set, will verify which relevant passages are not covered by any questions/nuggets")
     parser.add_argument('--bad-question', action='store_true', help="If set, will identify questions/nuggets that are not indicating relevance")
-    parser.add_argument('--min-judgment', type=int, required=False, metavar='PATH', help='Minimum judgment level for a paragraph to be judged relevant')
-    parser.add_argument('--min-rating', type=int, required=False, metavar='PATH', help='Minimum self-rating level for a paragraph to be predicted relevant')
-    parser.add_argument('--display', action='store_true', help="If set, will verify that extracted answers correlate with self-ratings.")
+    parser.add_argument('--min-judgment', type=int, required=False, metavar='LEVEL', help='Minimum judgment level for a paragraph to be judged relevant')
+    parser.add_argument('--min-rating', type=int, required=False, metavar='LEVEL', help='Minimum self-rating level for a paragraph to be predicted relevant')
+    parser.add_argument('--grid-display', type=str, metavar='CSV', help="CSV file to export passage/question grades and answers to.", default=None)
 
 
 
@@ -284,10 +280,10 @@ def main(cmdargs=None):
         grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
         answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
         verify_grade_extraction(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
-    if args.display:
+    if args.grid_display:
         grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
         answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
-        display(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
+        grid_display(graded= graded, question_bank= question_set, file_path=Path(args.grid_display),  rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
     if args.uncovered_passages:
         identify_uncovered_passages(graded=graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)
     if args.bad_question:
