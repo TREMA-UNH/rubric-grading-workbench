@@ -92,6 +92,7 @@ def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter
             qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
 
     exam_to_qrels.write_qrel_file(qrel_out_file, qrel_entries)
+    print(f"Direct? {direct_grading}/ ratings? {use_ratings} / query-facets? {use_query_facets}: Exporting {len(qrel_entries)} to {qrel_out_file}. Grade_filter = {grade_filter.print_name()}")
 
 
 
