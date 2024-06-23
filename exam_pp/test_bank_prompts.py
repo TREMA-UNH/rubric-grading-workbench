@@ -1173,14 +1173,13 @@ class FagB_few(DirectGradingPrompt):
     def prompt_template(self, context:str)->str:
         return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.
 
-Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependen
-t, so this would be at room temperature. Hope this helps.
+Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependent, so this would be at room temperature. Hope this helps.
 Question: how many eye drops per ml 
 Answer: Yes 
 
 Passage: RE: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles should last me 100 days but I run out way before that time when I am using 4 
-drops per day.In the past other pharmacies have given me 3 10-ml bottles for 100 days.E: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles s
-hould last me 100 days but I run out way before that time when I am using 4 drops per day. 
+drops per day.In the past other pharmacies have given me 3 10-ml bottles for 100 days.E: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles 
+should last me 100 days but I run out way before that time when I am using 4 drops per day. 
 Question: how many eye drops per ml 
 Answer: No 
 
