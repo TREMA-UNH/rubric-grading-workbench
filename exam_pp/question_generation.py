@@ -40,9 +40,17 @@ class FetchGptJson:
         return isinstance(lst, list) and all(isinstance(item, str) for item in lst)
 
     def _parse_json_response(self, gpt_response:str) -> Optional[List[str]]:
+        cleaned_gpt_response=""
+        if gpt_response.strip().startswith("{"):
+            cleaned_gpt_response=gpt_response.strip()
+        elif gpt_response.startswith("```json"):
+            cleaned_gpt_response= re.sub(r'```json|```', '', gpt_response).strip()
+        else:
+            print(f"Not sure how to parse ChatGPT response from json:\n {gpt_response}")
+            cleaned_gpt_response=gpt_response
 
         try:
-            response = json.loads(gpt_response)
+            response = json.loads(cleaned_gpt_response)
             list = response.get(self._field_name)
             if(self.__is_list_of_strings(list)) is not None:
                 return list
