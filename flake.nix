@@ -23,9 +23,14 @@
           exampp = self.buildPythonPackage {
             name = "exampp";
             src = ./.;
+            format = "setuptools";
             propagatedBuildInputs = with self; [ 
               pydantic
-           ];
+              nltk
+              ir_datasets
+              fuzzywuzzy
+            ];
+            doCheck = false;
           };
         };
 
