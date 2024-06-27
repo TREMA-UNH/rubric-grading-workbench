@@ -51,7 +51,7 @@
 
       in {
         packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
-        lib.pythonOverrides = pkgs.lib.composeManyExtensions ([ (dspy-nix.lib.${system}.pythonOverrides.cpu) pythonOverrides ]);
+        lib.pythonOverrides = pkgs.lib.composeManyExtensions ([ (dspy-nix.lib.${system}.pythonOverrides.cuda) pythonOverrides ]);
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";
