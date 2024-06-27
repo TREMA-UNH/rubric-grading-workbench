@@ -20,7 +20,16 @@
           zlib-state = self.callPackage ./nix/zlib-state.nix {};
           warc3-wet = self.callPackage ./nix/warc3-wet.nix {};
           warc3-wet-clueweb09 = self.callPackage ./nix/warc3-wet-clueweb09.nix {};
-          exampp = self.callPackage ./exampp {};
+          exampp = self.buildPythonPackage {
+            name = "exampp";
+            src = ./exampp;
+            propagatedBuildInputs = with self; [ 
+              pydantic
+              fuzzywuzzy
+              nltk
+              transformers
+           ];
+          };
         };
 
         mkShell = target: (dspy-nix.lib.${system}.mkShell {
@@ -42,7 +51,7 @@
 
       in {
         packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
-        lib.pythonOverrides = pkgs.lib.composeManyExtensions ([ (dspy-nix.lib.${system}.mkPythonOverrides system) ] ++ pythonOverrides);
+        lib.pythonOverrides = pkgs.lib.composeManyExtensions ([ (dspy-nix.lib.${system}.pythonOverrides.cpu) pythonOverrides ]);
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";
