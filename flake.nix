@@ -22,12 +22,9 @@
           warc3-wet-clueweb09 = self.callPackage ./nix/warc3-wet-clueweb09.nix {};
           exampp = self.buildPythonPackage {
             name = "exampp";
-            src = ./exampp;
+            src = ./.;
             propagatedBuildInputs = with self; [ 
               pydantic
-              fuzzywuzzy
-              nltk
-              transformers
            ];
           };
         };
@@ -52,6 +49,7 @@
       in {
         packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
         lib.pythonOverrides = pkgs.lib.composeManyExtensions ([ (dspy-nix.lib.${system}.pythonOverrides.cuda) pythonOverrides ]);
+        packages.exampp = (pkgs.python3.override {packageOverrides = pythonOverrides;}).pkgs.exampp;
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";
