@@ -61,7 +61,7 @@ def label_judgments_correlation_table(table_printer:print_correlation_table.Tabl
                                                                                                         , min_answers=min_answers
                                                                                                         , use_ratings=use_ratings
                                                                                                         , use_exam_grades=use_exam_grades)
-            print(f'Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
+            print(f'Min Answers= {min_answers}, use ratings= {use_ratings}, Overall exam/manual agreement {corrAll.printMeasures()},  acc {corrAll.accuracy_measure():.2f} / prec {corrAll.prec_measure():.2f} / rec {corrAll.rec_measure():.2f}')
             counts[fmt_labels(label)][fmt_judgments(judgment)]=corrAll.predictedRelevant
             if label_to_judgment_kappa[fmt_labels(label)] == fmt_judgments(judgment):
                 kappas[fmt_labels(label)] = corrAll.cohen_kappa()

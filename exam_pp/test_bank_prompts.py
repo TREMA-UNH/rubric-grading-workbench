@@ -1256,7 +1256,7 @@ Answer:
 @dataclass
 class Thomas(SelfRatingDirectGradingPrompt):
     def prompt_template(self, context:str)->str:
-        return f'''Instruction: You are a search quality rater evaluating the relevance of passages. Given a query and a passages, you must provide a score on an integer scale of 0 to 2 with the following meanings:
+        return f'''Instruction: You are a search quality rater evaluating the relevance of passages. Given a query and a passage, you must provide a score on an integer scale of 0 to 2 with the following meanings:
 2 = highly relevant, very helpful for this query
 1 = relevant, may be partly helpful but might contain other irrelevant content
 0 = not relevant, should never be shown for this query

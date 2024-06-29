@@ -26,11 +26,24 @@ def exam_to_qrels_files(exam_input_file:Path, qrel_out_file:Path, grade_filter:G
    
     write_qrel_file(qrel_out_file, qrel_entries)
 
-def write_qrel_file(qrel_out_file, qrel_entries):
+def write_qrel_file(qrel_out_file:Path, qrel_entries:List[QrelEntry]):
     '''Use to write qrels file'''
     with open(qrel_out_file, 'wt', encoding='utf-8') as file:
         file.writelines(entry.format_qrels() for entry in qrel_entries)
         file.close()
+
+def read_qrel_file(qrel_in_file:Path) ->List[QrelEntry]:
+    '''Use to read qrel file'''
+    with open(qrel_in_file, 'rt') as file:
+        qrel_entries:List[QrelEntry] = list()
+        for line in file.readlines():
+            splits = line.split(" ")
+            if len(splits)>=4:
+                qrel_entries.append(QrelEntry(query_id=splits[0], paragraph_id=splits[2], grade=int(splits[3])))
+            else:
+                raise RuntimeError(f"All lines in qrels file needs to contain four columns. Offending line: \"{line}\"")
+    return qrel_entries
+
 
 def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
     '''workhorse to convert exam-annotated paragraphs into qrel entries.
