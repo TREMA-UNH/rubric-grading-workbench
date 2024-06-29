@@ -217,11 +217,19 @@ class GradeFilter():
 
         # grade.prompt_info is marked as is_self_rated
         if self.is_self_rated is not None:
-            if grade.prompt_info is not None:
-                grade_is_self_rated = grade.prompt_info.get("is_self_rated", None)
-                if grade_is_self_rated is not None:
-                    if not grade_is_self_rated == self.is_self_rated:
-                        return False
+            if self.is_self_rated and grade.self_ratings is not None:
+                pass
+            elif not self.is_self_rated and grade.self_ratings is None:
+                pass
+            else:
+                return False 
+
+
+            # if grade.prompt_info is not None:
+            #     grade_is_self_rated = grade.prompt_info.get("is_self_rated", None)
+            #     if grade_is_self_rated is not None:
+            #         if not grade_is_self_rated == self.is_self_rated:
+            #             return False
 
         # prompt type (question, nugget, direct)
         if self.prompt_type is not None:
