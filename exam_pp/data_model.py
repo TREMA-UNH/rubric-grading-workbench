@@ -314,7 +314,7 @@ class FullParagraphData(BaseModel):
 
     def retrieve_exam_grade_any(self, grade_filter:GradeFilter) -> List[ExamGrades]:
             if self.grades is not None:
-                found = grade_filter.fetch_any(self.exam_grades, self.grades)[0]
+                found = next(grade_filter.fetch_any(self.exam_grades, self.grades).__iter__(),None)
                 if found is not None:
                     return [found]
 

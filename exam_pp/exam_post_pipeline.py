@@ -13,7 +13,7 @@ from . import question_loader
 from . import tqa_loader
 
 
-from .test_bank_prompts import DirectGradingPrompt, Prompt, get_prompt_classes, get_prompt_type_from_prompt_class
+from .test_bank_prompts import DirectGradingPrompt, NuggetPrompt, Prompt, QuestionPrompt, get_prompt_classes, get_prompt_type_from_prompt_class
 from .data_model import FullParagraphData, QueryWithFullParagraphList, parseQueryWithFullParagraphs, GradeFilter
 from .exam_cover_metric import ExamCoverEvals, ExamCoverScorerFactory, compute_exam_cover_scores
 from . import exam_to_qrels
@@ -640,7 +640,7 @@ def main(cmdargs=None):
 
 
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
-    parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+    parser.add_argument('--prompt-class', type=str,  required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
@@ -653,7 +653,12 @@ def main(cmdargs=None):
     parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
     parser.add_argument('--min-relevant-judgment', type=int, default=1, metavar="LEVEL", help='Minimum judgment levelfor relevant passages. (Set to 2 for TREC DL)')
     parser.add_argument('--testset', type=str, choices=["cary3","dl19","dl20"], metavar="SET", help='Offers hard-coded defaults for --official-leaderboard and --min-relevant-judgment for some test sets. Options: cary3, dl19, or dl20 ')
-    
+
+    parser.add_argument('--dont-check-prompt-class',action='store_true',  help='If set, will allow any prompt_class to be used that is in the data, without any verification. Any data errors are your own fault!')
+    prompt_type_choices=[QuestionPrompt.my_prompt_type, NuggetPrompt.my_prompt_type, DirectGradingPrompt.my_prompt_type]
+    parser.add_argument('--prompt-type', type=str, choices=prompt_type_choices, required=False,  metavar="PROMPT_TYPE", help=f"Manually set the prompt_type when setting --dont-check-prompt-class (it will otherwise be automatically set based on known prompt_classes). Choices: {prompt_type_choices}")
+
+
 
 
     # Parse the arguments
@@ -661,8 +666,23 @@ def main(cmdargs=None):
         args = parser.parse_args(args=cmdargs)    
     else:
         args = parser.parse_args()
-        
-    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
+
+
+    if not args.dont_check_prompt_class:
+        if args.prompt_class not in get_prompt_classes():
+            raise RuntimeError(f"Unknown promptclass {args.prompt_class}. Valid choices: {get_prompt_classes()}. You can disable the check with \'--dont-check-prompt-class\'")
+    if args.dont_check_prompt_class:
+        #  make sure that prompt_type argument is specified
+        if args.prompt_type is None:
+            raise RuntimeError(f"Since --dont-check-prompt-class is set, you must also specify --prompt-type PROMPT_TYPE!")
+
+    def get_prompt_type():
+        if args.dont_check_prompt_class:
+            return args.prompt_type
+        else:
+            return get_prompt_type_from_prompt_class(args.prompt_class)
+
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type())
 
 
     exam_input_file=args.exam_annotated_file
@@ -739,7 +759,7 @@ def main(cmdargs=None):
                      , use_query_facets=args.qrel_query_facets
                      , use_ratings=args.use_ratings
                      , query_facets=query_facets
-                     , direct_grading= args.qrel_query_facets and get_prompt_type_from_prompt_class(args.prompt_class)==DirectGradingPrompt.my_prompt_type
+                     , direct_grading= args.qrel_query_facets and get_prompt_type()==DirectGradingPrompt.my_prompt_type
                      )
         print("qrel leaderboard")
 
