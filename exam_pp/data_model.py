@@ -327,8 +327,6 @@ class FullParagraphData(BaseModel):
                     return [found]
 
             if self.exam_grades is not None:
-                print("exam grades is not None")
-            
                 found = next((g for g in self.exam_grades if grade_filter.filter(g)), None)
                 if found is not None:
                     return [found]
