@@ -219,10 +219,9 @@ Alternative prompts classes are
 
 * `NuggetSelfRatedPrompt`: self-rating of nugget mentions (enable `--use-nuggets`)
 * `NuggetExtractionPrompt`: extraction of nugget mentioned, for explaination and verification (to be used with `use-nuggets`)
-* `QuestionCompleteConciseUnanswerablePromptWithChoices`: self-rating answerability of exam questions
+* `QuestionSelfRatedUnanswerablePromptWithChoices`: self-rating answerability of exam questions
 * `QuestionCompleteConcisePromptWithAnswerKey2`: extract answers for exam questions (informational or for test banks with known correct answers)
 * `FagB`,`FagB_few`, `HELM`, `Sun`, `Sun_few`, `Thomas`: Direct grading prompts.
-
 
 ### Phase 3: Manual Verification
 
