@@ -1139,7 +1139,8 @@ class DirectGradingPrompt(Prompt):
             return 1
         else:
             return 0    
-    
+
+
 class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
 
     def __post_init__(self):
@@ -1150,13 +1151,23 @@ class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
     def has_rating(self):
         return True
     
+
+    @abstractmethod
+    def max_valid_rating(self)->int:
+        '''maximum rating that is valid for the prompt, e.g. if ratings are 0,1,2 then this function should return 2.'''
+        pass
+
+
     def check_answer_rating(self,answer:str)->int:
-        return self.self_rater.check_answer_rating(answer)
-    
-    def check_answer(self, answer:str)->bool:
-        return self.self_rater.check_answer(answer)
+        rating = self.self_rater.check_answer_rating(answer)
+        if rating > 2:
+            return 0
+        else:
+            return rating
 
-
+    def check_answer(self,answer:str)->bool:
+        return self.check_answer_rating(answer=answer) > 0
+        
 
 @dataclass
 class FagB(DirectGradingPrompt):
@@ -1265,3 +1276,16 @@ Query: {self.query_text}
 Passage: {context}
 Answer:
 '''
+    def max_valid_rating(self)->int:
+        return 2
+
+    # def check_answer_rating(self,answer:str)->int:
+    #     rating = self.self_rater.check_answer_rating(answer)
+    #     if rating > 2:
+    #         return 0
+    #     else:
+    #         return rating
+
+    # def check_answer(self,answer:str)->bool:
+    #     return self.check_answer_rating(answer=answer) > 0
+        
