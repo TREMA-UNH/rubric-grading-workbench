@@ -420,24 +420,22 @@ def selfRated_vs_judged_correlation(correlation_out_file:Path, grade_filter, que
             predicted_label_list = [{5}, {4}, {3},{2},{1},{0}]
             judgment_list = [{3},{2},{1},{0}]
 
-        # todo LD bring back            
+
             label_to_judgment_kappa:Dict[str, str]
-            # label_to_judgment_kappa = { fmt_labels(j):fmt_judgments(j)  for j in judgment_list }
-            # label_to_judgment_kappa[fmt_labels({5})]=fmt_judgments({2})
-            # label_to_judgment_kappa[fmt_labels({4})]=fmt_judgments({2})
-            # label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({1})
-            # label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({1})
+            label_to_judgment_kappa = { fmt_labels(j):fmt_judgments(j)  for j in judgment_list }
+            label_to_judgment_kappa[fmt_labels({5})]=fmt_judgments({2})
+            label_to_judgment_kappa[fmt_labels({4})]=fmt_judgments({2})
+            label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({1})
+            label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({1})
 
-            # if 1 in non_relevant_grade_set: 
-            #     label_to_judgment_kappa[fmt_labels({5})]=fmt_judgments({3})
-            #     label_to_judgment_kappa[fmt_labels({4})]=fmt_judgments({3})
-            #     label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({2})
-            #     label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({2})                
-            #     label_to_judgment_kappa[fmt_labels({1})]=fmt_judgments({2})          
-            # 
-            for i in {0,1,2,3}:
-                label_to_judgment_kappa[fmt_labels({i})]=fmt_judgments({i})  
-
+            if 1 in non_relevant_grade_set: 
+                label_to_judgment_kappa[fmt_labels({5})]=fmt_judgments({3})
+                label_to_judgment_kappa[fmt_labels({4})]=fmt_judgments({3})
+                label_to_judgment_kappa[fmt_labels({3})]=fmt_judgments({2})
+                label_to_judgment_kappa[fmt_labels({2})]=fmt_judgments({2})                
+                label_to_judgment_kappa[fmt_labels({1})]=fmt_judgments({2})          
+            
+            
             label_judgments_correlation_table(table_printer=table_printer
                                             , query_paragraphs=query_paragraphs, grade_filter=grade_filter
                                             , predicted_label_list=predicted_label_list, judgment_list=judgment_list
