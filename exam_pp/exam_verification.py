@@ -20,7 +20,7 @@ def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_ba
             for question in question_bank_entry.get_questions():
                 qid = question.question_id
                 question_text = question.question_text
-                print("\n{qid}\n{question_text}")
+                print(f"\n{qid}\n{question_text}")
 
                 answer_pairs: List[Tuple[int,str]] = list()
 
@@ -146,7 +146,9 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
         question:ExamQuestion
         for entry in graded:
             question_bank_entry = questions_dict.get(entry.queryId)
-            if question_bank_entry is not None:
+            if question_bank_entry is None:
+                print(f"Can't identify question bank entry for {entry.queryId}. Available Keys: {questions_dict.keys()}")
+            else:
                 display_entries:List[List[DisplayEntry]] = list()
                 question_ids = [q.question_id for q in question_bank_entry.get_questions()]
                 question_texts = {q.question_id:q.question_text for q in question_bank_entry.get_questions()} 
