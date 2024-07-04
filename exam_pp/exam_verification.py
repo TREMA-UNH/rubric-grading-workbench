@@ -208,10 +208,11 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
 
                 # Write each row
                 for paragraph_display_entries  in display_entries:
-                    p = paragraph_display_entries[0]
+                    if len(paragraph_display_entries):
+                        p = paragraph_display_entries[0]
 
-                    row = flatten([p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
-                    writer.writerow(row)
+                        row = flatten([p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
+                        writer.writerow(row)
 
 
         print(f"output written to {file_path}")
