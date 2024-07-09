@@ -217,18 +217,18 @@ def grid_display(graded:List[QueryWithFullParagraphList]
 
 
                 writer.writerow([])
-                writer.writerow(['queryid',pargraph_display_entries[0].query_id, 'query_text=?'])
+                query_id = pargraph_display_entries[0].query_id
+                writer.writerow(['queryid',query_id, 'query_text=?'])
                 
                 # Write the header row
-                writer.writerow(flatten(['',''] ,[[qid, ''] for qid in question_ids]))  # Empty string for the top-left corner cell
-                writer.writerow(flatten(['',''],  [[question_text_dict[qid], ''] for qid in question_ids]))  # Empty string for the top-left corner cell
+                writer.writerow(flatten([query_id,'',''] ,[[question_id, ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
+                writer.writerow(flatten([query_id,'',''],  [[question_text_dict[question_id], ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
 
                 # Write each row
                 for paragraph_display_entries  in display_entries:
                     if len(paragraph_display_entries):
                         p = paragraph_display_entries[0]
-
-                        row = flatten([p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
+                        row = flatten([query_id, p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
                         writer.writerow(row)
 
 
