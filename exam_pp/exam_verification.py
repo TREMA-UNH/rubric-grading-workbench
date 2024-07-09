@@ -130,7 +130,11 @@ class DisplayEntry():
     extracted_answer:str
 
 
-def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], file_path:Path, rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
+def grid_display(graded:List[QueryWithFullParagraphList]
+                 , question_bank:Sequence[QueryTestBank]
+                 , file_path:Path
+                 , rate_grade_filter: GradeFilter
+                 , answer_grade_filter: GradeFilter):
 
     import csv
 
@@ -140,7 +144,14 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
         writer = csv.writer(file, dialect=csv.excel)
             
         # graded_dict={q.queryId: q for q in graded}
-        questions_dict= {q.query_id:cast(QueryQuestionBank, q)  for q in question_bank } 
+        # questions_dict= {q.query_id:cast(QueryQuestionBank, q)  for q in question_bank } 
+        
+        questions_dict:Dict[str, List[ExamQuestion]] = defaultdict(list)
+        question_text_dict:Dict[str, str] = dict() # question Id -> question text
+        for q in question_bank:
+            questions_dict[q.query_id].extend(cast(QueryQuestionBank, q).get_questions())
+            for qq in cast(QueryQuestionBank, q).get_questions():
+                question_text_dict[qq.question_id]=qq.question_text
 
 
         question:ExamQuestion
@@ -150,16 +161,19 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
                 print(f"Can't identify question bank entry for {entry.queryId}. Available Keys: {questions_dict.keys()}")
             else:
                 display_entries:List[List[DisplayEntry]] = list()
-                question_ids = [q.question_id for q in question_bank_entry.get_questions()]
-                question_texts = {q.question_id:q.question_text for q in question_bank_entry.get_questions()} 
+                question_ids = [q.question_id for q in question_bank_entry]
+                # question_texts = {q.question_id:q.question_text for q in question_bank_entry} 
+
+                for question in question_bank_entry:
+                    question_id = question.question_id
+                    print(f"{entry.queryId} -- {question_id} -- {question.question_text}")
 
                 for paragraph in entry.paragraphs:
                     pargraph_display_entries: List[DisplayEntry] = list()
 
-                    for question in question_bank_entry.get_questions():
-                        qid = question.question_id
-                        question_text = question.question_text
-                        print("\n{qid}\n{question_text}")
+                    for question in question_bank_entry:
+                        question_id = question.question_id
+                        # print(f"{entry.queryId} -- {question_id} -- {question.question_text}")
 
                         answer_pairs: List[Tuple[int,str]] = list()
 
@@ -168,12 +182,13 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
                         rate = -1
                         extracted_anwer = []
                         for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=rate_grade_filter):
-                            rate = max ([rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == qid])
-                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
+                            rate_ = max ([rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == question_id])
+                            rate = max(rate_, rate)
+                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == question_id]
                             myanswers.extend(ans)
 
                         for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=answer_grade_filter):
-                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == qid]
+                            ans = [answer for qid_,answer in exam_grade.answers if qid_ == question_id]
                             extracted_anwer = ans
                             myanswers.extend(ans)
 
@@ -202,11 +217,11 @@ def grid_display(graded:List[QueryWithFullParagraphList], question_bank:Sequence
 
 
                 writer.writerow([])
-                writer.writerow(['queryid',entry.queryId, 'query_text', questions_dict[entry.queryId].query_text])
+                writer.writerow(['queryid',pargraph_display_entries[0].query_id, 'query_text=?'])
                 
                 # Write the header row
                 writer.writerow(flatten(['',''] ,[[qid, ''] for qid in question_ids]))  # Empty string for the top-left corner cell
-                writer.writerow(flatten(['',''],  [[question_texts[qid], ''] for qid in question_ids]))  # Empty string for the top-left corner cell
+                writer.writerow(flatten(['',''],  [[question_text_dict[qid], ''] for qid in question_ids]))  # Empty string for the top-left corner cell
 
                 # Write each row
                 for paragraph_display_entries  in display_entries:
