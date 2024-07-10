@@ -4,6 +4,9 @@ import itertools
 import math
 from pathlib import Path
 from typing import Sequence, cast, Dict, List, Tuple
+
+
+from . import tqa_loader
 from .test_bank_prompts import get_prompt_classes, get_prompt_types
 from . data_model import QueryWithFullParagraphList, GradeFilter, parseQueryWithFullParagraphs
 from . question_bank_loader import QueryQuestionBank, ExamQuestion, QueryTestBank
@@ -169,7 +172,7 @@ def grid_display(graded:List[QueryWithFullParagraphList]
                     print(f"{entry.queryId} -- {question_id} -- {question.question_text}")
 
                 for paragraph in entry.paragraphs:
-                    pargraph_display_entries: List[DisplayEntry] = list()
+                    paragraph_display_entries: List[DisplayEntry] = list()
 
                     for question in question_bank_entry:
                         question_id = question.question_id
@@ -182,8 +185,10 @@ def grid_display(graded:List[QueryWithFullParagraphList]
                         rate = -1
                         extracted_anwer = []
                         for exam_grade in paragraph.retrieve_exam_grade_all(grade_filter=rate_grade_filter):
-                            rate_ = max ([rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == question_id])
-                            rate = max(rate_, rate)
+                            selected_ratings = [rate.self_rating for rate in exam_grade.self_ratings_as_iterable() if rate.get_id() == question_id]
+                            if len(selected_ratings):
+                                rate_ = max (selected_ratings)
+                                rate = max(rate_, rate)
                             ans = [answer for qid_,answer in exam_grade.answers if qid_ == question_id]
                             myanswers.extend(ans)
 
@@ -192,44 +197,47 @@ def grid_display(graded:List[QueryWithFullParagraphList]
                             extracted_anwer = ans
                             myanswers.extend(ans)
 
-                        if extracted_anwer:
-                            myanswer_str = "\t".join(extracted_anwer)
-                            # print(f"{question_text}\t {paragraph.paragraph_id}\t {myanswer_str}")
-                            # info_str = f"{question_text}\t {paragraph.paragraph_id}\t {rate} \t {myanswer_str}"
-                            # answer_pairs.append(  (rate, info_str) ) 
-                            dp =  DisplayEntry(query_id=entry.queryId
-                                                , question_id=question.question_id
-                                                , question_text= question.question_text
-                                                , paragraph_id= paragraph.paragraph_id
-                                                , paragraph_text= paragraph.text
-                                                , self_rating=rate
-                                                , extracted_answer=myanswer_str 
-                                                )  
-                            pargraph_display_entries.append(dp)
+                        # if extracted_anwer:
+                        myanswer_str = "\t".join(extracted_anwer)
+                        # print(f"{question_text}\t {paragraph.paragraph_id}\t {myanswer_str}")
+                        # info_str = f"{question_text}\t {paragraph.paragraph_id}\t {rate} \t {myanswer_str}"
+                        # answer_pairs.append(  (rate, info_str) ) 
+                        dp =  DisplayEntry(query_id=entry.queryId
+                                            , question_id=question.question_id
+                                            , question_text= question.question_text
+                                            , paragraph_id= paragraph.paragraph_id
+                                            , paragraph_text= paragraph.text
+                                            , self_rating=rate
+                                            , extracted_answer=myanswer_str 
+                                            )  
+                        paragraph_display_entries.append(dp)
 
-                    display_entries.append(pargraph_display_entries)        
+                    if paragraph_display_entries:
+                        display_entries.append(paragraph_display_entries)        
 
 
                 def rankscore(entries:List[DisplayEntry])->int:
                     return sum( (e.self_rating for e in entries) )
 
-                display_entries = sorted(display_entries, key= lambda x: rankscore(x), reverse=True ) # most confident answers first
+
+                if display_entries:
+                    display_entries = sorted(display_entries, key= lambda x: rankscore(x), reverse=True ) # most confident answers first
 
 
-                writer.writerow([])
-                query_id = pargraph_display_entries[0].query_id
-                writer.writerow(['queryid',query_id, 'query_text=?'])
-                
-                # Write the header row
-                writer.writerow(flatten([query_id,'',''] ,[[question_id, ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
-                writer.writerow(flatten([query_id,'',''],  [[question_text_dict[question_id], ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
+                    writer.writerow([])
+                    query_id = display_entries[0][0].query_id
+                    writer.writerow(['queryid',query_id, 'query_text=?'])
+                    
+                    # Write the header row
+                    writer.writerow(flatten([query_id,'',''] ,[[question_id, ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
+                    writer.writerow(flatten([query_id,'',''],  [[question_text_dict[question_id], ''] for question_id in question_ids]))  # Empty string for the top-left corner cell
 
-                # Write each row
-                for paragraph_display_entries  in display_entries:
-                    if len(paragraph_display_entries):
-                        p = paragraph_display_entries[0]
-                        row = flatten([query_id, p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
-                        writer.writerow(row)
+                    # Write each row
+                    for paragraph_display_entries  in display_entries:
+                        if len(paragraph_display_entries):
+                            p = paragraph_display_entries[0]
+                            row = flatten([query_id, p.paragraph_id, p.paragraph_text],   [[display_entry.self_rating, display_entry.extracted_answer] for display_entry in paragraph_display_entries])
+                            writer.writerow(row)
 
 
         print(f"output written to {file_path}")
@@ -266,7 +274,7 @@ def main(cmdargs=None):
     parser.add_argument('--prompt-type', type=str, choices=get_prompt_types(), required=False, default="question", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or file)')
-    parser.add_argument('--question-type', type=str, choices=['question-bank'], required=False, metavar='PATH', help='Question type to read from question-path')
+    parser.add_argument('--question-type', type=str, choices=['question-bank','tqa'], required=False, metavar='PATH', help='Question type to read from question-path')
     parser.add_argument('--use-nuggets', action='store_true', help="if set uses nuggets instead of questions")
 
     parser.add_argument('--verify-grading', action='store_true', help="If set, will verify that extracted answers correlate with self-ratings.")
@@ -285,8 +293,13 @@ def main(cmdargs=None):
         args = parser.parse_args()
 
 
+
     if args.question_type == 'question-bank':
         question_set = question_bank_loader.parseTestBank(args.question_path,  use_nuggets=args.use_nuggets)
+    #  Todo TQA!        
+    elif args.question_type == "tqa":
+        # question_set = fix_car_query_id(tqa_loader.parseTestBank(Path(args.question_path))
+        question_set = tqa_loader.parseTestBank_all(Path(args.question_path), fix_query_id=tqa_loader.fix_tqa_car_query_id)
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
 
