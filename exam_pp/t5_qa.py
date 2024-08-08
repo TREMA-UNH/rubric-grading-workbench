@@ -144,20 +144,20 @@ class Text2TextPipeline():
             yield batch
 
 
-    def chunkingBatchAnswerQuestions(self, questions:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
+    def chunkingBatchAnswerQuestions(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
             """Run question answering over batches of questions, and tuples it up with the answers"""
-            promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+            promptGenerator=lambda prompt: prompt.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
 
-            def processBatch(qpcs:List[Prompt])->Iterable[Tuple[Prompt, str]]:
+            def processBatch(prompt_batch:List[Prompt])->Iterable[Tuple[Prompt, str]]:
                 """Prepare a batch for question answering, tuple it up with the answers"""
-                prompts = [promptGenerator(qpc) for qpc in qpcs]
+                prompts = [promptGenerator(prompt) for prompt in prompt_batch]
                 
                 outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
                 answers:List[str] = [output['generated_text']  for output in outputs]
-                return zip(qpcs, answers, strict=True)
+                return zip(prompt_batch, answers, strict=True)
 
             return list(itertools.chain.from_iterable(
-                        (processBatch(batch) for batch in self.batchChunker(questions)) 
+                        (processBatch(batch) for batch in self.batchChunker(prompts)) 
                         )) 
 
 

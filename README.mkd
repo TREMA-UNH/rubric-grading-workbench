@@ -36,16 +36,16 @@ Upon installation, each of these command line utilities supports extensive docum
 ## Installation via poetry
 
 
-Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. First, clone this repository, fetch the `data-dl20.tar.xz` [tarball](https://shorturl.at/nHOZ8), and extract it into directory `data/dl20`.
+Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. First, clone this repository, fetch the `data-dl20.tar.xz` [tarball](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz), and extract it into directory `data/dl20`.
 ```bash
 $ git clone <this repository>
 $ cd <cloned directory>
 $ poetry install
-$ wget https://shorturl.at/nHOZ8  # will download data-dl20.tar.xz
+$ wget [https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz)  # tarball with graded runs, questions, and nuggets
 $ tar -x -C data/dl20 data-dl20.tar.xz
 ```
 
-Official run files need to be obtained from <https://trec.nist.gov/results/trec29/deep.passages.input.html>. Access credentials are provided by the TREC Manager.  For reviewing purposes only, we provide an archive of run files at <https://shorturl.at/mGVXY>. Decompressed run files need to be placed in `./data/dl20/dl20runs``
+Official run files need to be obtained from <https://trec.nist.gov/results/trec29/deep.passages.input.html>. Access credentials are provided by the TREC Manager.  Decompressed run files need to be placed in `./data/dl20/dl20runs`
 
 
 Alternative installation methods are described below.
@@ -219,10 +219,9 @@ Alternative prompts classes are
 
 * `NuggetSelfRatedPrompt`: self-rating of nugget mentions (enable `--use-nuggets`)
 * `NuggetExtractionPrompt`: extraction of nugget mentioned, for explaination and verification (to be used with `use-nuggets`)
-* `QuestionCompleteConciseUnanswerablePromptWithChoices`: self-rating answerability of exam questions
+* `QuestionSelfRatedUnanswerablePromptWithChoices`: self-rating answerability of exam questions
 * `QuestionCompleteConcisePromptWithAnswerKey2`: extract answers for exam questions (informational or for test banks with known correct answers)
 * `FagB`,`FagB_few`, `HELM`, `Sun`, `Sun_few`, `Thomas`: Direct grading prompts.
-
 
 ### Phase 3: Manual Verification
 
@@ -355,6 +354,7 @@ $ poetry run autograder-analyze \
 
 A bash script with data for the code walkthrough is provided in [walkthrough-dl20.sh](walkthrough-dl20.sh)
 
+[Unabrigded results and manual verification analyses.](results/README.mkd)
 
 
 ## Alternative Installation Methods

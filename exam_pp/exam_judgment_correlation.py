@@ -109,23 +109,26 @@ def confusion_exam_vs_judged_correlation(query_paragraphs:List[QueryWithFullPara
         query_id = queryWithFullParagraphList.queryId
         paragraphs = queryWithFullParagraphList.paragraphs
         for para in paragraphs:
-            for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
-                judg = para.get_any_judgment()
-                
-                if judg ==None:
-                    continue # don't have all the data
+            judg = para.get_any_judgment()
+            
+            if judg ==None:
+                pass # we don't have judgments
+            elif not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                pass # we don't have labels
+            else:
+                # both judgments and relevance labels
+                for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
+                    hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
+                    if min_rating is not None:
+                        if exam_grade.self_ratings is None: 
+                            raise RuntimeError("These grades don't have self-ratings.")
+                        filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
+                        hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
+                    isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
 
-                hasAnsweredAny = (len(exam_grade.correctAnswered) >= min_answers)
-                if min_rating is not None:
-                    if exam_grade.self_ratings is None: 
-                        raise RuntimeError("These grades don't have self-ratings.")
-                    filteredRatedAnswers =  [rate.get_id() for rate in exam_grade.self_ratings if rate.self_rating>=min_rating]
-                    hasAnsweredAny = (len(filteredRatedAnswers) >= min_answers)
-                isJudgedRelevant = any (j.relevance>= min_judgment_level for j in para.paragraph_data.judgments)
+                    globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
-                globalExamVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
-
-                examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
+                    examVsJudged.add(predict=hasAnsweredAny, truth=isJudgedRelevant)
 
         # print(f'{query_id}: examVsJudged {examVsJudged.printMeasures()}')# ; manualRankMetric {manualRankMetric.printMeasures()}  ; examRankMetric {examRankMetric.printMeasures()}')
         perQueryStats[query_id]=examVsJudged
@@ -158,7 +161,9 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
                 judg = para.get_any_judgment()
                 
                 if judg ==None:
-                    continue # don't have all the data
+                    continue # we don't have judgments
+                if not any(para.retrieve_exam_grade_any(grade_filter=grade_filter)):
+                    continue # we don't have labels
                 if exam_grade.self_ratings is None:
                     raise RuntimeError(f"{query_id} paragraphId: {para.paragraph_id}:  Exam grades have no self ratings!  {exam_grade}")
 
@@ -184,7 +189,7 @@ def confusion_exact_rating_exam_vs_judged_correlation(query_paragraphs:List[Quer
 
 def predict_labels_from_answers(para:FullParagraphData, grade_filter:GradeFilter, min_answers:int=1)->int:
     for exam_grade in para.retrieve_exam_grade_any(grade_filter=grade_filter): # there will be 1 or 0
-        if len(exam_grade.correctAnswered) > min_answers:
+        if len(exam_grade.correctAnswered) >= min_answers:
             return 1
         else:
             return 0
@@ -251,19 +256,24 @@ def confusion_predicted_judgments_correlation(query_paragraphs:List[QueryWithFul
         for para in paragraphs:
             judg = para.get_any_judgment()
             
-            if judg ==None:
-                continue # don't have all the data
+            if judg == None:
+                continue # we don't have judgments
+            filtered_grades = para.retrieve_exam_grade_any(grade_filter=grade_filter)
+            if not any(filtered_grades):
+                continue # we don't have labels
+
             isJudgedRelevant = any (j.relevance in judgments for j in para.paragraph_data.judgments)
+
 
 
             predicted_judgment:int
             if use_exam_grades:
-                if use_ratings:
+                if use_ratings and filtered_grades[0].self_ratings:
                     predicted_judgment = predict_labels_from_exam_ratings(para=para, grade_filter=grade_filter, min_answers=min_answers)
                 else:
                     predicted_judgment = predict_labels_from_answers(para=para, grade_filter=grade_filter, min_answers=min_answers)
             else: # use relevance-label prompts
-                if use_ratings:
+                if use_ratings and filtered_grades[0].self_ratings:
                     predicted_judgment = predict_labels_from_grade_rating(para=para, grade_filter=grade_filter)
                 else:
                     predicted_judgment = predict_labels_from_grades(para=para, grade_filter=grade_filter)

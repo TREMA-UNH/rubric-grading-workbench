@@ -1,8 +1,7 @@
 {
   description = "ExamPP";
 
-  # inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/ffb2e65e054b989c55a83f79af0ed4b912e22e14";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.dspy-nix.url = "git+https://git.smart-cactus.org/ben/dspy-nix";
 
@@ -20,6 +19,18 @@
           zlib-state = self.callPackage ./nix/zlib-state.nix {};
           warc3-wet = self.callPackage ./nix/warc3-wet.nix {};
           warc3-wet-clueweb09 = self.callPackage ./nix/warc3-wet-clueweb09.nix {};
+          exampp = self.buildPythonPackage {
+            name = "exampp";
+            src = ./.;
+            format = "setuptools";
+            propagatedBuildInputs = with self; [ 
+              pydantic
+              nltk
+              ir_datasets
+              fuzzywuzzy
+            ];
+            doCheck = false;
+          };
         };
 
         mkShell = target: (dspy-nix.lib.${system}.mkShell {
@@ -41,6 +52,8 @@
 
       in {
         packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
+        lib.pythonOverrides = pythonOverrides;
+        packages.exampp = (pkgs.python3.override {packageOverrides = pythonOverrides;}).pkgs.exampp;
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";

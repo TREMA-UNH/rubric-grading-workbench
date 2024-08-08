@@ -6,11 +6,17 @@ from typing import Tuple, List, Any, Dict, Optional
 from pydantic import BaseModel
 import json
 
+from .question_bank_loader import ExamQuestion, QueryQuestionBank
+
+from .query_loader import direct_grading_prompt
+
 from .pydantic_helper import pydantic_dump
 from .test_bank_prompts import QuestionPromptWithChoices, QuestionSelfRatedUnanswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey ,QuestionPrompt
 from .test_bank_prompts import *
 
 
+def fix_tqa_car_query_id(tqa_query_id:str)->str:
+    return f'tqa2:{tqa_query_id}'
 
 # @dataclass
 class Question(BaseModel):
@@ -53,16 +59,6 @@ def parseConvertedQuestions(file_path:Path)->List[Question]:
     return result
 
 
-    # # Open the gzipped file
-    # with gzip.open(file_path, 'wt', encoding='utf-8') as file:
-    #     # Iterate over each line in the file
-    #     for queryId, qs in questions:
-    #             for q in qs:
-    #                 j = q.json()
-    #                 file.write(j)
-    #                 file.write('\n')
-    #     # file.writelines([json.dumps(x)+'\n' for x in questions])
-    # file.close()
 
 
 
@@ -184,15 +180,33 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                  , query_text=query_text
                                                                  )     
     else:
+
         raise RuntimeError(f"Prompt class {prompt_class} not supported by tqa_loader.")
     return qpc
             
 
-def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[QuestionPrompt]]]:
+def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     query_questions = load_TQA_questions(tqa_file)
-    return [(query,  [question_obj_to_prompt(prompt_class, q=question)  
+
+    if get_prompt_type_from_prompt_class(prompt_class) == DirectGradingPrompt.my_prompt_type:
+        # Direct grading prompt
+
+        # hack to only include one direct prompt for each query.
+        # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
+        return [(query_id,  [
+                             direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None)
+                            ])  
+                for query_id, questions in query_questions if len(questions)>0]
+
+
+    if get_prompt_type_from_prompt_class(prompt_class) == QuestionPrompt.my_prompt_type:
+        # Question Prompt
+        return [(query,  [question_obj_to_prompt(prompt_class, q=question)  
                          for question in questions])  
                                 for query, questions in query_questions]
+
+    else:
+        raise RuntimeError(f"prompt {prompt_class} not supported by TQA")
 
 
 def load_all_tqa_data(tqa_path:Path = Path("./tqa_train_val_test"), prompt_class:str="QuestionPromptWithChoices"):
@@ -210,7 +224,42 @@ def load_all_tqa_questions(tqa_path:Path = Path("./tqa_train_val_test")):
             , load_TQA_questions(tqa_path.joinpath('test','tqa_v2_test.json')) 
             ))
     
+#  -----
 
+
+def parseTestBank_all(tqa_path:Path = Path("./tqa_train_val_test"), fix_query_id:Optional[Callable[[str], str]]=None):
+    return list(itertools.chain(
+            parseTestBank(tqa_path.joinpath('train','tqa_v1_train.json'),fix_query_id=fix_query_id)
+            , parseTestBank(tqa_path.joinpath('val','tqa_v1_val.json'),fix_query_id=fix_query_id)     
+            , parseTestBank(tqa_path.joinpath('test','tqa_v2_test.json'),fix_query_id=fix_query_id) 
+            ))
+
+def parseTestBank(file_path:Path, fix_query_id:Optional[Callable[[str], str]]=None) -> Sequence[QueryQuestionBank] :
+    '''Load as QueryTestBank (exam questions or nuggets)'''
+
+    result: List[QueryQuestionBank] = list()
+
+    for (query_id, questions) in load_TQA_questions(file_path):
+        fixed_query_id = query_id if fix_query_id is None else fix_query_id(query_id)
+
+        # -> List[Tuple[str, List[Question]]]:
+        if len(questions):
+            exam_questions = list()
+        
+            for question in questions:
+                gold_answer_set = set(question.correct) if question.correct is not None else set()
+                exam_question = ExamQuestion(question_id=question.qid, question_text=question.question, gold_answers=gold_answer_set, facet_id=None, info=None, query_id=question.query_id)
+                exam_questions.append(exam_question)
+
+            query_text = questions[0].query_text if questions[0].query_text is not None else ""
+            
+            question_bank = QueryQuestionBank(query_id= fixed_query_id, facet_id= None, facet_text=None, test_collection="tqa", query_text=query_text, info=None, items=exam_questions, hash=9999)
+            result.append(question_bank)
+
+    return result
+
+
+#  -----
 
 def main():
     """Emit one question"""

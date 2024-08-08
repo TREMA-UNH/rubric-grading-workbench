@@ -1,0 +1,38 @@
+
+
+**Table 1. Results on IR generation methods on DL20 with autograde-qrels**.  Methods are evaluated with Autograder-Qrels using on nuggets and questions of minimum ratings 3,4, and 5 with standard error bars. Results are sorted by question-4. Results are produced with `trec_eval` using `P@20` metric. The current implementation does not support standard error bars.  
+
+
+| method  | **nugget-3** | **nugget-4** | **nugget-5** | **question-3** | **question-4** | **question-5** |
+| --- | :-- | :-- | :-- | :-- | :-- | :-- |
+| dl20-system-chat-gpt3.5-wikipedia | **0.5806** | **0.5685** | **0.5574** | **0.3787** | **0.3046** | **0.2213** |
+| dl20-system-gpt4-wikipedia | **0.6907** | **0.6787** | **0.663** | **0.3843** | **0.2889** | **0.1981** |
+| dl20-system-chat-gpt3.5-web | **0.2315** | **0.2241** | **0.2185** | **0.1139** | **0.0917** | **0.0731** |
+| dl20-system-gpt4-web | **0.2843** | **0.2759** | **0.2639** | **0.1278** | **0.0926** | **0.0657** |
+| dl20-system-chat-gpt3.5-question | **0.1019** | **0.1009** | **0.1** | **0.0704** | **0.0583** | **0.0454** |
+| dl20-system-gpt4-question | **0.0907** | **0.0907** | **0.0898** | **0.0556** | **0.0481** | **0.037** |
+
+
+
+This result is to demonstrate the applicabiliy of autograder for generated IR methods. Generated methods based on Chat-GPT versions 3.5 and 4, using prompts that ask to generate a Wikipedia article, web page, or direct answer for the query (which is interpreted as a question). 
+
+
+
+
+**Table 2. Leaderboard ranks of generated IR methods that would correspond to the rank-based methods on DL20 leaderboard with autograder-qrels.**
+
+
+|  |  | leaderboard rank@ | leaderboard rank@ | leaderboard rank@ | leaderboard rank@ | leaderboard rank@ | leaderboard rank@ |
+| :-- | --- | :-- | :-- | :-- | :-- | :-- | :-- |
+| method |  | **nugget-3** | **nugget-4** | **nugget-5** | **question-3** | **question-4** | **question-5** |
+| dl20-system-chat-gpt3.5-wikipedia |  | 18 | 53 | 1 | 56 | 56 | 50 |
+| dl20-system-gpt4-wikipedia |  | 18 | 53 | 1 | 56 | 56 | 53 |
+| dl20-system-chat-gpt3.5-web |  | 60 | 55 | 1 | 60 | 60 | 60 |
+| dl20-system-gpt4-web |  | 60 | 55 | 1 | 60 | 60 | 60 |
+| dl20-system-chat-gpt3.5-question |  | 60 | 55 | 55 | 60 | 60 | 60 |
+| dl20-system-gpt4-question |  | 60 | 55 | 55 | 60 | 60 | 60 |
+
+
+We find that the question-based autograder-qrels is most stable in the rank placement. 
+
+We note that these GPT models were not fine-tuned for this task, and since GPT is used for nugget/question generation there is an unfair advantage , and merely demonstrate that the autograder metrics can be applied, and lend themselves for a comparison between IR methods based on ranking and/or generation.

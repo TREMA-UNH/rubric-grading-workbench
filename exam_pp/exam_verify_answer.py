@@ -13,7 +13,7 @@ from transformers import pipeline, T5ForConditionalGeneration, AutoTokenizer
 
 
 from .exam_cover_metric import frac
-from .test_bank_prompts import QuestionCompleteConcisePromptWithAnswerKey2, QuestionPrompt, QuestionPromptWithChoices, get_prompt_classes
+from .test_bank_prompts import QuestionCompleteConcisePromptWithAnswerKey2, QuestionPrompt, QuestionPromptWithChoices, get_prompt_classes, get_prompt_type_from_prompt_class
 from . import data_model as parse
 from . import tqa_loader
 
@@ -371,7 +371,7 @@ def main(cmdargs=None):
     if args.question_set != "tqa":
         raise RuntimeError("Only tqa questions can be re-verified (correct answers are required)")
         
-    grade_filter = parse.GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set)
+    grade_filter = parse.GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
 
 
     # graded_query_paragraphs_file = "squad2-t5-qa-tqa-exam--benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
@@ -405,6 +405,8 @@ def main(cmdargs=None):
         reverify_answers(args.out, graded_query_paragraphs, grade_filter, args.answer_verification_prompt, query2questions)
     pass
 
+
+
 def main_messaround():
 # def main():
     # falseNegs = [( "the Sun", "the sun"), ("fins", "fin")]
@@ -423,7 +425,7 @@ def main_messaround():
     graded_query_paragraphs = parse.parseQueryWithFullParagraphs(graded_query_paragraphs_file)
 
     prompt_class = "QuestionCompleteConcisePromptWithAnswerKey"
-    grade_filter = parse.GradeFilter(model_name="google/flan-t5-large", prompt_class=None, is_self_rated=None, min_self_rating=None, question_set="tqa")
+    grade_filter = parse.GradeFilter(model_name="google/flan-t5-large", prompt_class=None, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
 
     query2questions_plain = fix_car_query_id(tqa_loader.load_all_tqa_questions())
     query2questions:Dict[str,Dict[str, tqa_loader.Question]]

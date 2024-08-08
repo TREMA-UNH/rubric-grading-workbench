@@ -1,33 +1,19 @@
+import gzip
 from typing import *
 
-from . import question_bank_loader
+from .query_loader import direct_grading_prompts, json_query_loader
 
-
+from . import question_bank_loader 
 from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
 from .t5_qa import *
-from .data_model import *
+from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
 
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
-
-
-def runSquadQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    # promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
-    promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt)
-    return answerTuples
-
-def runT2TQA(qa, questions, paragraph_txt, model_tokenizer, max_token_len):
-    promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGeneratorQC=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(paragraph_txt, model_tokenizer = model_tokenizer, max_token_len = max_token_len)
-    # promptGenerator=lambda qpc: qpc.generate_prompt_with_context(paragraph_txt)
-    answerTuples = qa.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
-    return answerTuples
 
 
 def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
@@ -40,24 +26,31 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
                          , question_id=None
                          , self_rating=prompt.check_answer_rating(answer)
                          ) 
+    elif prompt.prompt_type()==DirectGradingPrompt.my_prompt_type:
+        return SelfRating(nugget_id=None
+                         , question_id=None
+                         , self_rating=prompt.check_answer_rating(answer)
+                         ) 
+
     else:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-def noodle_one_query(queryWithFullParagraphList, questions:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
+def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
-    anyPrompt = questions[0]
+    anyPrompt = grading_prompts[0]
 
     paragraphs = queryWithFullParagraphList.paragraphs
+
 
 
     for para in itertools.islice(paragraphs, max_paragraphs):
         paragraph_id = para.paragraph_id
         paragraph_txt = para.text
 
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions(questions, paragraph_txt=paragraph_txt)
+        answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
         # for q,a in answerTuples:
             # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
 
@@ -82,7 +75,7 @@ def noodle_one_query(queryWithFullParagraphList, questions:List[Prompt], qaPipel
                                     , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]
                                     , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                     , llm = qaPipeline.exp_modelName()
-                                    , llm_options={"prompt_template":"generate_prompt_with_context_QC_no_choices", "answer_match":"lowercase, stemmed, fuzz > 0.8"}
+                                    , llm_options={}
                                     , prompt_type= anyPrompt.prompt_type()
                                     , prompt_info = anyPrompt.prompt_info()
                                     , self_ratings = ratedQs
@@ -94,6 +87,33 @@ def noodle_one_query(queryWithFullParagraphList, questions:List[Prompt], qaPipel
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
     
+
+
+def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+    '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
+
+    paragraphs = queryWithFullParagraphList.paragraphs
+
+    for para in itertools.islice(paragraphs, max_paragraphs):
+        paragraph_txt = para.text
+
+        answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
+        (_, answer) = answerTuples[0]
+
+        grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
+                           , answer=answer
+                           , self_ratings= grading_prompt.check_answer_rating(answer)
+                           , llm = qaPipeline.exp_modelName()
+                           , llm_options={}
+                           , prompt_type= grading_prompt.prompt_type()
+                           , prompt_info = grading_prompt.prompt_info()
+                        )
+        
+        if para.grades is None:
+            para.grades = list()
+        para.grades.append(grade_obj)
+
+
 
 
 def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
@@ -114,8 +134,8 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
 
         for queryWithFullParagraphList in itertools.islice(query_paragraphs, max_queries):
             query_id = queryWithFullParagraphList.queryId
-            questions = question_set.get(query_id)
-            if questions is None or len(questions)==0:
+            grading_prompts = question_set.get(query_id)
+            if grading_prompts is None or len(grading_prompts)==0:
                 print(f'No exam question for query Id {query_id} available. skipping.')
                 continue
             
@@ -146,9 +166,16 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
                 queryWithFullParagraphList = previousQueryWithFullParagraphList
                 pass
             else:
-                # Regular path
-                noodle_one_query(queryWithFullParagraphList, questions, qaPipeline, max_paragraphs)
-            
+
+                any_prompt = grading_prompts[0]
+                if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
+                    # Regular path
+                    noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
+                elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
+                    for grading_prompt in grading_prompts: # we expect there to be only one
+                        noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
+                else:
+                    raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
             
             file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             # out_file.write('\n')
@@ -185,7 +212,7 @@ def main(cmdargs=None):
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or file)')
-    parser.add_argument('--question-type', type=str, choices=['tqa','genq', 'question-bank'], required=True, metavar='PATH', help='Question type to read from question-path')
+    parser.add_argument('--question-type', type=str, choices=['tqa','genq', 'question-bank','direct'], required=True, metavar='PATH', help='Question type to read from question-path')
     
 
     parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
@@ -213,6 +240,8 @@ def main(cmdargs=None):
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
         question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
+    elif args.question_type == 'direct':
+        question_set = direct_grading_prompts(queries=json_query_loader(query_json=args.question_path), prompt_class=args.prompt_class, max_queries=None)
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     

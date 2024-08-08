@@ -5,16 +5,6 @@ import re
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from nltk.stem import PorterStemmer
-import nltk
-from fuzzywuzzy import fuzz
-
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import PorterStemmer
-
-nltk.download('stopwords')
-nltk.download('punkt')  
 
 def get_prompt_classes()->List[str]:
     return ['QuestionPromptWithChoices'
@@ -32,17 +22,65 @@ def get_prompt_classes()->List[str]:
             , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
             ]
 
+# def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
+#     if prompt_class in {'QuestionPromptWithChoices'
+#             , 'QuestionAnswerablePromptWithChoices'
+#             , 'QuestionCompleteConciseUnanswerablePromptWithChoices'
+#             , 'QuestionCompleteConcisePromptWithAnswerKey'
+#             , 'QuestionCompleteConcisePromptWithAnswerKey2'
+#             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
+#             , 'QuestionSelfRatedExplainPrompt'
+#             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'}:
+#             return QuestionPrompt.my_prompt_type
+#     if prompt_class in {'NuggetSelfRatedPrompt'
+#                         , 'NuggetExtractionPrompt'}:
+#         return NuggetPrompt.my_prompt_type
+#     if prompt_class in {"FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"}:
+#         return DirectGradingPrompt.my_prompt_type
+#     return None
+
+    
+def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
+    clzz = globals().get(prompt_class)
+    if clzz:
+        return clzz.my_prompt_type
+    else:
+        return None
+
+def get_prompt_types()->List[str]:
+    set_of_types =  {get_prompt_type_from_prompt_class(prompt_class) for prompt_class in get_prompt_classes() if get_prompt_type_from_prompt_class(prompt_class) is not None}
+    return list(set_of_types)
+
 
 # -------   helpers --------------- 
 
 
+class NltkInitializer():
+    import nltk
+    import nltk.stem #  import PorterStemmer
+    import fuzzywuzzy.fuzz #import fuzz
+    import nltk.corpus # import stopwords
+    import nltk.corpus # import stopwords
+    import nltk.tokenize # word_tokenize
+
+    x = nltk.download('stopwords')
+    y = nltk.download('punkt')  
+    stemmer = nltk.stem.PorterStemmer()
+
+    word_tokenize = nltk.tokenize.word_tokenize
+    stopwords = nltk.corpus.stopwords
+    fuzzratio = fuzzywuzzy.fuzz.ratio
+    # def fuzz(*kwargs):
+    #     return fuzzywuzzy.fuzz(kwargs)
+
+
+
 class QuestionPromptNormalizer():
-    stemmer = PorterStemmer()
 
     def normalize_answer(self, answer:str)->str:
         # Lowercase, Perform other normalization like removing punctuation, if necessary
         # Stem the answer
-        return self.stemmer.stem(answer.lower())
+        return NltkInitializer.stemmer.stem(answer.lower())
 
 
 
@@ -67,7 +105,7 @@ class QuestionStemmedChecker():
 
     def check_answer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         is_match = any (is_fuzzy_match(stemmed_answer, stemmed_gold) 
@@ -75,6 +113,8 @@ class QuestionStemmedChecker():
 
         return is_match
 
+    def answer_match_info(self)->str:
+        return "lowercase, stopped, stemmed, removed trailing period, fuzz > 0.8 / true-false special handling"
 
 class TrueFalseMatcher():
 
@@ -141,7 +181,7 @@ class UnanswerableMatcher():
     
     def check_answer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         if len(stemmed_answer)<1:
@@ -151,6 +191,13 @@ class UnanswerableMatcher():
                                    for stemmed_gold in self.normalized_unanswerable_expressions)
 
         return not is_match
+
+
+
+    def answer_match_info(self)->str:
+        return "Check for unanswerable expression, all else is deemed correct"
+
+
 
 
 class UnanswerableMatcher2():
@@ -170,6 +217,7 @@ class UnanswerableMatcher2():
 
     # inverse logic!  we are scanning for non-answers!!!
     def check_unanswer(self,answer:str)->bool:
+        '''Return false if expressions of inability to answer'''
         return self.check_unanswer_simple(answer) and self.check_unanswer_stemmed(answer)
 
 
@@ -180,7 +228,7 @@ class UnanswerableMatcher2():
 
     def check_unanswer_stemmed(self,answer:str)->bool:
         def is_fuzzy_match(stemmed_answer:str, stemmed_gold:str)->bool:
-                return fuzz.ratio(stemmed_answer, stemmed_gold) > 80
+                return NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80
         
         stemmed_answer = normalize_answer(answer)
         if len(stemmed_answer)<1:
@@ -193,8 +241,9 @@ class UnanswerableMatcher2():
 
 
 class SelfRater():
-    def __init__(self, unanswerable_matcher2):
+    def __init__(self, unanswerable_matcher2, max_rating:int=5):
         self.unanswerable_matcher2 = unanswerable_matcher2
+        self.max_rating = max_rating
     
     # self-rated logic. We are scanning for 0-5. 
     # other answers get rating 1
@@ -203,10 +252,16 @@ class SelfRater():
     def check_answer_rating(self,answer:str)->int:
         rating:int 
         # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
-        match = re.fullmatch(r'[^\w]*([0-5])[^\w]*', answer)
+        match = re.fullmatch(r'[^\w]*([0-9])[^\w]*', answer)
         if match:
             rating = int(match.group(1))
-        elif self.unanswerable_matcher2.check_unanswer(answer):   # TODO I think this is a bug
+            if rating > self.max_rating: # outside the legal range
+                if self.unanswerable_matcher2.check_unanswer(answer):   
+                    rating = 0
+                else:
+                    rating = 1
+
+        elif self.unanswerable_matcher2.check_unanswer(answer):   
             rating = 0
         else:
             rating = 1
@@ -252,14 +307,13 @@ class AnswerKey2Verifier():
         text = text.translate(str.maketrans('', '', string.punctuation))
 
         # Tokenize text
-        tokens = word_tokenize(text)
+        tokens = NltkInitializer.word_tokenize(text)
 
         # Remove stopwords
-        tokens = [word for word in tokens if word not in stopwords.words('english')]
+        tokens = [word for word in tokens if word not in NltkInitializer.stopwords.words('english')]
 
         # Stemming
-        stemmer = PorterStemmer()
-        stemmed_tokens = [stemmer.stem(word) for word in tokens]
+        stemmed_tokens = [NltkInitializer.stemmer.stem(word) for word in tokens]
 
         # Rejoin words
         normalized_text = ' '.join(stemmed_tokens)
@@ -295,16 +349,26 @@ class AnswerKey2Verifier():
                 return is_match
 
         if len(stemmed_answer) >=4:
-            is_fuzzy = any (fuzz.ratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
+            is_fuzzy = any (NltkInitializer.fuzzratio(stemmed_answer, stemmed_gold) > 80 for stemmed_gold in self.stop_stemmed_correct_answers)
             return is_fuzzy
         return None
+    
+
+    def answer_match_info(self):
+        return "AnswerKey2Verifier: use fuzzy on normalized answers >80;   normalize by lowercasing, remove punctuation,  tokenize, stemming using NLTK"
+    
 
 # ------------ prompt classes ------------
+
+@dataclass
 class Prompt(abc.ABC):
 
     @abstractmethod
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
-        pass
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "is_self_rated":self.has_rating() 
+                }
 
     @abstractmethod
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
@@ -331,6 +395,10 @@ class Prompt(abc.ABC):
     @abstractmethod
     def prompt_type(self)->str:
         return "undefined"
+
+    @abstractmethod
+    def prompt_style(self)->str:
+        return "Is this text relevant for ..."
 
 
 @dataclass
@@ -372,6 +440,66 @@ def normalize_answer(answer:str)->str:
     return QuestionPromptNormalizer().normalize_answer(answer)
 
 
+# ------ prompt truncation ----
+
+class PromptTruncater():
+
+    @staticmethod
+    def truncate_context(tokenizer, template,  context:str, max_length:int)->str:
+
+        # Tokenize the question
+        prompt_tokens = tokenizer.encode(template, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(prompt_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        return tokenizer.decode(truncated_context_tokens)
+
+
+    @staticmethod
+    def truncate_context_question_prompt(tokenizer, context:str, question:str, max_length:int)->str:
+
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
+
+        # Tokenize and truncate the context
+        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+
+        # Combine truncated context with the full question
+        combined_tokens = question_tokens + truncated_context_tokens
+        prompt = tokenizer.decode(combined_tokens)
+
+        return prompt
+
+    @staticmethod
+    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
+        # Tokenize the question
+        question_tokens = tokenizer.encode(question, add_special_tokens=False)
+
+        # Calculate the number of tokens available for the context
+        num_special_tokens = tokenizer.num_special_tokens_to_add()
+        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
+
+        # Tokenize and truncate the context
+        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
+        
+
+        # Combine truncated context with the full question
+
+        prompt = {
+            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
+            'context': tokenizer.decode(context_tokens)
+        }
+        return prompt
+
 
 
 #  ----------- Prompts ---------------
@@ -388,9 +516,9 @@ class QuestionPromptWithChoices(QuestionPrompt):
     query_text:str
 
     question_prompt_normalizer = QuestionPromptNormalizer()
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
-        # self.normalized_correct_answers = {normalize_answer(gold) for gold in correct_answers}
         self.true_false_matcher = TrueFalseMatcher(correct=self.correct)
         self.question_stemmed_checker = QuestionStemmedChecker(correct_answers={self.correct})
 
@@ -398,57 +526,19 @@ class QuestionPromptWithChoices(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "context: question:"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": True
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "context: question:"
+    
 
     def has_rating(self):
         return False
 
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-
-        # Tokenize and truncate the context
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-        
-
-        # Combine truncated context with the full question
-        # prompt = tokenizer.decode(combined_tokens)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
 
     def check_answer_rating(self, answer: str) -> int:
         return super().check_answer_rating(answer)
@@ -463,11 +553,11 @@ class QuestionPromptWithChoices(QuestionPrompt):
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         question = self.question
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {question}", max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {question}", max_length=max_token_len)
         return prompt
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question = self.question
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {question}", max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {question}", max_length=max_token_len)
         return prompt
 
     def check_answer(self,answer:str)->bool:
@@ -483,6 +573,8 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
     query_text:str
     unanswerable_expressions:Set[str]
 
+    prompt_truncater = PromptTruncater()
+
     def __post_init__(self):
         self.unanswerable_matcher=UnanswerableMatcher(self.unanswerable_expressions)
         self.unanswerable_expressions = self.unanswerable_matcher.unanswerable_expressions 
@@ -493,53 +585,18 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "How does this text answer this question:"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "How does this text answer this question:"
+    
 
     def has_rating(self):
         return False
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = truncated_context_tokens + question_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-
-        # Tokenize and truncate the context
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
-
 
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
@@ -547,14 +604,14 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         context_prompt = f"context: {context};"
         # question =  f'Is this question answerable: {self.question}'
         # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f' question: How does this text answer this question: {self.question}'
         context_prompt = f"context: {context};"
         # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
@@ -573,7 +630,8 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         return self.unanswerable_matcher.check_answer_stemmed(answer)
 
 
-
+    def answer_match_info(self):
+        return self.unanswerable_matcher.answer_match_info()
 
 @dataclass
 class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
@@ -583,7 +641,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
     unanswerable_expressions:Set[str]
-
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.unanswerable_matcher = UnanswerableMatcher(self.unanswerable_expressions)
@@ -595,66 +653,27 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
     
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context."
+    
 
     def has_rating(self):
         return False
 
 
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-
-        # Tokenize and truncate the context
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-        
-
-        # Combine truncated context with the full question
-        # prompt = tokenizer.decode(combined_tokens)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
 
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
-        # question =  f'Is this question answerable: {self.question}'
-        # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
@@ -662,7 +681,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         context_prompt = f"Context: {context}"
 
         # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
@@ -680,6 +699,8 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         
 
 
+    def answer_match_info(self)->str:
+        return self.unanswerable_matcher.answer_match_info()
 
 
 
@@ -694,8 +715,8 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    # stemmer = PorterStemmer()
     question_prompt_normalizer = QuestionPromptNormalizer()
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.true_false_matcher = TrueFalseMatcher(self.correct)
@@ -703,72 +724,31 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context"
+    
 
     def has_rating(self):
         return False
-
-
-
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-
-        # Tokenize and truncate the context
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-        
-
-        # Combine truncated context with the full question
-        # prompt = tokenizer.decode(combined_tokens)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
 
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
         context_prompt = f"Context: {context}"
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
@@ -782,9 +762,26 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     def check_answer_stemmed(self,answer:str)->bool:
         return self.question_stemmed_checker.check_answer_stemmed(answer)
 
+    def answer_match_info(self)->str:
+        return self.question_stemmed_checker.answer_match_info
 
 @dataclass
-class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
+class QuestionCompleteConcisePromptWithAnswerKey2(QuestionCompleteConcisePromptWithAnswerKey):
+    def __post_init__(self):
+        QuestionCompleteConcisePromptWithAnswerKey.__post_init__(self)
+        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
+
+    
+    def check_answer(self,answer:str)->bool:
+        return self.answer_key2_verifier.check_answer(answer)
+
+
+    def answer_match_info(self):
+        return self.answer_key2_verifier.answer_match_info()
+    
+
+@dataclass
+class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionCompleteConcisePromptWithAnswerKey):
     '''This is an answer-verifier to be used to regrade any QA prompt with explicit answers.'''
     question_id:str
     question:str
@@ -812,11 +809,15 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
         return info
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        return ""
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
 
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        return {}
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
+
+    def prompt_style(self)->str:
+        raise RuntimeError("This prompt is only for re-grading of previous answers.")
+    
 
 
     def check_answer(self,answer:str)->bool:
@@ -836,102 +837,6 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionPrompt):
     
 
 
-@dataclass
-class QuestionCompleteConcisePromptWithAnswerKey2(QuestionPrompt):
-    question_id:str
-    question:str
-    choices:Dict[str,str]
-    correct:str
-    correctKey:Optional[str]
-    query_id:str
-    facet_id:Optional[str]
-    query_text:str
-
-
-    # stemmer = PorterStemmer()
-
-    def __post_init__(self):
-        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
-
-
-    def answer_match_info(self)->str:
-        return "lowercase, stopped, stemmed, removed trailing period, fuzz > 0.8 / true-false special handling"
-
-        
-    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
-        def old_prompt(key, default):
-            if old_prompt_info is None:
-                return default
-            return old_prompt_info.get(key, default)
-        
-        info =  {"prompt_class": self.__class__.__name__
-                , "orig_prompt_class": old_prompt("prompt_class", "")
-                , "prompt_style":  old_prompt("prompt_style", "question-answering prompt")
-                , "context_first": old_prompt("context_first", False)
-                , "check_unanswerable": False
-                , "check_answer_key": True
-                , "is_self_rated":self.has_rating()
-                }
-        return info
-
-    def has_rating(self):
-        return False
-
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
-
-
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
-        question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
-        context_prompt = f"Context: {context}"
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
-        return prompt
-
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
-        context_prompt = f"Context: {context}"
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
-        return prompt
-
-
-    def check_answer(self,answer:str)->bool:
-        return self.answer_key2_verifier.check_answer(answer)
-
-
 
 @dataclass
 class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
@@ -944,8 +849,6 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
 
-    stemmer = PorterStemmer()
-
     def __post_init__(self):
         self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
             
@@ -954,12 +857,15 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "provide a complete and concise answer to the question based on the context."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": False
                 , "check_answer_key": True
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context"
+    
 
     def has_rating(self):
         return False
@@ -996,66 +902,27 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     query_text:str
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
-        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
         self.self_rater = SelfRater(self.unanswerable_matcher2)
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
                 ,"orig_prompt_class": "unknown"
-                ,"prompt_style": "N/A  (this prompt re-verifies answers produced by \"orig_prompt_class\")"
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "Can the question be answered based on the available context? Choose one"
+    
 
     def has_rating(self):
         return True
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-
-        # Tokenize and truncate the context
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-        
-
-        # Combine truncated context with the full question
-        # prompt = tokenizer.decode(combined_tokens)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
-
 
     pretext ='''Can the question be answered based on the available context? choose one:
         - 5: The answer is highly relevant, complete, and accurate.
@@ -1074,7 +941,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         context_prompt = f"Context: {context}"
         # question =  f'Is this question answerable: {self.question}'
         # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
@@ -1082,7 +949,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         context_prompt = f"Context: {context}"
 
         # question =  f'Is this question answerable: {self.question}'
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
@@ -1105,7 +972,7 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
@@ -1114,45 +981,22 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "Is the nugget addressed..."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
 
+    def prompt_style(self)->str:
+        return  "Is the nugget addressed..."
+    
+
     def has_rating(self):
         return True
 
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
+ 
 
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-
-    # pretext ='''Is the key fact (also known as a "nugget") covered in the provided context? Please evaluate based on the following scale:
-    #     - 5: The key fact is explicitly covered, with detailed explanation and context, ensuring a comprehensive understanding.
-    #     - 4: The key fact is covered with sufficient detail, though some minor elements or nuances may not be fully explored.
-    #     - 3: The key fact is mentioned and generally correct, but lacks detailed elaboration or contains minor inaccuracies.
-    #     - 2: The key fact is briefly mentioned or alluded to, but significant details are missing or inaccuracies are present.
-    #     - 1: The key fact is barely mentioned, with major inaccuracies or missing context, providing minimal insight.
-    #     - 0: The key fact is not covered or mentioned at all in the provided context.
-    #     '''
     pretext ='''Given the context, evaluate the coverage of the specified key fact (nugget). Use this scale:
         - 5: Detailed, clear coverage.
         - 4: Sufficient coverage, minor omissions.
@@ -1163,30 +1007,10 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
         '''
 
 
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
-        prompt = NuggetSelfRatedPrompt.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
@@ -1210,7 +1034,7 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
     unanswerable_expressions:Set[str]
 
-    stemmer = PorterStemmer()
+    prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.unanswerable_matcher=UnanswerableMatcher(self.unanswerable_expressions)
@@ -1219,63 +1043,26 @@ class NuggetExtractionPrompt(NuggetPrompt):
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
-                ,"prompt_style": "Is the nugget addressed..."
+                ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 }
+    def prompt_style(self)->str:
+        return  "Is the nugget addressed..."
+    
 
     def has_rating(self):
         return False
-
-
-    @staticmethod
-    def truncate_context_question_prompt(tokenizer, context, question, max_length):
-
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
-
-        # Tokenize and truncate the context
-        truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        # Combine truncated context with the full question
-        combined_tokens = question_tokens + truncated_context_tokens
-        prompt = tokenizer.decode(combined_tokens)
-
-        return prompt
-
-    @staticmethod
-    def truncate_context_question_prompt_QC(tokenizer, context:str, question:str, max_length:int):
-        # Tokenize the question
-        question_tokens = tokenizer.encode(question, add_special_tokens=False)
-
-        # Calculate the number of tokens available for the context
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5  #5 for good measure
-        context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
-
-        prompt = {
-            'question': f'{tokenizer.cls_token}{question}',  # '<cls>Where do I live?'
-            'context': tokenizer.decode(context_tokens)
-        }
-        return prompt
-
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'Extract the passage from the text that best relates to the key fact (nugget), ensuring relevance and clarity. Key Fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
-        prompt = QuestionPromptWithChoices.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-
-    def check_answer(self, answer:str)->bool:
-        return self.unanswerable_matcher.check_unanswer(answer)
 
 
     # inverse logic!  we are scanning for non-answers!!!
@@ -1291,3 +1078,214 @@ class NuggetExtractionPrompt(NuggetPrompt):
         return self.unanswerable_matcher.check_answer_stemmed(answer)
         
 
+
+## --------------
+@dataclass
+class DirectGradingPrompt(Prompt):
+    query_id:str
+    query_text:str
+    facet_id:Optional[str]
+    facet_text:Optional[str]
+
+    my_prompt_type="direct_grading"
+    prompt_truncater = PromptTruncater()
+
+    def __post_init__(self):
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
+        self.true_false_matcher = TrueFalseMatcher2()
+
+    def prompt_id(self)->str:
+        return "direct_grading"
+
+    def prompt_type(self)->str:
+        return DirectGradingPrompt.my_prompt_type
+
+
+    @abstractmethod
+    def prompt_template(self, context:str)->str:
+        pass
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": False
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating() 
+                }
+    def prompt_style(self)->str:
+        return  "Is this passage relevant?"
+    
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        empty_prompt =  self.prompt_template(context="")  # measure tokens in prompt template (without context)
+        truncated_context = self.prompt_truncater.truncate_context(tokenizer=model_tokenizer, template=empty_prompt, context=context, max_length=max_token_len)
+        prompt =  str.format(self.prompt_template(context=truncated_context))
+        return prompt
+    
+
+    def check_answer(self, answer)->bool:
+        if self.unanswerable_matcher2.check_unanswer(answer)==False:
+            return False
+        else:
+            return self.true_false_matcher.check_true_false("True", answer=answer)
+    
+
+    def has_rating(self):
+        return False
+    
+    def check_answer_rating(self,answer:str)->int:
+        if self.check_answer(answer=answer):
+            return 1
+        else:
+            return 0    
+
+
+class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.self_rater = SelfRater(self.unanswerable_matcher2)
+
+
+    def has_rating(self):
+        return True
+    
+
+    @abstractmethod
+    def max_valid_rating(self)->int:
+        '''maximum rating that is valid for the prompt, e.g. if ratings are 0,1,2 then this function should return 2.'''
+        pass
+
+
+    def check_answer_rating(self,answer:str)->int:
+        rating = self.self_rater.check_answer_rating(answer)
+        if rating > 2:
+            return 0
+        else:
+            return rating
+
+    def check_answer(self,answer:str)->bool:
+        return self.check_answer_rating(answer=answer) > 0
+        
+
+@dataclass
+class FagB(DirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.
+
+Question: {self.query_text}
+Passage: {context}
+Answer:
+'''
+
+
+class FagB_few(DirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.
+
+Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependent, so this would be at room temperature. Hope this helps.
+Question: how many eye drops per ml 
+Answer: Yes 
+
+Passage: RE: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles should last me 100 days but I run out way before that time when I am using 4 
+drops per day.In the past other pharmacies have given me 3 10-ml bottles for 100 days.E: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles 
+should last me 100 days but I run out way before that time when I am using 4 drops per day. 
+Question: how many eye drops per ml 
+Answer: No 
+
+Passage: : You can transfer money to your checking account from other Wells Fargo. accounts through Wells Fargo Mobile Banking with the mobile app, online, at any. Wells Fargo ATM, or at a 
+Wells Fargo branch. 1 Money in — deposits. 
+Question: can you open a wells fargo account online 
+Answer: No 
+
+Passage: You can open a Wells Fargo banking account from your home or even online. It is really easy to do, provided you have all of the appropriate documentation. Wells Fargo has so many b
+ank account options that you will be sure to find one that works for you. They offer free checking accounts with free online banking. 
+Question: can you open a wells fargo account online 
+Answer: Yes
+
+Passage: {context}
+Question: {self.query_text}
+Answer:
+'''
+
+@dataclass
+class HELM(DirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Does the passage answer the que
+        ry? Respond with 'Yes' or 'No'.
+
+Query: {self.query_text}
+Passage: {context}
+Answer:
+'''
+
+
+@dataclass
+class Sun(DirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Given a passage and a query, predict whether the passage includes an answer to the query by producing either "Yes" or "No".
+Query: {self.query_text}
+Passage: {context}
+Answer:
+'''
+    
+@dataclass
+class Sun_few(DirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: Given a passage and a query, predict whether the passage includes an answer to the query by producing either "Yes" or "No".
+
+Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependent, so this would be at room temperature. Hope this helps.
+Query: how many eye drops per ml
+Does the passage answer the query?
+Answer: Yes
+
+Passage: RE: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles should last me 100 days but I run out way before that time when I am using 4 drops per day.In the past other pharmacies have given me 3 10-ml bottles for 100 days.E: How many eyedrops are there in a 10 ml bottle of Cosopt? My Kaiser pharmacy insists that 2 bottles should last me 100 days but I run out way before that time when I am using 4 drops per day.
+Query: how many eye drops per ml
+Does the passage answer the query?
+Answer: No
+
+Passage: : You can transfer money to your checking account from other Wells Fargo. accounts through Wells Fargo Mobile Banking with the mobile app, online, at any. Wells Fargo ATM, or at a Wells Fargo branch. 1 Money in — deposits.
+Query: can you open a wells fargo account online
+Does the passage answer the query?
+Answer: No
+
+Passage: You can open a Wells Fargo banking account from your home or even online. It is really easy to do, provided you have all of the appropriate documentation. Wells Fargo has so many bank account options that you will be sure to find one that works for you. They offer free checking accounts with free online banking. 
+Query: can you open a wells fargo account online
+Does the passage answer the query?
+Answer: Yes
+
+Passage: {context}
+Query: {self.query_text}
+
+Does the passage answer the query?
+Answer:
+'''
+
+
+
+@dataclass
+class Thomas(SelfRatingDirectGradingPrompt):
+    def prompt_template(self, context:str)->str:
+        return f'''Instruction: You are a search quality rater evaluating the relevance of passages. Given a query and a passage, you must provide a score on an integer scale of 0 to 2 with the following meanings:
+2 = highly relevant, very helpful for this query
+1 = relevant, may be partly helpful but might contain other irrelevant content
+0 = not relevant, should never be shown for this query
+
+Query: {self.query_text}
+Passage: {context}
+Answer:
+'''
+    def max_valid_rating(self)->int:
+        return 2
+
+    # def check_answer_rating(self,answer:str)->int:
+    #     rating = self.self_rater.check_answer_rating(answer)
+    #     if rating > 2:
+    #         return 0
+    #     else:
+    #         return rating
+
+    # def check_answer(self,answer:str)->bool:
+    #     return self.check_answer_rating(answer=answer) > 0
+        
