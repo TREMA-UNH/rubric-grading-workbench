@@ -1,0 +1,39 @@
+
+
+**Table 1. Results on IR generation methods on DL20 with autograde-cover**.  Methods are evaluated with Autograder-Cover using on nuggets and questions of minimum ratings 3,4, and 5 with standard error bars. Results are sorted by question-4. 
+
+
+| method | **nugget-3** | +/- | std-err | **nugget-4** | +/- | std-err | **nugget-5** | +/- | std-err | **question-3** | +/- | std-err | **question-4** | +/- | std-err | **question-5** | +/- | std-err |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| \_overall\_ | **0.998** | +/- | 0.002 | **0.993** | +/- | 0.004 | **0.511** | +/- | 0.044 | **0.909** | +/- | 0.012 | **0.887** | +/- | 0.015 | **0.463** | +/- | 0.033 |
+| gpt4-wikipedia | **0.983** | +/- | 0.008 | **0.937** | +/- | 0.014 | **0.339** | +/- | 0.037 | **0.83** | +/- | 0.022 | **0.807** | +/- | 0.024 | **0.356** | +/- | 0.029 |
+| chat-gpt3.5-wikipedia | **0.981** | +/- | 0.008 | **0.911** | +/- | 0.021 | **0.393** | +/- | 0.045 | **0.82** | +/- | 0.02 | **0.796** | +/- | 0.022 | **0.348** | +/- | 0.031 |
+| chat-gpt3.5-web | **0.981** | +/- | 0.009 | **0.926** | +/- | 0.019 | **0.17** | +/- | 0.034 | **0.676** | +/- | 0.027 | **0.613** | +/- | 0.028 | **0.148** | +/- | 0.023 |
+| gpt4-web | **0.991** | +/- | 0.004 | **0.948** | +/- | 0.01 | **0.137** | +/- | 0.029 | **0.661** | +/- | 0.028 | **0.607** | +/- | 0.028 | **0.156** | +/- | 0.022 |
+| chat-gpt3.5-question | **0.88** | +/- | 0.025 | **0.743** | +/- | 0.035 | **0.207** | +/- | 0.037 | **0.554** | +/- | 0.033 | **0.541** | +/- | 0.033 | **0.183** | +/- | 0.027 |
+| gpt4-question | **0.896** | +/- | 0.023 | **0.713** | +/- | 0.035 | **0.165** | +/- | 0.032 | **0.554** | +/- | 0.031 | **0.537** | +/- | 0.032 | **0.172** | +/- | 0.026 |
+
+This result is to demonstrate the applicabiliy of autograder for generated IR methods. Generated methods based on Chat-GPT versions 3.5 and 4, using prompts that ask to generate a Wikipedia article, web page, or direct answer for the query (which is interpreted as a question). 
+
+
+
+
+**Table 2. Leaderboard ranks of generated IR methods that would correspond to the rank-based methods on DL20 leaderboard with autograder-cover.**
+
+Tables   
+
+|  | rank@ | rank@ | rank@ | rank@ | rank@ | rank@ |
+| --- | :-- | :-- | :-- | :-- | :-- | :-- |
+| method | **nugget-3** | **nugget-4** | **nugget-5** | **question-3** | **question-4** | **question-5** |
+| gpt4-wikipedia | 36 | 17 | 1 | 1 | 1 | 1 |
+| chat-gpt3.5-wikipedia | 45 | 47 | 1 | 1 | 1 | 1 |
+| chat-gpt3.5-web | 45 | 37 | 53 | 56 | 56 | 56 |
+| gpt4-web | 2 | 6 | 56 | 56 | 56 | 56 |
+| chat-gpt3.5-question | 59 | 56 | 52 | 56 | 56 | 56 |
+| gpt4-question | 59 | 57 | 54 | 56 | 56 | 56 |
+
+
+
+We find that the question-based autograder-cover is most stable in the rank placement. 
+
+We note that these GPT models were not fine-tuned for this task, and since GPT is used for nugget/question generation there is an unfair advantage , and merely demonstrate that the autograder metrics can be applied, and lend themselves for a comparison between IR methods based on ranking and/or generation.
