@@ -47,11 +47,10 @@
             ir_datasets
           ];
         }).overrideAttrs (oldAttrs: {
-          nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [self.outputs.packages.${system}.trec-eval];
+          nativeBuildInputs = oldAttrs.nativeBuildInputs;
         });
 
       in {
-        packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
         lib.pythonOverrides = pythonOverrides;
         packages.exampp = (pkgs.python3.override {packageOverrides = pythonOverrides;}).pkgs.exampp;
 

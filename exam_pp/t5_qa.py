@@ -29,6 +29,10 @@ PromptGeneratorQC = Callable[[Prompt],Dict[str,str]]
 
 
 def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
+    '''Estimates the batch size possible with a given model and given GPU memory constraints'''
+    # TODO: make this its own script
+
+
     gpu_memory = 45634    # A40
     # Constants
     memory_for_activations_mib = gpu_memory / 2  # Half of the total GPU memory
@@ -68,7 +72,7 @@ class QaPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"QaPipeline model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -124,7 +128,7 @@ class Text2TextPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text2Text model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -182,7 +186,7 @@ class TextGenerationPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text generation model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
