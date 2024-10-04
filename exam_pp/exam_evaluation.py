@@ -10,7 +10,7 @@ from . import exam_grading
 from . import question_bank_loader
 from . import tqa_loader
 
-from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard
+from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard, run_qrel_variance_leaderboard
 
 from .exam_to_qrels import exam_to_qrels_files
 from . import exam_to_qrels
@@ -197,7 +197,13 @@ def main(cmdargs=None):
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            run_minimal_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            # run_minimal_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            #                      ,run_dir=Path(args.run_dir)
+            #                      , min_level=args.min_self_rating
+            #                      , leaderboard_out=args.qrel_leaderboard_out
+            #                      , trec_eval_metric=args.trec_eval_metric
+            #                      )
+            run_qrel_variance_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_self_rating
                                  , leaderboard_out=args.qrel_leaderboard_out

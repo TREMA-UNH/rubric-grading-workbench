@@ -176,7 +176,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
 ## -------------------------------------------
         
 
-def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
+def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
@@ -194,7 +194,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
 
         try:
             # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
-            prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=None, facet_text=None)
+            prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
             # hack to only include one direct prompt for each query.
 
             if bank.query_id not in prompt_dict:  # ONLY one direct grading prompt per query!!! 
@@ -205,6 +205,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
         except:
             # not a direct grading prompt
             # try question and nugget prompts
+
 
 
             if not use_nuggets:
@@ -220,6 +221,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
                                                                             , facet_id = question.facet_id
                                                                             , query_text = question_bank.query_text
                                                                             , unanswerable_expressions = option_non_answers
+                                                                            , self_rater_tolerant=self_rater_tolerant
                                                                             )
                     elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
                         prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
@@ -258,6 +260,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_cla
                                                     , facet_id = nugget.facet_id
                                                     , query_text = nugget_bank.query_text
                                                     , unanswerable_expressions = option_non_answers
+                                                    , self_rater_tolerant=self_rater_tolerant
                                                     )
                     elif(prompt_class =="NuggetExtractionPrompt"):
                         prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id

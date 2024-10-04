@@ -207,6 +207,20 @@ class ExamCoverEvalsDict(dict):
 
 OVERALL_ENTRY = "_overall_"
 
+
+def systemMeanStderr(examCoverPerQuery:List[float])->Tuple[float,float]:
+    '''aggregate query-wise exam scores into mean/stderr'''
+
+    if(len(examCoverPerQuery)>=1):
+        avgExam =   statistics.mean(examCoverPerQuery)
+        stdExam = 0.0
+        if(len(examCoverPerQuery)>=2):
+            stdDevExam =   statistics.stdev(examCoverPerQuery) if(len(examCoverPerQuery)>=2) else 0.0
+            stdExam = stdDevExam / math.sqrt(len(examCoverPerQuery))
+        return (avgExam, stdExam)
+    else:
+        return (0.0,0.0)
+
 def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList], exam_factory: ExamCoverScorerFactory, rank_cut_off:int=20)-> Dict[str, ExamCoverEvals] :
     '''Workhorse to compute exam cover scores from exam-annotated paragraphs.
     Load input file with `parseQueryWithFullParagraphs`
@@ -232,7 +246,7 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
         # collect top paragraphs per method
         top_per_method = top_ranked_paragraphs(rank_cut_off, paragraphs)
 
-        # computer query-wise exam scores for all methods
+        # compute query-wise exam scores for all methods
         for method, paragraphs in top_per_method.items():
             nexamScore = exam_cover_scorer.nExamCoverageScore(paragraphs)
             resultsPerMethod[method].nExamCoverPerQuery[query_id] = nexamScore
@@ -242,27 +256,16 @@ def compute_exam_cover_scores(query_paragraphs:List[QueryWithFullParagraphList],
 
 
 
-    # aggregate query-wise exam scores into overall scores.
-
-    def overallExam(examCoverPerQuery:List[float])->Tuple[float,float]:
-        if(len(examCoverPerQuery)>=1):
-            avgExam =   statistics.mean(examCoverPerQuery)
-            stdExam = 0.0
-            if(len(examCoverPerQuery)>=2):
-                stdDevExam =   statistics.stdev(examCoverPerQuery) if(len(examCoverPerQuery)>=2) else 0.0
-                stdExam = stdDevExam / math.sqrt(len(examCoverPerQuery))
-            return (avgExam, stdExam)
-        else:
-            return (0.0,0.0)
 
     for  method,examEvals in resultsPerMethod.items():
-        examEvals.nExamScore, examEvals.nExamScoreStd = overallExam(examEvals.nExamCoverPerQuery.values())
+        examEvals.nExamScore, examEvals.nExamScoreStd = systemMeanStderr(examEvals.nExamCoverPerQuery.values())
         print(f'OVERALL N-EXAM@{rank_cut_off} method {method}: avg examScores {examEvals.nExamScore:.2f} +/0 { examEvals.nExamScoreStd:.3f}')
 
-        examEvals.examScore, examEvals.examScoreStd = overallExam(examEvals.examCoverPerQuery.values())
+        examEvals.examScore, examEvals.examScoreStd = systemMeanStderr(examEvals.examCoverPerQuery.values())
         print(f'OVERALL EXAM@{rank_cut_off} method {method}: avg examScores {examEvals.examScore:.2f} +/0 {examEvals.examScoreStd:.3f}')
 
     return resultsPerMethod
+
 
 def compute_exam_cover_scores_file(exam_input_file:Path, out_jsonl_file:Path, exam_factory:ExamCoverScorerFactory, rank_cut_off:int=20):
     """export ExamCoverScores to a file:  which method covers most questions? """
