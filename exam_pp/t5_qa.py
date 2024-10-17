@@ -249,7 +249,7 @@ class LlamaTextGenerationPipeline():
 
                     
 
-                    print("--\n"+answer)
+                    # print("--\n"+answer)
                     answers.append(answer)
 
                     # print("Llama pipeline outputs:\n", output)
