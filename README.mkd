@@ -373,7 +373,32 @@ If you are getting error message about unfree packages or experimental command, 
 * `nix --extra-experimental-features 'nix-command flakes' develop` 
 * `NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure`
 
+
+### Use Cachix
+
+We recommend the use of Cachix to avoid re-compiling basic dependencies. For that just respond "yes" when asked the following:
+
+```
+do you want to allow configuration setting 'substituters' to be set to 'https://dspy-nix.cachix.org' (y/N)? y
+do you want to permanently mark this value as trusted (y/N)? y
+```
+
+
+### Trusted user issue
+
+If you get error messages indicating that you are not a "trusted user", such as the following
+
+```
+warning: ignoring untrusted substituter 'https://dspy-nix.cachix.org', you are not a trusted user.
+```
+
+Then ask your administrator to edit the nix config file (`/etc/nix/nix.conf`) and add your username or group to the trusted user list as follows: `trusted-users = root $username @$group`.
+
+
+
 [install-nix]: https://nix.dev/install-nix
+
+
 
 
 **Usage:**
