@@ -6,7 +6,7 @@ import itertools
 import time
 import typing
 from pydantic import BaseModel
-from pydantic.generics import GenericModel
+# from pydantic.generics import GenericModel
 import json
 from typing import List, Any, Optional, Dict, Set, TextIO, Tuple,  TypeVar, Generic, List, cast
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ class Nugget(TestPoint):
     nugget_id: str
     nugget_text: str
 
-class QueryTestBank(GenericModel, Generic[T]):
+class QueryTestBank(BaseModel, Generic[T]):
     query_id: str
     facet_id: Optional[str]
     facet_text: Optional[str]
