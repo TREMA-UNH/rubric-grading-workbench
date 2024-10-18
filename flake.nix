@@ -60,6 +60,11 @@
         devShells.cuda = mkShell "cuda";
       }
     );
+
+  nixConfig = {
+    substituters = [ "https://dspy-nix.cachix.org" ];
+    trusted-public-keys = [ "dspy-nix.cachix.org-1:VJ553D0iJVoA8ov2+ly+dLnGHarfSQpemzVW6dY6CfE=" ];
+  };
 }
 
 
