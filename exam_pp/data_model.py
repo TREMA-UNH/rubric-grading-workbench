@@ -1,6 +1,7 @@
 from collections import defaultdict
 import itertools
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
+
 from typing import Iterable, List, Any, Optional, Dict, Tuple, Union, cast
 from dataclasses import dataclass
 import gzip
