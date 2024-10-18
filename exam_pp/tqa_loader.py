@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, Optional
 
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 import json
 
 from .question_bank_loader import ExamQuestion, QueryQuestionBank

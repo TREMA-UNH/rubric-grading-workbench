@@ -7,7 +7,7 @@ import itertools
 import re
 
 from collections import defaultdict
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 
 
 

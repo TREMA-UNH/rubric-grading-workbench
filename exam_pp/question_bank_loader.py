@@ -5,7 +5,7 @@ import hashlib
 import itertools
 import time
 import typing
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 # from pydantic.generics import GenericModel
 import json
 from typing import List, Any, Optional, Dict, Set, TextIO, Tuple,  TypeVar, Generic, List, cast
