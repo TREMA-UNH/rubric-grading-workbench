@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from typing import Tuple, List, Any, Dict, Optional
 
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 import json
 
 from .question_bank_loader import ExamQuestion, QueryQuestionBank
@@ -100,7 +100,7 @@ def load_TQA_questions(tqa_file:Path)-> List[Tuple[str, List[Question]]]:
     return result
 
 
-def question_obj_to_prompt(prompt_class:str, q:Question)->QuestionPrompt:
+def question_obj_to_prompt(prompt_class:str, q:Question, self_rater_tolerant:bool)->QuestionPrompt:
     return question_to_prompt(prompt_class
                             , query_id=q.query_id
                             , query_text=q.query_text
@@ -110,9 +110,10 @@ def question_obj_to_prompt(prompt_class:str, q:Question)->QuestionPrompt:
                             , correctKey=q.correctKey
                             , correct=q.correct
                             , facet_id = q.facet_id
+                            , self_rater_tolerant= self_rater_tolerant
                             )
 
-def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct, facet_id)->QuestionPrompt:
+def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct, facet_id, self_rater_tolerant:bool)->QuestionPrompt:
     qpc:QuestionPrompt
 
     if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
@@ -122,6 +123,7 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
                                                                      , facet_id = facet_id
                                                                      , query_text=query_text
                                                                      , unanswerable_expressions=set()
+                                                                     , self_rater_tolerant=self_rater_tolerant
                                                                      )
     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
         if choices is None:
@@ -185,7 +187,7 @@ def question_to_prompt(prompt_class, query_id, query_text, qid, question, choice
     return qpc
             
 
-def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
+def load_TQA_prompts(self_rater_tolerant:bool,tqa_file:Path, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     query_questions = load_TQA_questions(tqa_file)
 
     if get_prompt_type_from_prompt_class(prompt_class) == DirectGradingPrompt.my_prompt_type:
@@ -201,7 +203,7 @@ def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices"
 
     if get_prompt_type_from_prompt_class(prompt_class) == QuestionPrompt.my_prompt_type:
         # Question Prompt
-        return [(query,  [question_obj_to_prompt(prompt_class, q=question)  
+        return [(query,  [question_obj_to_prompt(prompt_class, q=question, self_rater_tolerant=self_rater_tolerant)  
                          for question in questions])  
                                 for query, questions in query_questions]
 
@@ -209,11 +211,11 @@ def load_TQA_prompts(tqa_file:Path, prompt_class:str="QuestionPromptWithChoices"
         raise RuntimeError(f"prompt {prompt_class} not supported by TQA")
 
 
-def load_all_tqa_data(tqa_path:Path = Path("./tqa_train_val_test"), prompt_class:str="QuestionPromptWithChoices"):
+def load_all_tqa_data(self_rater_tolerant:bool, tqa_path:Path = Path("./tqa_train_val_test"), prompt_class:str="QuestionPromptWithChoices"):
     return list(itertools.chain(
-            load_TQA_prompts(tqa_path.joinpath('train','tqa_v1_train.json'), prompt_class=prompt_class)
-            , load_TQA_prompts(tqa_path.joinpath('val','tqa_v1_val.json'), prompt_class=prompt_class)     
-            , load_TQA_prompts(tqa_path.joinpath('test','tqa_v2_test.json'), prompt_class=prompt_class) 
+            load_TQA_prompts(tqa_path.joinpath('train','tqa_v1_train.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)
+            , load_TQA_prompts(tqa_path.joinpath('val','tqa_v1_val.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)     
+            , load_TQA_prompts(tqa_path.joinpath('test','tqa_v2_test.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant) 
             ))
 
 
@@ -264,7 +266,7 @@ def parseTestBank(file_path:Path, fix_query_id:Optional[Callable[[str], str]]=No
 def main():
     """Emit one question"""
     print("hello")
-    questions = load_all_tqa_data()
+    questions = load_all_tqa_data(self_rater_tolerant=False)
     print("num questions loaded: ", len(questions))
     print("q0",questions[0])
 

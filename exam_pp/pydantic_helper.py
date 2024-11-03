@@ -1,4 +1,4 @@
-from pydantic import BaseModel,  __version__ as pydantic_version
+from pydantic.v1 import BaseModel,  __version__ as pydantic_version
 import json
 
 # Check Pydantic version

@@ -240,7 +240,7 @@ class UnanswerableMatcher2():
         return not is_match
 
 
-class SelfRater():
+class SelfRaterStrict():
     def __init__(self, unanswerable_matcher2, max_rating:int=5):
         self.unanswerable_matcher2 = unanswerable_matcher2
         self.max_rating = max_rating
@@ -253,6 +253,40 @@ class SelfRater():
         rating:int 
         # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
         match = re.fullmatch(r'[^\w]*([0-9])[^\w]*', answer)
+        if match:
+            rating = int(match.group(1))
+            if rating > self.max_rating: # outside the legal range
+                if self.unanswerable_matcher2.check_unanswer(answer):   
+                    rating = 0
+                else:
+                    rating = 1
+
+        elif self.unanswerable_matcher2.check_unanswer(answer):   
+            rating = 0
+        else:
+            rating = 1
+
+        return rating
+
+
+    def check_answer(self, answer:str)->bool:
+        rating = self.check_answer_rating(answer=answer)
+        return rating > 0
+
+
+class SelfRaterTolerant():
+    def __init__(self, unanswerable_matcher2, max_rating:int=5):
+        self.unanswerable_matcher2 = unanswerable_matcher2
+        self.max_rating = max_rating
+    
+    # self-rated logic. We are scanning for 0-5. 
+    # other answers get rating 1
+    # unanserable expressions get rating 0
+        
+    def check_answer_rating(self,answer:str)->int:
+        rating:int 
+        # Regex to match a string with only one digit (0-5), and possibly other non-letter characters
+        match = re.fullmatch(r'[^\w]*([0-9])[^\w]*\s.*', answer)
         if match:
             rating = int(match.group(1))
             if rating > self.max_rating: # outside the legal range
@@ -901,12 +935,17 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     facet_id:Optional[str]
     query_text:str
     unanswerable_expressions:Set[str]
+    self_rater_tolerant:bool
+
 
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
-        self.self_rater = SelfRater(self.unanswerable_matcher2)
+        if self.self_rater_tolerant:
+            self.self_rater = SelfRaterTolerant(self.unanswerable_matcher2)
+        else:
+            self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -916,6 +955,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
+                , "is_self_rater_tolerant": self.self_rater_tolerant
                 }
     def prompt_style(self)->str:
         return  "Can the question be answered based on the available context? Choose one"
@@ -969,14 +1009,18 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
     query_id:str
     facet_id:Optional[str]
     query_text:str
-
     unanswerable_expressions:Set[str]
+    self_rater_tolerant:bool
+
 
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
         self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=self.unanswerable_expressions)
-        self.self_rater = SelfRater(self.unanswerable_matcher2)
+        if self.self_rater_tolerant:
+            self.self_rater = SelfRaterTolerant(self.unanswerable_matcher2)
+        else:
+            self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
 
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
@@ -986,6 +1030,7 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
+                , "self_rater_tolerant": self.self_rater_tolerant
                 }
 
     def prompt_style(self)->str:
@@ -1142,10 +1187,9 @@ class DirectGradingPrompt(Prompt):
 
 
 class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
-
     def __post_init__(self):
         super().__post_init__()
-        self.self_rater = SelfRater(self.unanswerable_matcher2)
+        self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
 
 
     def has_rating(self):
@@ -1266,6 +1310,7 @@ Answer:
 
 @dataclass
 class Thomas(SelfRatingDirectGradingPrompt):
+    
     def prompt_template(self, context:str)->str:
         return f'''Instruction: You are a search quality rater evaluating the relevance of passages. Given a query and a passage, you must provide a score on an integer scale of 0 to 2 with the following meanings:
 2 = highly relevant, very helpful for this query

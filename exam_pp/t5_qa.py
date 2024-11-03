@@ -3,6 +3,7 @@ import math
 import os
 from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
+import torch
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 
 from .test_bank_prompts import Prompt, QuestionPromptWithChoices,QuestionPrompt
@@ -29,6 +30,10 @@ PromptGeneratorQC = Callable[[Prompt],Dict[str,str]]
 
 
 def computeMaxBatchSize(modelConfig:PretrainedConfig)-> int:
+    '''Estimates the batch size possible with a given model and given GPU memory constraints'''
+    # TODO: make this its own script
+
+
     gpu_memory = 45634    # A40
     # Constants
     memory_for_activations_mib = gpu_memory / 2  # Half of the total GPU memory
@@ -68,7 +73,7 @@ class QaPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"QaPipeline model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -124,7 +129,7 @@ class Text2TextPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text2Text model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -161,6 +166,100 @@ class Text2TextPipeline():
                         )) 
 
 
+class LlamaTextGenerationPipeline():
+    """Llama Text Generation Pipeline for text-generation based question answering"""
+
+    def __init__(self, model_name:str):
+        """promptGenerator for a particular question. 
+           Example usages: 
+              * `promptGenerator=lambda qpc: qpc.generate_prompt()`
+              * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
+           """
+        self.question_batchSize = 100 # batchSize 
+    
+        # Initialize the tokenizer and model
+        self.modelName = model_name
+        self.model = AutoModelForCausalLM.from_pretrained(self.modelName)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
+
+        print(f"Text generation model config: { self.model.config}")
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        self.max_token_len = 512
+
+        # in order to support batching in Llama
+        self.tokenizer.pad_token_id = self.model.config.eos_token_id
+        self.tokenizer.padding_side ='left'
+
+        # Create a Hugging Face pipeline
+        self.t5_pipeline_qa = pipeline('text-generation'
+                                       , model=self.model
+                                       , tokenizer=self.tokenizer
+                                       , device=device
+                                       , batch_size=BATCH_SIZE
+                                       , use_fast=True
+                                       , model_kwargs={"torch_dtype": torch.bfloat16, "quantization_config": {"load_in_4bit": True}}
+                                    #    , device_map="auto"
+                                       )
+
+    def exp_modelName(self)->str:
+        return self.modelName
+
+
+    def batchChunker(self, iterable):
+        iterator = iter(iterable)
+        while True:
+            batch = list(itertools.islice(iterator, self.question_batchSize))
+            if not batch or len(batch)<1:
+                break
+            yield batch
+
+    def chunkingBatchAnswerQuestions(self, questions:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
+            """Run question answering over batches of questions, and tuples it up with the answers"""
+            promptGenerator=lambda qpc: qpc.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+
+            def processBatch(qpcs:List[Prompt])->Iterable[Tuple[Prompt, str]]:
+                """Prepare a batch for question answering, tuple it up with the answers"""
+                #prompts = [[{"role":"user", "content": promptGenerator(qpc)}] for qpc in qpcs]
+                # prompts = [[promptGenerator(qpc)+" must be a value between 0-5!\n Answer: "] for qpc in qpcs]
+                prompts = [(promptGenerator(qpc)+" Rate how well the passage answers the question by responding with a code between 0 and 5.\n Answer:") for qpc in qpcs]
+
+                # messages = [
+                #     {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
+                #     {"role": "user", "content": "Who are you?"},
+                # ]
+
+                terminators = [
+                    self.tokenizer.eos_token_id,
+                    self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+                ]
+
+                
+                answers:List[str] = list()
+
+                output = self.t5_pipeline_qa(prompts, max_new_tokens=100 #, max_length=MAX_TOKEN_LEN, 
+                                                 , eos_token_id=terminators
+                                                 , pad_token_id = self.tokenizer.pad_token_id
+                                                 , do_sample=True
+                                                 , temperature=0.6
+                                                 , top_p=0.9)
+                for index, prompt in enumerate(prompts):
+                    # print("Llama output\n", output)
+                    raw_answer = output[index][-1]['generated_text']
+                    answer = raw_answer[len(prompt):].strip()
+
+                    
+
+                    # print("--\n"+answer)
+                    answers.append(answer)
+
+                    # print("Llama pipeline outputs:\n", output)
+                # answers:List[str] = [output['generated_text'][-1]  for output in outputs]
+                return zip(qpcs, answers, strict=True)
+
+            return list(itertools.chain.from_iterable(
+                        (processBatch(batch) for batch in self.batchChunker(questions)) 
+                        ))     
+
 class TextGenerationPipeline():
     """QA Pipeline for text-generation based question answering"""
 
@@ -182,7 +281,7 @@ class TextGenerationPipeline():
         self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
         print(f"Text generation model config: { self.model.config}")
-        print("maxBatchSize",computeMaxBatchSize(self.model.config))
+        # print("maxBatchSize",computeMaxBatchSize(self.model.config))
         # self.promptGenerator = promptGenerator
         self.max_token_len = 512
 
@@ -222,7 +321,7 @@ class TextGenerationPipeline():
 
 def mainQA():
     import tqa_loader
-    lesson_questions = tqa_loader.load_all_tqa_data()[0:2]
+    lesson_questions = tqa_loader.load_all_tqa_data(self_rater_tolerant=False)[0:2]
     
     
     qa = QaPipeline('sjrhuschlee/flan-t5-large-squad2')

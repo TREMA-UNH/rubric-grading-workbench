@@ -1,6 +1,6 @@
 import itertools
 from typing import Tuple, List, Any, Dict, Optional, Set
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 import json
 import re
 import json

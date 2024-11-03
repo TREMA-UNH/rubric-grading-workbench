@@ -47,11 +47,10 @@
             ir_datasets
           ];
         }).overrideAttrs (oldAttrs: {
-          nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [self.outputs.packages.${system}.trec-eval];
+          nativeBuildInputs = oldAttrs.nativeBuildInputs;
         });
 
       in {
-        packages.trec-eval = pkgs.callPackage ./nix/trec-eval.nix {};
         lib.pythonOverrides = pythonOverrides;
         packages.exampp = (pkgs.python3.override {packageOverrides = pythonOverrides;}).pkgs.exampp;
 
@@ -61,6 +60,11 @@
         devShells.cuda = mkShell "cuda";
       }
     );
+
+  nixConfig = {
+    substituters = [ "https://dspy-nix.cachix.org" ];
+    trusted-public-keys = [ "dspy-nix.cachix.org-1:VJ553D0iJVoA8ov2+ly+dLnGHarfSQpemzVW6dY6CfE=" ];
+  };
 }
 
 

@@ -159,6 +159,7 @@ exam_post_pipeline.main(cmdargs=[car_graded_file
                               ,"--run-dir","./run-car","--qrel-query-facets", "--use-ratings"
                               , "--model","google/flan-t5-large","--prompt-class","QuestionSelfRatedUnanswerablePromptWithChoices" 
                               , "--question-set", "question-bank"
+                              , "--question-path-for-facets", "car-questions.jsonl.gz"
                              , "--leaderboard-out", "dl.cover.tsv"
                              , "--qrel-leaderboard-out", "dl.qrel.tsv"
                             #   , "--testset","dl19"

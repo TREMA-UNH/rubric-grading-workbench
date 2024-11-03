@@ -20,7 +20,7 @@ from . import exam_to_qrels
 from . import exam_leaderboard_correlation
 from . import exam_judgment_correlation
 from .exam_judgment_correlation import ConfusionStats
-from .exam_run_trec_eval import trec_eval_leaderboard
+from .exam_run_trec_eval import compute_exam_qrels_scores, parse_trec_eval_variance, run_trec_eval_variance, trec_eval_leaderboard
 from . import print_correlation_table
 from . import exam_cover_metric
 
@@ -218,6 +218,49 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
             file.writelines(["\n","\n"])
 
         file.close()
+
+
+
+def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), leaderboard_sort:Optional[str]=None):
+    with open(leaderboard_out, 'wt') as file:
+        # min_rating:Optional[int]
+
+        for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
+
+            resultsPerMethod:Dict[str, ExamCoverEvals]
+            
+            trec_eval_out =run_trec_eval_variance(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x, trec_eval_metric=trec_eval_metric)
+            trec_eval_parsed=parse_trec_eval_variance(trec_eval_out)
+            resultsPerMethod = compute_exam_qrels_scores(trec_eval_parsed)
+
+
+            
+            # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
+            exam_leaderboard_correlation.print_leaderboard_eval(evals = list(resultsPerMethod.values()), grade_filter=grade_filter)
+
+            # nExamCorrelation,examCorrelation=exam_leaderboard_correlation.leaderboard_correlation(resultsPerMethod.values(), official_leaderboard=official_leaderboard)
+            # print(f'min_rating={str(min_rating)} nExam:{nExamCorrelation}')
+            # print(f'min_rating={str(min_rating)}  exam:{examCorrelation}')
+
+
+            table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values())
+                                                                   , official_leaderboard=dict()
+                                                                   , nExamCorrelation=None
+                                                                   , examCorrelation=None
+                                                                   , sortBy=leaderboard_sort) 
+            
+
+        
+            file.writelines("\n".join(table))
+            file.writelines( ["\n"
+                            , f' EXAM scores produced with {grade_filter}\n'
+                            , f' min_rating\t{str(min_level_x)}\n'
+                            ,'\n'])
+
+            file.writelines(["\n","\n"])
+
+        file.close()
+
 
 def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20"):
     with open(leaderboard_out, 'wt') as file:
@@ -766,6 +809,7 @@ def main(cmdargs=None):
         print("qrel leaderboard")
 
         if args.run_dir is not None:
+            # TODO turn into run_qrel_variance_leaderboard
             run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level
@@ -787,6 +831,7 @@ def main(cmdargs=None):
 
 
     if args.leaderboard_out is not None:
+        # run_qrel_variance_leaderboard
         run_leaderboard(leaderboard_file=args.leaderboard_out
                         , grade_filter=grade_filter
                         , query_paragraphs=query_paragraphs

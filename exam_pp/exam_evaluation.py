@@ -10,7 +10,7 @@ from . import exam_grading
 from . import question_bank_loader
 from . import tqa_loader
 
-from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard
+from .exam_post_pipeline import run_minimal_qrel_leaderboard, run_qrel_leaderboard, run_qrel_variance_leaderboard
 
 from .exam_to_qrels import exam_to_qrels_files
 from . import exam_to_qrels
@@ -57,10 +57,10 @@ def export_leaderboard_table(leaderboard_out:Path, evals:List[ExamCoverEvals],so
 
 
 
-def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, min_self_rating: Optional[int]=1):
+def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, min_self_rating: Optional[int]=1,leaderboard_sort:Optional[str]=None):
     exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter, min_self_rating=min_self_rating)
     resultsPerMethod:Dict[str, ExamCoverEvals] = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
-    export_leaderboard_table(leaderboard_out=leaderboard_file, evals= list(resultsPerMethod.values()), sortBy="exam")
+    export_leaderboard_table(leaderboard_out=leaderboard_file, evals= list(resultsPerMethod.values()), sortBy=leaderboard_sort)
 
 
 # -----------------------
@@ -132,6 +132,7 @@ def main(cmdargs=None):
     # parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Export Inter-annotator Agreement Correlation to this file ', default=None)
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Leaderboard to this file ', default=None)
+    parser.add_argument('-s', '--leaderboard-sort', type=str, metavar="SORT", help='Key to sort the leaderboard (exam, n-exam) or None for sort by method name.')
 
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
@@ -197,11 +198,18 @@ def main(cmdargs=None):
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            run_minimal_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            # run_minimal_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            #                      ,run_dir=Path(args.run_dir)
+            #                      , min_level=args.min_self_rating
+            #                      , leaderboard_out=args.qrel_leaderboard_out
+            #                      , trec_eval_metric=args.trec_eval_metric
+            #                      )
+            run_qrel_variance_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_self_rating
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
+                                 , leaderboard_sort=args.leaderboard_sort
                                  )
 
 
@@ -210,6 +218,7 @@ def main(cmdargs=None):
                         , grade_filter=grade_filter
                         , query_paragraphs=query_paragraphs
                         , min_self_rating=args.min_self_rating
+                        , leaderboard_sort=args.leaderboard_sort
                         )
 
 

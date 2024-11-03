@@ -89,7 +89,7 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
     
 
 
-def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     paragraphs = queryWithFullParagraphList.paragraphs
@@ -208,6 +208,7 @@ def main(cmdargs=None):
     modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name)
                 ,'question-answering': lambda model_name:  QaPipeline(model_name)
                 ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name) 
+                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name)
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -235,13 +236,24 @@ def main(cmdargs=None):
 
     question_set:Dict[str,List[Prompt]]
     if args.question_type == "tqa":
-        question_set = dict(fix_car_query_id(tqa_loader.load_all_tqa_data(Path(args.question_path), prompt_class=args.prompt_class)))
+        question_set = dict(fix_car_query_id( tqa_loader.load_all_tqa_data(Path(args.question_path)
+                                                                          , prompt_class=args.prompt_class
+                                                                          , self_rater_tolerant = (args.model_pipeline=="llama")
+                                                                          )))
     elif args.question_type == 'genq':
         question_set = dict(question_loader.load_naghmehs_question_prompts(args.question_path, prompt_class=args.prompt_class))
     elif args.question_type == 'question-bank':
-        question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path, prompt_class=args.prompt_class, use_nuggets=args.use_nuggets))
+        question_set = dict(question_bank_loader.load_prompts_from_test_bank(args.question_path
+                                                                             , prompt_class=args.prompt_class
+                                                                             , use_nuggets=args.use_nuggets
+                                                                             , self_rater_tolerant = (args.model_pipeline=="llama")
+                                                                             ))
     elif args.question_type == 'direct':
-        question_set = direct_grading_prompts(queries=json_query_loader(query_json=args.question_path), prompt_class=args.prompt_class, max_queries=None)
+        question_set = direct_grading_prompts(queries=json_query_loader(query_json=args.question_path)
+                                              , prompt_class=args.prompt_class
+                                              , max_queries=None
+                                              , self_rater_tolerant = (args.model_pipeline=="llama")
+                                              )
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
