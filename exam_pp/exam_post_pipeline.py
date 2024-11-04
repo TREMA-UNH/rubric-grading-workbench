@@ -221,7 +221,7 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
 
 
-def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter()):
+def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), leaderboard_sort:Optional[str]=None):
     with open(leaderboard_out, 'wt') as file:
         # min_rating:Optional[int]
 
@@ -246,7 +246,8 @@ def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out
             table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values())
                                                                    , official_leaderboard=dict()
                                                                    , nExamCorrelation=None
-                                                                   , examCorrelation=None) 
+                                                                   , examCorrelation=None
+                                                                   , sortBy=leaderboard_sort) 
             
 
         

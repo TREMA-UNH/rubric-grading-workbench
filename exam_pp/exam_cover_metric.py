@@ -4,7 +4,7 @@ from collections import defaultdict
 from math import nan
 import math
 import statistics
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 import gzip
 from typing import Set, List, Tuple, Dict, Optional, Iterable
 from collections import defaultdict
