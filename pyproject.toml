@@ -1,34 +1,34 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "exam_pp"
-version = "0.1.1"
+version = "0.1.2"
 description = "RUBRIC Autograder Workbench for evaluating retrieval, generation, and RAG information systems"
-authors = ["Laura Dietz <dietz@cs.unh.edu>", "Ben Gamari <ben@smart-cactus.org>", "Naghmeh Farzi <Naghmeh.Farzi@unh.edu>"]
-packages = [
-    { include = "exam_pp" }
+authors = [
+    {name = "Laura Dietz", email = "dietz@cs.unh.edu"},
+    {name = "Ben Gamari", email = "ben@smart-cactus.org"},
+    {name = "Naghmeh Farzi", email = "Naghmeh.Farzi@unh.edu"},
+]
+requires-python = ">= 3.8"
+dependencies = [
+    "pydantic ~= 2.6",
+    "fuzzywuzzy ~= 0.18",
+    "nltk ~= 3.8",
+    "pylatex ~= 1.4",
+    "scipy",
+    "openai ~= 1.11",
+    "requests ~= 2.31",
+    "trec-car-tools ~= 2.6",
+    "torch ~= 2.1",
+    "transformers ~= 4.37",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.8"  
-pydantic = "^1.10"
-fuzzywuzzy = "^0.18"
-nltk = "^3.8"
-pylatex = "^1.4"
-scipy = "*"
-openai = "^1.11"
-requests = "^2.31"
-trec-car-tools = "^2.6"
-torch = "^2.1"
-transformers = "^4.37"
+[tool.setuptools]
+packages = ["exam_pp"]
 
-[tool.poetry.dev-dependencies]
-mypy = "*"
-jedi = "*"
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
+[project.scripts]
 autograder-generate = "exam_pp.question_generation:main"
 autograder-grade = "exam_pp.exam_grading:main"
 autograder-verify = "exam_pp.exam_verification:main"

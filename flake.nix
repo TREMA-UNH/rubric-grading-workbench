@@ -22,9 +22,15 @@
           exampp = self.buildPythonPackage {
             name = "exampp";
             src = ./.;
-            format = "setuptools";
+            format = "pyproject";
             propagatedBuildInputs = with self; [ 
+              setuptools
               pydantic
+              pylatex
+              scipy
+              openai
+              torch
+              transformers
               nltk
               ir_datasets
               fuzzywuzzy

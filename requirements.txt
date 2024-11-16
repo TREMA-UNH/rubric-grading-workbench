@@ -1,7 +1,0 @@
-pydantic
-fuzzywuzzy
-nltk
-mypy
-jedi
-pylatex
-trec-car-tools
