@@ -1,4 +1,6 @@
 import gzip
+import concurrent.futures
+
 from typing import *
 
 from .query_loader import direct_grading_prompts, json_query_loader
@@ -11,6 +13,7 @@ from .t5_qa import *
 from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
 
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
@@ -36,7 +39,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -44,60 +47,61 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
+    async def noodle_one_paragraph(para:FullParagraphData):
+
+            paragraph_id = para.paragraph_id
+            paragraph_txt = para.text
+
+            answerTuples = await qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
+            # for q,a in answerTuples:
+                # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
+
+            ratedQs: Optional[List[SelfRating]]
+            ratedQs = [self_ratings_from_prompt(prompt=prompt, answer=answer)         
+                                for prompt,answer in answerTuples
+                                if prompt.has_rating()]
+            
+            if len(ratedQs)==0:
+                ratedQs = None
 
 
-    for para in itertools.islice(paragraphs, max_paragraphs):
-        paragraph_id = para.paragraph_id
-        paragraph_txt = para.text
+            correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
+            numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
+            numAll = len(answerTuples)
+            if numAll > 0: # can't provide exam when no questions are answered.
+                print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
 
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
-        # for q,a in answerTuples:
-            # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
+                # adding exam data to the JSON file
+                exam_grades = ExamGrades( correctAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                                        , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]
+                                        , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
+                                        , llm = qaPipeline.exp_modelName()
+                                        , llm_options={}
+                                        , prompt_type= anyPrompt.prompt_type()
+                                        , prompt_info = anyPrompt.prompt_info()
+                                        , self_ratings = ratedQs
+                                ) 
+                if para.exam_grades is None:
+                    para.exam_grades = list()
+                para.exam_grades.append(exam_grades)
 
-        ratedQs: Optional[List[SelfRating]]
-        ratedQs = [self_ratings_from_prompt(prompt=prompt, answer=answer)         
-                            for prompt,answer in answerTuples
-                            if prompt.has_rating()]
+            else:
+                print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
         
-        if len(ratedQs)==0:
-            ratedQs = None
+    await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
 
 
-        correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
-        numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
-        numAll = len(answerTuples)
-        if numAll > 0: # can't provide exam when no questions are answered.
-            print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
-
-            # adding exam data to the JSON file
-            exam_grades = ExamGrades( correctAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                                    , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                    , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]
-                                    , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                    , llm = qaPipeline.exp_modelName()
-                                    , llm_options={}
-                                    , prompt_type= anyPrompt.prompt_type()
-                                    , prompt_info = anyPrompt.prompt_info()
-                                    , self_ratings = ratedQs
-                            ) 
-            if para.exam_grades is None:
-                para.exam_grades = list()
-            para.exam_grades.append(exam_grades)
-
-        else:
-            print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
-    
-
-
-def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
-    for para in itertools.islice(paragraphs, max_paragraphs):
+
+    async def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
+        answerTuples = await qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
         (_, answer) = answerTuples[0]
 
         grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
@@ -113,10 +117,10 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
             para.grades = list()
         para.grades.append(grade_obj)
 
+    await asyncio.gather( *(noodle_one_paragraph(para) for para in itertools.islice(paragraphs, max_paragraphs) ))
 
 
-
-def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+async def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -138,7 +142,7 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
             if grading_prompts is None or len(grading_prompts)==0:
                 print(f'No exam question for query Id {query_id} available. skipping.')
                 continue
-            
+
             # restart logic: check whether we are done copying
             if query_id == restart_from_query:  
                 print(f"Restart Logic:  encountered restart query {query_id}. Stopping copying and starting exam grading")
@@ -170,20 +174,22 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
+                    await noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
-            
+
             file.write(dumpQueryWithFullParagraphList(queryWithFullParagraphList))
             # out_file.write('\n')
             file.flush()
 
+        qaPipeline.finish()
         file.close()
 
-def main(cmdargs=None):
+
+async def main(cmdargs=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
     import argparse
@@ -259,7 +265,8 @@ def main(cmdargs=None):
     
     qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name)
 
-    noodle(qaPipeline=qaPipeline
+    await noodle(
+             qaPipeline=qaPipeline
            , question_set=question_set
            , paragraph_file= args.paragraph_file
            , out_file = args.out_file
@@ -270,4 +277,4 @@ def main(cmdargs=None):
            )
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -1,13 +1,16 @@
+import asyncio
+
 import itertools
 import math
 import os
 from pathlib import Path
 from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
+import typing
 import torch
 from transformers import pipeline, T5ForConditionalGeneration, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 
 from .test_bank_prompts import Prompt, QuestionPromptWithChoices,QuestionPrompt
-
+from .batched_worker import BatchedWorker
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
 device:Optional[int] = None
@@ -109,7 +112,6 @@ class QaPipeline():
                         (processBatch(batch) for batch in self.batchChunker(questions)) 
                         )) 
 
-
 class Text2TextPipeline():
     """QA Pipeline for text2text based question answering"""
 
@@ -119,8 +121,12 @@ class Text2TextPipeline():
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
               * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
            """
-        self.question_batchSize = 100 # batchSize
-    
+        def call_pipeline(prompts: List[str]) -> List[str]:
+            resps = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+            return [resp['generated_text'] for resp in resps]
+        
+        self.batcher = BatchedWorker[str, str](func = call_pipeline, batch_size = 100)
+
         # Initialize the tokenizer and model
         # self.modelName = 'google/flan-t5-large'
         self.modelName = model_name
@@ -136,34 +142,35 @@ class Text2TextPipeline():
         # Create a Hugging Face pipeline
         self.t5_pipeline_qa = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
 
+
+    def finish(self) -> None:
+        self.batcher.finish()
+
+
     def exp_modelName(self)->str:
         return self.modelName
 
 
-    def batchChunker(self, iterable):
-        iterator = iter(iterable)
-        while True:
-            batch = list(itertools.islice(iterator, self.question_batchSize))
-            if not batch or len(batch)<1:
-                break
-            yield batch
+    async def chunkingBatchAnswerQuestions(self, prompts:List[Prompt],  paragraph_txt:str) -> List[Tuple[Prompt, str]]:
+        promptGenerator=lambda prompt: prompt.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+        return [(prompt, await self.batcher.run(promptGenerator(prompt))) for prompt in prompts]
 
 
-    def chunkingBatchAnswerQuestions(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
-            """Run question answering over batches of questions, and tuples it up with the answers"""
-            promptGenerator=lambda prompt: prompt.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
+    # def chunkingBatchAnswerQuestions(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
+    #         """Run question answering over batches of questions, and tuples it up with the answers"""
+    #         promptGenerator=lambda prompt: prompt.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
 
-            def processBatch(prompt_batch:List[Prompt])->Iterable[Tuple[Prompt, str]]:
-                """Prepare a batch for question answering, tuple it up with the answers"""
-                prompts = [promptGenerator(prompt) for prompt in prompt_batch]
+    #         def processBatch(prompt_batch:List[Prompt])->Iterable[Tuple[Prompt, str]]:
+    #             """Prepare a batch for question answering, tuple it up with the answers"""
+    #             prompts = [promptGenerator(prompt) for prompt in prompt_batch]
                 
-                outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-                answers:List[str] = [output['generated_text']  for output in outputs]
-                return zip(prompt_batch, answers, strict=True)
+    #             outputs = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+    #             answers:List[str] = [output['generated_text']  for output in outputs]
+    #             return zip(prompt_batch, answers, strict=True)
 
-            return list(itertools.chain.from_iterable(
-                        (processBatch(batch) for batch in self.batchChunker(prompts)) 
-                        )) 
+    #         return list(itertools.chain.from_iterable(
+    #                     (processBatch(batch) for batch in self.batchChunker(prompts)) 
+    #                     )) 
 
 
 class LlamaTextGenerationPipeline():
@@ -200,6 +207,7 @@ class LlamaTextGenerationPipeline():
                                        , model_kwargs={"torch_dtype": torch.bfloat16, "quantization_config": {"load_in_4bit": True}}
                                     #    , device_map="auto"
                                        )
+
 
     def exp_modelName(self)->str:
         return self.modelName
@@ -287,6 +295,7 @@ class TextGenerationPipeline():
 
         # Create a Hugging Face pipeline
         self.t5_pipeline_qa = pipeline('text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
+
 
     def exp_modelName(self)->str:
         return self.modelName

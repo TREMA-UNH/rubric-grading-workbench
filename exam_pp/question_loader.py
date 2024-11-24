@@ -107,6 +107,7 @@ def load_naghmehs_question_prompts(question_file:Path, prompt_class:str="Questio
                                                                              , facet_id = facet_id
                                                                              , query_text = query_text
                                                                              , unanswerable_expressions = unanswerable_expressions
+                                                                             , self_rater_tolerant = False
                                                                              )
                     elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
                         qpc = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id=qid
