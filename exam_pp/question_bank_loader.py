@@ -304,21 +304,32 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
 ## -------------------------------------------        
 
 def main():
+
+    # construct questions
+    #  either without gold answers
     question1 = ExamQuestion(question_id="12897q981", query_id="Q1", question_text="What was my question, again?", facet_id=None, info=None, gold_answers=None)
-    question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info=None, gold_answers=["me","myself","I"])
+    # or with one or more gold answers, also save anythin you want in the info field, its not used, but sometimes its useful
+    question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info={"anything":"I want", "used":False}, gold_answers=["me","myself","I"])
 
     print(pydantic_dump(question1))
+
+    # For each query, construct the test bank, (query facets are optional), you can name the test collection, and use a hash code for versioning
     queryBank = QueryQuestionBank(query_id="Q1", facet_id=None, test_collection="dummy", query_text="everything", info=None
                       , items = [question1, question2], hash=1111
                       )
 
 
+    # write test banks to a file
     writeTestBank("newfile.jsonl.gz", [queryBank])
 
+    # you can also open the test bank with our code
     bank_again = parseTestBank("newfile.jsonl.gz")
     print(bank_again)
 
+
+    # this is how we construct grading prompts from the test bank
     prompts = load_prompts_from_test_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices", use_nuggets=False, self_rater_tolerant=False)
+    # (self_rater_tolerant defines what we do when the LLM does not respond with a numerical grade code)
     print(prompts[0])
 
 if __name__ == "__main__":
