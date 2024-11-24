@@ -305,20 +305,20 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
 
 def main():
     question1 = ExamQuestion(question_id="12897q981", query_id="Q1", question_text="What was my question, again?", facet_id=None, info=None, gold_answers=None)
-    question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info=None, gold_answers=None)
+    question2 = ExamQuestion(question_id="42", query_id="Q1", question_text="Who am I?", facet_id="some_facet", info=None, gold_answers=["me","myself","I"])
 
     print(pydantic_dump(question1))
     queryBank = QueryQuestionBank(query_id="Q1", facet_id=None, test_collection="dummy", query_text="everything", info=None
-                      , items = [question1, question2]
+                      , items = [question1, question2], hash=1111
                       )
 
 
-    writeTestBank("newfile.jsonl.gz", [queryBank, queryBank])
+    writeTestBank("newfile.jsonl.gz", [queryBank])
 
     bank_again = parseTestBank("newfile.jsonl.gz")
-    print(bank_again[0])
+    print(bank_again)
 
-    prompts = load_prompts_from_test_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    prompts = load_prompts_from_test_bank("newfile.jsonl.gz", prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices", use_nuggets=False, self_rater_tolerant=False)
     print(prompts[0])
 
 if __name__ == "__main__":
