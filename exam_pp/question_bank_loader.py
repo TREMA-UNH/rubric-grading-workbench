@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .query_loader import direct_grading_prompt
 
-from .test_bank_prompts import DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
+from .test_bank_prompts import DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 from .pydantic_helper import pydantic_dump
 
 
@@ -259,6 +259,18 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             , query_text = question_bank.query_text
                                                                             , unanswerable_expressions = option_non_answers
                                                                             )
+                    elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
+                        prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
+                                                                            , question = question.question_text
+                                                                            , choices = {}
+                                                                            , correct=set(question.gold_answers)
+                                                                            , correctKey=None
+                                                                            , query_id = question_bank.query_id
+                                                                            , facet_id = question.facet_id
+                                                                            , query_text = question_bank.query_text
+                                                                            # , unanswerable_expressions = option_non_answers
+                                                                            )
+                    # QuestionCompleteConcisePromptWithAnswerKey
                     else:
                         raise RuntimeError(f"Prompt class {prompt_class} not supported by this question_loader or direct_grading loader.")\
                 

@@ -118,16 +118,26 @@ class QuestionStemmedChecker():
 
 class TrueFalseMatcher():
 
-    def __init__(self,correct:str):
-        self.correct_answers:Set[str] = {correct}
+    def __init__(self,correct:Set[str]):
+        self.correct_answers:Set[str] = correct
 
-        if correct.lower().strip() =="false":
-            self.correct_answers.add("no")
-            self.correct_answers.add("incorrect")
-            self.correct_answers.add("wrong")
-        if correct.lower().strip() =="true":
-            self.correct_answers.add("yes")
-            self.correct_answers.add("correct")
+        if len(correct)==1:
+            add_false = False
+            add_true = False
+            for correct_answer in correct:
+                if correct_answer.lower().strip() =="false":
+                    add_false=True
+                if correct_answer.lower().strip() =="true":
+                    add_true=True
+
+            if add_false:
+                    self.correct_answers.add("no")
+                    self.correct_answers.add("incorrect")
+                    self.correct_answers.add("wrong")
+            if add_true:
+                    self.correct_answers.add("yes")
+                    self.correct_answers.add("correct")
+
 
     def is_match(self, answer:str)->bool:
         return answer.lower().strip() in self.correct_answers
@@ -136,18 +146,18 @@ class TrueFalseMatcher():
         return self.is_match(answer)
 
 class TrueFalseMatcher2():
-    def check_true_false(self, correct:str, answer:str)->Optional[bool]:
+    def check_true_false(self, correct:Set[str], answer:str)->Optional[bool]:
         FALSE_answers = {"no", "incorrect","false"}
         TRUE_answers = {"yes", "correct","true"}
-        answer_ = correct.lower().strip()
+        answer_ = {correct_answer.lower().strip() for correct_answer in correct}
 
-        if answer_ == "false":
+        if answer_ == {"false"}:
             if answer.lower() in FALSE_answers:
                 return True
             else:
                 return False
 
-        if answer_ == "true":
+        if answer_ == {"true"}:
             if answer.lower() in TRUE_answers:
                 return True
             else:
@@ -315,12 +325,10 @@ class AnswerKey2Verifier():
     question_prompt_normalizer = QuestionPromptNormalizer()
     true_false_matcher = TrueFalseMatcher2()
 
-    def __init__(self, correct):
-        self.correct=self.strip_trailing_period(correct)
-        if self.correct.endswith('.'):
-            self.correct = self.correct[:-1]
+    def __init__(self, correct:Set[str]):
+        self.correct={self.strip_trailing_period(correct_answer) for correct_answer in correct} 
 
-        self.correct_answers = {self.correct} # we don't give choices:, f"{self.correctKey})", self.correctKey}
+        self.correct_answers = self.correct # we don't give choices:, f"{self.correctKey})", self.correctKey}
 
         self.normalized_correct_answers = {normalize_answer(gold) for gold in self.correct_answers}
         self.stop_stemmed_correct_answers = {self.stop_stem_normalize_answer(gold) for gold in self.correct_answers}
@@ -357,7 +365,7 @@ class AnswerKey2Verifier():
     def check_answer(self,answer:str)->bool:
         answer_=self.strip_trailing_period(answer)
 
-        checkTF = self.check_true_false(answer_)
+        checkTF = self.check_true_false({answer_})
         if checkTF is not None:
             return checkTF
         
@@ -543,7 +551,7 @@ class QuestionPromptWithChoices(QuestionPrompt):
     question_id:str
     question:str
     choices:Dict[str,str]
-    correct:str
+    correct:Set[str]
     correctKey:Optional[str]
     query_id:str
     facet_id:Optional[str]
@@ -743,7 +751,7 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     question_id:str
     question:str
     choices:Dict[str,str]
-    correct:str
+    correct:Set[str]
     correctKey:Optional[str]
     query_id:str
     facet_id:Optional[str]
@@ -754,7 +762,7 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
     def __post_init__(self):
         self.true_false_matcher = TrueFalseMatcher(self.correct)
-        self.question_stemmed_checker = QuestionStemmedChecker({self.correct})
+        self.question_stemmed_checker = QuestionStemmedChecker(set(self.correct))
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -820,7 +828,7 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionCompleteConc
     question_id:str
     question:str
     choices:Dict[str,str]
-    correct:str
+    correct:Set[str]
     correctKey:Optional[str]
     query_id:str
     facet_id:Optional[str]
@@ -1173,7 +1181,11 @@ class DirectGradingPrompt(Prompt):
         if self.unanswerable_matcher2.check_unanswer(answer)==False:
             return False
         else:
-            return self.true_false_matcher.check_true_false("True", answer=answer)
+            match_result = self.true_false_matcher.check_true_false({"True"}, answer=answer)
+            if match_result is not None:
+                return match_result
+            else:
+                return True
     
 
     def has_rating(self):

@@ -108,12 +108,12 @@ def question_obj_to_prompt(prompt_class:str, q:Question, self_rater_tolerant:boo
                             , question=q.question
                             , choices=q.choices
                             , correctKey=q.correctKey
-                            , correct=q.correct
+                            , correct={q.correct} if q.correct is not None else set()
                             , facet_id = q.facet_id
                             , self_rater_tolerant= self_rater_tolerant
                             )
 
-def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct, facet_id, self_rater_tolerant:bool)->QuestionPrompt:
+def question_to_prompt(prompt_class, query_id, query_text, qid, question, choices:Optional[Dict[str,str]], correctKey, correct:Set[str], facet_id, self_rater_tolerant:bool)->QuestionPrompt:
     qpc:QuestionPrompt
 
     if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
@@ -196,7 +196,7 @@ def load_TQA_prompts(self_rater_tolerant:bool,tqa_file:Path, prompt_class:str="Q
         # hack to only include one direct prompt for each query.
         # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
         return [(query_id,  [
-                             direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None)
+                             direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
                             ])  
                 for query_id, questions in query_questions if len(questions)>0]
 
@@ -213,9 +213,9 @@ def load_TQA_prompts(self_rater_tolerant:bool,tqa_file:Path, prompt_class:str="Q
 
 def load_all_tqa_data(self_rater_tolerant:bool, tqa_path:Path = Path("./tqa_train_val_test"), prompt_class:str="QuestionPromptWithChoices"):
     return list(itertools.chain(
-            load_TQA_prompts(tqa_path.joinpath('train','tqa_v1_train.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)
-            , load_TQA_prompts(tqa_path.joinpath('val','tqa_v1_val.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)     
-            , load_TQA_prompts(tqa_path.joinpath('test','tqa_v2_test.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant) 
+            load_TQA_prompts(tqa_file=tqa_path.joinpath('train','tqa_v1_train.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)
+            , load_TQA_prompts(tqa_file=tqa_path.joinpath('val','tqa_v1_val.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant)     
+            , load_TQA_prompts(tqa_file=tqa_path.joinpath('test','tqa_v2_test.json'), prompt_class=prompt_class, self_rater_tolerant=self_rater_tolerant) 
             ))
 
 

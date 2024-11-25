@@ -242,7 +242,7 @@ async def main(cmdargs=None):
 
     question_set:Dict[str,List[Prompt]]
     if args.question_type == "tqa":
-        question_set = dict(fix_car_query_id( tqa_loader.load_all_tqa_data(Path(args.question_path)
+        question_set = dict(fix_car_query_id( tqa_loader.load_all_tqa_data(tqa_path=Path(args.question_path)
                                                                           , prompt_class=args.prompt_class
                                                                           , self_rater_tolerant = (args.model_pipeline=="llama")
                                                                           )))
