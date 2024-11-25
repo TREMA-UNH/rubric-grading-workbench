@@ -373,6 +373,9 @@ If you are getting error message about unfree packages or experimental command, 
 * `nix --extra-experimental-features 'nix-command flakes' develop` 
 * `NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure`
 
+If you are on mac/darwin try this:
+
+* `NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 NIXPKGS_ALLOW_BROKEN=1 NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure .#cpu`
 
 ### Use Cachix
 
