@@ -322,6 +322,8 @@ class SelfRaterTolerant():
 
 
 class AnswerKey2Verifier():
+    import nltk
+    nltk.download('punkt_tab')
     question_prompt_normalizer = QuestionPromptNormalizer()
     true_false_matcher = TrueFalseMatcher2()
 
