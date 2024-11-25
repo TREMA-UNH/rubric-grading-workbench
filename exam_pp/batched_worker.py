@@ -55,7 +55,7 @@ class BatchedWorker(Generic[Input, Output]):
                 pass
 
             if batch:
-                print(f"batch len={len(batch)}")
+                # print(f"batch len={len(batch)}")
                 results = self.func([x.input for x in batch])
                 for result, work_item in zip(results, batch):
                     work_item.result.set_result(result)
