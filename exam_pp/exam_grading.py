@@ -101,7 +101,9 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
     async def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        answerTuples = await qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
+        # answerTuples = await qaPipeline.chunkingBatchAnswerQuestions_async([grading_prompt], paragraph_txt=paragraph_txt)
+        answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
+        
         (_, answer) = answerTuples[0]
 
         grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
