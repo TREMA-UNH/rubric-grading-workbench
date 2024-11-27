@@ -686,7 +686,7 @@ def main(cmdargs=None):
 
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
     parser.add_argument('--prompt-class', type=str,  required=True, default="QuestionPromptWithChoices", metavar="CLASS"
-                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+                        , help="The QuestionPrompt class or custom prompt name implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
@@ -804,7 +804,8 @@ def main(cmdargs=None):
                      , use_query_facets=args.qrel_query_facets
                      , use_ratings=args.use_ratings
                      , query_facets=query_facets
-                     , direct_grading= args.qrel_query_facets and get_prompt_type()==DirectGradingPrompt.my_prompt_type
+                     , direct_grading= get_prompt_type()==DirectGradingPrompt.my_prompt_type
+                    #  , direct_grading= args.qrel_query_facets and get_prompt_type()==DirectGradingPrompt.my_prompt_type
                      )
         print("qrel leaderboard")
 
