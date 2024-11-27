@@ -1066,24 +1066,21 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
 
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
-        return {"prompt_class": self.__class__.__name__
+        return {"prompt_class": self.prompt_name # self.__class__.__name__
                 ,"prompt_style": self.prompt_style()
                 , "context_first": False
                 , "check_unanswerable": True
                 , "check_answer_key": False
                 , "is_self_rated":self.has_rating()
                 , "is_self_rater_tolerant": self.self_rater_tolerant
+                , "prompt_hash": self.prompt_hash
                 }
     
     def prompt_style(self)->str:
         return self.prompt_style_str
     
-
     def has_rating(self):
         return True
-
-
-
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
@@ -1097,7 +1094,6 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=filled_prompt_text, max_length=max_token_len)
         return prompt
-
 
     def check_answer(self, answer:str)->bool:
         return self.self_rater.check_answer(answer)

@@ -247,8 +247,11 @@ def main(cmdargs=None):
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
 
-    parser.add_argument('--custom-prompt', type=str,required=False, metavar="PROMTP_TEXT"
+    parser.add_argument('--custom-prompt', type=str,required=False, metavar="PROMPT_TEXT"
                         , help="Custom question prompt text. Variables {question} and {context} will automatically be filled.")
+
+    parser.add_argument('--custom-prompt-name', type=str,required=False, metavar="NAME"
+                        , help="Name for the custom prompt. This name will be used instead of --prompt-class during post-processing and leaderboard evaluation")
 
 
     parser.add_argument('--restart-paragraphs-file', type=str, metavar='exam-xxx.jsonl.gz', help='Restart logic: Input file name with partial exam grade annotations that we want to copy from. Copies while queries are defined (unless --restart-from-query is set)')
@@ -272,6 +275,7 @@ def main(cmdargs=None):
                                                                              , use_nuggets=args.use_nuggets
                                                                              , self_rater_tolerant = (args.model_pipeline=="llama")
                                                                              , custom_prompt = args.custom_prompt
+                                                                             , custom_prompt_name = args.custom_prompt_name
                                                                              ))
     elif args.question_type == 'direct':
         question_set = direct_grading_prompts(queries=json_query_loader(query_json=args.question_path)

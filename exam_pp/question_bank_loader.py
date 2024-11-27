@@ -196,7 +196,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
 ## -------------------------------------------
         
 
-def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices", custom_prompt:Optional[str]=None)-> List[Tuple[str, List[Prompt]]]:
+def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices", custom_prompt:Optional[str]=None, custom_prompt_name:Optional[str]=None)-> List[Tuple[str, List[Prompt]]]:
     '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
@@ -238,6 +238,8 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                     if(prompt_class == "CustomQuestionSelfRatedPrompt"):
                         if(custom_prompt is None):
                             raise RuntimeError("Must set custom_prompt for prompt_class CustomQuestionSelfRatedPrompt.")
+                        if(custom_prompt_name is None):
+                            raise RuntimeError("Must set custom_prompt_name for prompt_class CustomQuestionSelfRatedPrompt.")
                         prompt = CustomQuestionSelfRatedPrompt(question_id = question.question_id
                                                             , question = question.question_text
                                                             , query_id = question_bank.query_id
@@ -246,7 +248,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                             , unanswerable_expressions = option_non_answers
                                                             , self_rater_tolerant=self_rater_tolerant
                         )
-                        prompt.set_custom_prompt(prompt_name="custom", prompt_text=custom_prompt, prompt_style=custom_prompt)
+                        prompt.set_custom_prompt(prompt_name=custom_prompt_name, prompt_text=custom_prompt, prompt_style=custom_prompt)
 
                     elif(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
                         prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
