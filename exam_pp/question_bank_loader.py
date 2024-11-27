@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .query_loader import direct_grading_prompt
 
-from .test_bank_prompts import DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey, QuestionCompleteConcisePromptWithAnswerKey2, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
+from .test_bank_prompts import CustomQuestionSelfRatedPrompt, DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey, QuestionCompleteConcisePromptWithAnswerKey2, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 from .pydantic_helper import pydantic_dump
 
 
@@ -196,7 +196,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
 ## -------------------------------------------
         
 
-def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
+def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices", custom_prompt:Optional[str]=None)-> List[Tuple[str, List[Prompt]]]:
     '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
@@ -234,7 +234,21 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                 for question in question_bank.get_questions():
                     if not question.query_id == query_id:
                             raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
-                    if(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
+                    
+                    if(prompt_class == "CustomQuestionSelfRatedPrompt"):
+                        if(custom_prompt is None):
+                            raise RuntimeError("Must set custom_prompt for prompt_class CustomQuestionSelfRatedPrompt.")
+                        prompt = CustomQuestionSelfRatedPrompt(question_id = question.question_id
+                                                            , question = question.question_text
+                                                            , query_id = question_bank.query_id
+                                                            , facet_id = question.facet_id
+                                                            , query_text = question_bank.query_text
+                                                            , unanswerable_expressions = option_non_answers
+                                                            , self_rater_tolerant=self_rater_tolerant
+                        )
+                        prompt.set_custom_prompt(prompt_name="custom", prompt_text=custom_prompt, prompt_style=custom_prompt)
+
+                    elif(prompt_class =="QuestionSelfRatedUnanswerablePromptWithChoices"):
                         prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
                                                                             , question = question.question_text
                                                                             , query_id = question_bank.query_id

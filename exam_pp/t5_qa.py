@@ -121,11 +121,9 @@ class Text2TextPipeline():
               * `promptGenerator=lambda qpc: qpc.generate_prompt()`
               * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
            """
-        def call_pipeline(prompts: List[str]) -> List[str]:
-            resps = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
-            return [resp['generated_text'] for resp in resps]
-        
-        self.batcher = BatchedWorker[str, str](func = call_pipeline, batch_size = 100)
+
+        self.question_batchSize = 100 # batchSize
+        self.batcher: Optional[BatchedWorker] = None
 
         # Initialize the tokenizer and model
         # self.modelName = 'google/flan-t5-large'
@@ -143,8 +141,13 @@ class Text2TextPipeline():
         self.t5_pipeline_qa = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
 
 
+    def call_pipeline(self, prompts: List[str]) -> List[str]:
+        resps = self.t5_pipeline_qa(prompts, max_length=MAX_TOKEN_LEN, num_beams=5, early_stopping=True)
+        return [resp['generated_text'] for resp in resps]
+
     def finish(self) -> None:
-        self.batcher.finish()
+        if self.batcher is not None:
+            self.batcher.finish()
 
 
     def exp_modelName(self)->str:
@@ -152,9 +155,20 @@ class Text2TextPipeline():
 
 
     async def chunkingBatchAnswerQuestions_async(self, prompts:List[Prompt],  paragraph_txt:str) -> List[Tuple[Prompt, str]]:
+        if self.batcher is None:
+            self.batcher = BatchedWorker[str, str](func = self.call_pipeline, batch_size = self.question_batchSize)
+
         promptGenerator=lambda prompt: prompt.generate_prompt(paragraph_txt, model_tokenizer = self.tokenizer, max_token_len = self.max_token_len)
         return [(prompt, await self.batcher.run(promptGenerator(prompt))) for prompt in prompts]
 
+
+    def batchChunker(self, iterable):
+        iterator = iter(iterable)
+        while True:
+            batch = list(itertools.islice(iterator, self.question_batchSize))
+            if not batch or len(batch)<1:
+                break
+            yield batch
 
     def chunkingBatchAnswerQuestions(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
             """Run question answering over batches of questions, and tuples it up with the answers"""

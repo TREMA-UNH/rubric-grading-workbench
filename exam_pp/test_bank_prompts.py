@@ -5,6 +5,24 @@ import re
 from abc import abstractmethod
 from dataclasses import dataclass
 
+import hashlib
+
+def get_md5_hash(input_string: str) -> str:
+    # Convert the string to bytes
+    input_bytes = input_string.encode('utf-8')
+
+    # Create an MD5 hash object
+    md5_hash = hashlib.md5()
+
+    # Update the hash object with the bytes
+    md5_hash.update(input_bytes)
+
+    # Get the hexadecimal digest of the hash
+    hex_digest = md5_hash.hexdigest()
+
+    return hex_digest
+
+
 
 def get_prompt_classes()->List[str]:
     return ['QuestionPromptWithChoices'
@@ -20,6 +38,8 @@ def get_prompt_classes()->List[str]:
             , 'NuggetExtractionPrompt'
             # relevance grade prompts
             , "FagB", "FagB_few", "HELM", "Sun", "Sun_few", "Thomas"
+# 
+            , 'CustomQuestionSelfRatedPrompt'
             ]
 
 # def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
@@ -48,7 +68,8 @@ def get_prompt_type_from_prompt_class(prompt_class:str)->Optional[str]:
         return None
 
 def get_prompt_types()->List[str]:
-    set_of_types =  {get_prompt_type_from_prompt_class(prompt_class) for prompt_class in get_prompt_classes() if get_prompt_type_from_prompt_class(prompt_class) is not None}
+    set_of_types:Set[str] =  {get_prompt_type_from_prompt_class(prompt_class) for prompt_class in get_prompt_classes() 
+                                    if get_prompt_type_from_prompt_class(prompt_class) is not None}
     return list(set_of_types)
 
 
@@ -1011,6 +1032,79 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     
 
 
+
+
+@dataclass
+class CustomQuestionSelfRatedPrompt(QuestionPrompt):
+    question_id:str
+    question:str
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+    unanswerable_expressions:Set[str]
+    self_rater_tolerant:bool
+
+    # prompt_text:str
+    # prompt_hash:str
+    # prompt_name:str
+    # prompt_style_str:str
+
+    prompt_truncater = PromptTruncater()
+
+    def __post_init__(self):
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
+        if self.self_rater_tolerant:
+            self.self_rater = SelfRaterTolerant(self.unanswerable_matcher2)
+        else:
+            self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
+
+    def set_custom_prompt(self, prompt_name:str, prompt_text:str, prompt_style:str):
+        self.prompt_text = prompt_text
+        self.prompt_name = prompt_name
+        self.prompt_style_str = prompt_style
+        self.prompt_hash = get_md5_hash(prompt_name+prompt_text)
+
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": True
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating()
+                , "is_self_rater_tolerant": self.self_rater_tolerant
+                }
+    
+    def prompt_style(self)->str:
+        return self.prompt_style_str
+    
+
+    def has_rating(self):
+        return True
+
+
+
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=filled_prompt_text, question="", max_length=max_token_len)
+        return prompt
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
+        context_prompt = f"Context: {context}"
+
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=filled_prompt_text, max_length=max_token_len)
+        return prompt
+
+
+    def check_answer(self, answer:str)->bool:
+        return self.self_rater.check_answer(answer)
+
+    def check_answer_rating(self,answer:str)->int:
+        return self.self_rater.check_answer_rating(answer)
+    
 
 @dataclass
 class NuggetSelfRatedPrompt(NuggetPrompt):
