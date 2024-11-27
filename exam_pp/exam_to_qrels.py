@@ -22,7 +22,7 @@ class QrelEntry:
 
 def exam_to_qrels_files(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
-    qrel_entries = conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
+    qrel_entries = convert_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
    
     write_qrel_file(qrel_out_file, qrel_entries)
 
@@ -45,7 +45,7 @@ def read_qrel_file(qrel_in_file:Path) ->List[QrelEntry]:
     return qrel_entries
 
 
-def conver_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
+def convert_exam_to_qrels(query_paragraphs:List[QueryWithFullParagraphList], grade_filter:GradeFilter)->List[QrelEntry]:
     '''workhorse to convert exam-annotated paragraphs into qrel entries.
     load input file with `parseQueryWithFullParagraphs`
     write qrels file with `write_qrel_file`

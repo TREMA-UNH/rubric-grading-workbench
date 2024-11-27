@@ -86,7 +86,7 @@ def export_qrels(query_paragraphs,  qrel_out_file:Path, grade_filter:GradeFilter
         if use_ratings:
             qrel_entries = exam_to_qrels.convert_exam_to_rated_qrels(query_paragraphs,grade_filter=grade_filter)
         else:
-            qrel_entries = exam_to_qrels.conver_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
+            qrel_entries = exam_to_qrels.convert_exam_to_qrels(query_paragraphs,grade_filter=grade_filter)
 
     exam_to_qrels.write_qrel_file(qrel_out_file, qrel_entries)
 
@@ -135,8 +135,10 @@ def main(cmdargs=None):
     parser.add_argument('-s', '--leaderboard-sort', type=str, metavar="SORT", help='Key to sort the leaderboard (exam, n-exam) or None for sort by method name.')
 
     parser.add_argument('-m', '--model', type=str, metavar="HF_MODEL_NAME", help='the hugging face model name used by the Q/A module.')
-    parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+    parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    # parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+                        # , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, will use  graded self-ratings. Default is to use the number of correct answers.')
     # parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
     parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will use self-ratings  >= RATING as relevant. (only applies to exam grades with self-ratings)')

@@ -1007,7 +1007,6 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
 
-
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}\n'
         context_prompt = f"Context: {context}"
         # question =  f'Is this question answerable: {self.question}'
