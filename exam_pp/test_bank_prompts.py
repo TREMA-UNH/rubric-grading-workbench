@@ -1101,10 +1101,13 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
     def gpt_json_prompt(self) ->Tuple[str,str]:
         json_instruction= r'''
-Give the response in the following JSON format:
+Respond only in the following JSON format:
 ```json
 { "grade": int }
-```'''
+```
+'''
+#   "short_justification": str }
+
         return (json_instruction, "grade")
 
     

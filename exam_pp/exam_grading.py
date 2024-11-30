@@ -97,7 +97,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
     #     noodle_one_paragraph(para)
 
 
-async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     paragraphs = queryWithFullParagraphList.paragraphs
@@ -221,10 +221,12 @@ async def main(cmdargs=None):
 
     parser.add_argument('--llm-engine', type=LlmEngine.from_string, metavar='Choice', choices=list(LlmEngine), help='LLM backend to be used, choices: '+",".join([str(x) for x in LlmEngine]))
 
-    modelPipelineOpts = {'text2text': lambda model_name, llm_engine:  Text2TextPipeline(model_name, llm_engine=llm_engine)
-                ,'question-answering': lambda model_name, llm_engine:  QaPipeline(model_name, llm_engine=llm_engine)
-                ,'text-generation': lambda model_name, llm_engine:  TextGenerationPipeline(model_name, llm_engine=llm_engine) 
-                , 'llama': lambda model_name, llm_engine: LlamaTextGenerationPipeline(model_name, llm_engine=llm_engine)
+    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name, llm_engine=LlmEngine.HF_TF)
+                ,'question-answering': lambda model_name:  QaPipeline(model_name, llm_engine=LlmEngine.HF_TF)
+                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.HF_TF) 
+                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name, llm_engine=LlmEngine.HF_TF)
+                ,'vLLM': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.VLLM) 
+                ,'OpenAI': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.OPEN_AI) 
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -283,7 +285,7 @@ async def main(cmdargs=None):
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.llm_engine)
+    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name)
 
     await noodle(
              qaPipeline=qaPipeline

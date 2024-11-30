@@ -122,7 +122,6 @@ def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int
         completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens) 
         result = [choice.message.content.strip() for choice in completion.choices]
     else:
-        print("Vllm v1 protocol")
         completion = retry_with_exponential_backoff(func=client.completions.create)(model=gpt_model,prompt=prompt, max_tokens=max_tokens) 
         result = [choice.text.strip() for choice in completion.choices]
 
@@ -170,15 +169,18 @@ class FetchGptJson:
     def __is_int(self, i):
         return isinstance(i,int)
 
-    def _parse_json_response(self, gpt_response:str) -> Optional[str]:
+    def _parse_json_response(self, gpt_response:str, request:Optional[str]=None) -> Optional[str]:
+        resp = gpt_response.strip()
         cleaned_gpt_response=""
-        if gpt_response.strip().startswith("{"):
-            cleaned_gpt_response=gpt_response.strip()
-        elif gpt_response.startswith("```json"):
-            cleaned_gpt_response= re.sub(r'```json|```', '', gpt_response).strip()
+        if resp.startswith("{"):
+            cleaned_gpt_response=resp
+        elif resp.startswith("```json"):
+            cleaned_gpt_response= re.sub(r'```json|```', '', resp).strip()
+        elif resp.startswith("```"):
+            cleaned_gpt_response= re.sub(r'```|```', '', resp).strip()
         else:
-            print(f"Not sure how to parse ChatGPT response from json:\n {gpt_response}")
-            cleaned_gpt_response=gpt_response
+            print(f"Not sure how to parse ChatGPT response from json:\n-----\n{request}\n-----\n{gpt_response}\n----")
+            cleaned_gpt_response=resp
 
         try:
             response = json.loads(cleaned_gpt_response)
@@ -208,7 +210,7 @@ class FetchGptJson:
                                       , rate_limiter=rate_limiter
                                       )
             # print(response)
-            reqs = self._parse_json_response(response)
+            reqs = self._parse_json_response(response, request=full_prompt)
             if reqs is not None:
                 return reqs
             else:
