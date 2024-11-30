@@ -275,6 +275,18 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             , query_text = question_bank.query_text
                                                                             , unanswerable_expressions = option_non_answers
                                                                             )
+
+                    elif(prompt_class == "QuestionBriefWithAnswerKey"):
+                        prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
+                                                                            , question = question.question_text
+                                                                            , choices = {}
+                                                                            , correct=set(question.gold_answers)
+                                                                            , correctKey=None
+                                                                            , query_id = question_bank.query_id
+                                                                            , facet_id = question.facet_id
+                                                                            , query_text = question_bank.query_text
+                                                                            # , unanswerable_expressions = option_non_answers
+                                                                            )
                     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
                         prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
                                                                             , question = question.question_text

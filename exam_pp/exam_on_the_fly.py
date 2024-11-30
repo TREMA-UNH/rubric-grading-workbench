@@ -53,7 +53,7 @@ def main():
 
     for para in paragraphs:
         paragraph_txt = para.text
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions(exam_questions, paragraph_txt=paragraph_txt)
+        answerTuples = qaPipeline.grade_paragraph(exam_questions, paragraph_txt=paragraph_txt)
         # correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
 
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import hashlib
 
+
 def get_md5_hash(input_string: str) -> str:
     # Convert the string to bytes
     input_bytes = input_string.encode('utf-8')
@@ -33,6 +34,7 @@ def get_prompt_classes()->List[str]:
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
             , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
+            , 'QuestionBriefWithAnswerKey'
             # Nugget prompts
             , 'NuggetSelfRatedPrompt'
             , 'NuggetExtractionPrompt'
@@ -440,6 +442,10 @@ class Prompt(abc.ABC):
         pass
 
     @abstractmethod
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        pass
+
+    @abstractmethod
     def check_answer(self, answer):
         return True
     
@@ -464,6 +470,15 @@ class Prompt(abc.ABC):
     @abstractmethod
     def prompt_style(self)->str:
         return "Is this text relevant for ..."
+
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "short_answer": str }
+```'''
+        return (json_instruction, "short_answer")
 
 
 @dataclass
@@ -673,8 +688,8 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         return prompt
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  f' question: How does this text answer this question: {self.question}'
-        context_prompt = f"context: {context};"
+        question_prompt =  f'How does this text answer this question: {self.question}'
+        context_prompt = context
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
@@ -743,7 +758,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
-        context_prompt = f"Context: {context}"
+        context_prompt = context
 
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
@@ -812,7 +827,68 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
+        context_prompt = context
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+
+    def check_answer(self,answer:str)->bool:
+        return self.true_false_matcher.check_answer(answer) or self.question_stemmed_checker.check_answer(answer)
+
+    def check_answer_simple(self,answer:str)->bool:
+        return self.question_stemmed_checker.check_answer_simple(answer)
+
+
+    def check_answer_stemmed(self,answer:str)->bool:
+        return self.question_stemmed_checker.check_answer_stemmed(answer)
+
+    def answer_match_info(self)->str:
+        return self.question_stemmed_checker.answer_match_info
+
+@dataclass
+class QuestionBriefWithAnswerKey(QuestionPrompt):
+    question_id:str
+    question:str
+    choices:Dict[str,str]
+    correct:Set[str]
+    correctKey:Optional[str]
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+
+    question_prompt_normalizer = QuestionPromptNormalizer()
+    prompt_truncater = PromptTruncater()
+
+    def __post_init__(self):
+        self.true_false_matcher = TrueFalseMatcher(self.correct)
+        self.question_stemmed_checker = QuestionStemmedChecker(set(self.correct))
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": False
+                , "check_answer_key": True
+                , "is_self_rated":self.has_rating()
+                }
+    def prompt_style(self)->str:
+        return  "provide a complete and concise answer to the question based on the context"
+    
+
+    def has_rating(self):
+        return False
+
+
+    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+        # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
+        question_prompt =  f'Extract a very short answer from the context for this question: {self.question}\n'
         context_prompt = f"Context: {context}"
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  f'provide a brief correct answer to the question based on the context. Question: {self.question}'
+        context_prompt = context
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
@@ -1016,13 +1092,22 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}'
-        context_prompt = f"Context: {context}"
+        context_prompt = context
 
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "grade": int }
+```'''
+        return (json_instruction, "grade")
+
+    
     def check_answer(self, answer:str)->bool:
         return self.self_rater.check_answer(answer)
 
@@ -1088,7 +1173,7 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
-        context_prompt = f"Context: {context}"
+        context_prompt = context
 
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=filled_prompt_text, max_length=max_token_len)
@@ -1100,6 +1185,15 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
     def check_answer_rating(self,answer:str)->int:
         return self.self_rater.check_answer_rating(answer)
     
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "grade": int }
+```'''
+        return (json_instruction, "grade")
+
 
 @dataclass
 class NuggetSelfRatedPrompt(NuggetPrompt):
@@ -1158,12 +1252,28 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
         return prompt
 
 
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
+        context_prompt = context
+
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
     def check_answer(self, answer:str)->bool:
         return self.self_rater.check_answer(answer)
 
     def check_answer_rating(self,answer:str)->int:
         return self.self_rater.check_answer_rating(answer)
     
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "grade": int }
+```'''
+        return (json_instruction, "grade")
 
 
 
@@ -1201,12 +1311,17 @@ class NuggetExtractionPrompt(NuggetPrompt):
         return False
 
     def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'Extract the passage from the text that best relates to the key fact (nugget), ensuring relevance and clarity. Key Fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
+        context_prompt = context
+
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
 
 
     # inverse logic!  we are scanning for non-answers!!!
@@ -1222,6 +1337,14 @@ class NuggetExtractionPrompt(NuggetPrompt):
         return self.unanswerable_matcher.check_answer_stemmed(answer)
         
 
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "extract": int }
+```'''
+        return (json_instruction, "extract")
 
 ## --------------
 @dataclass
@@ -1267,6 +1390,14 @@ class DirectGradingPrompt(Prompt):
         prompt =  str.format(self.prompt_template(context=truncated_context))
         return prompt
     
+    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  str.format(self.prompt_template(context=""))
+
+        context_prompt = context
+
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
 
     def check_answer(self, answer)->bool:
         if self.unanswerable_matcher2.check_unanswer(answer)==False:
@@ -1287,6 +1418,15 @@ class DirectGradingPrompt(Prompt):
             return 1
         else:
             return 0    
+
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "relevance": bool }
+```'''
+        return (json_instruction, "relevance")
 
 
 class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
@@ -1314,7 +1454,16 @@ class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
 
     def check_answer(self,answer:str)->bool:
         return self.check_answer_rating(answer=answer) > 0
-        
+
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Give the response in the following JSON format:
+```json
+{ "relevance": int }
+```'''
+        return (json_instruction, "relevance")
+
 
 @dataclass
 class FagB(DirectGradingPrompt):

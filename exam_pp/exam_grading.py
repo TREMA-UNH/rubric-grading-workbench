@@ -39,8 +39,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-# async
-def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -48,12 +47,13 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
-    def noodle_one_paragraph(para:FullParagraphData):
+    async def noodle_one_paragraph(para:FullParagraphData):
 
             paragraph_id = para.paragraph_id
             paragraph_txt = para.text
 
-            answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
+            answerTuples = await qaPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt)
+
             # for q,a in answerTuples:
                 # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
 
@@ -90,26 +90,23 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
             else:
                 print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
         
-    # await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
-    # loop = asyncio.get_running_loop()
-    for para in  itertools.islice(paragraphs, max_paragraphs):
-        noodle_one_paragraph(para)
-        # await loop.run_in_executor(None, noodle_one_paragraph(para))
+    await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
+    ## loop = asyncio.get_running_loop()
+    # for para in  itertools.islice(paragraphs, max_paragraphs):
+    #     ## await loop.run_in_executor(None, noodle_one_paragraph(para))
+    #     noodle_one_paragraph(para)
 
 
-# async
-def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
 
-    # async 
-    def noodle_one_paragraph(para):
+    async  def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        # answerTuples = await qaPipeline.chunkingBatchAnswerQuestions_async([grading_prompt], paragraph_txt=paragraph_txt)
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
+        answerTuples = qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt)
         
         (_, answer) = answerTuples[0]
 
@@ -126,13 +123,12 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
             para.grades = list()
         para.grades.append(grade_obj)
 
-    # await asyncio.gather( *(noodle_one_paragraph(para) for para in itertools.islice(paragraphs, max_paragraphs) ))
-    for para in itertools.islice(paragraphs, max_paragraphs):
-        noodle_one_paragraph(para)
+    await asyncio.gather( *(noodle_one_paragraph(para) for para in itertools.islice(paragraphs, max_paragraphs) ))
+    # for para in itertools.islice(paragraphs, max_paragraphs):
+    #     noodle_one_paragraph(para)
 
 
-# async 
-def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+async def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -186,12 +182,10 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    # await
-                    noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
+                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        # await 
-                        noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 
@@ -203,8 +197,7 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
         file.close()
 
 
-# async 
-def main(cmdargs=None):
+async def main(cmdargs=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
     import argparse
@@ -226,10 +219,12 @@ def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name)
-                ,'question-answering': lambda model_name:  QaPipeline(model_name)
-                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name) 
-                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name)
+    parser.add_argument('--llm-engine', type=LlmEngine.from_string, metavar='Choice', choices=list(LlmEngine), help='LLM backend to be used, choices: '+",".join([str(x) for x in LlmEngine]))
+
+    modelPipelineOpts = {'text2text': lambda model_name, llm_engine:  Text2TextPipeline(model_name, llm_engine=llm_engine)
+                ,'question-answering': lambda model_name, llm_engine:  QaPipeline(model_name, llm_engine=llm_engine)
+                ,'text-generation': lambda model_name, llm_engine:  TextGenerationPipeline(model_name, llm_engine=llm_engine) 
+                , 'llama': lambda model_name, llm_engine: LlamaTextGenerationPipeline(model_name, llm_engine=llm_engine)
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -259,7 +254,9 @@ def main(cmdargs=None):
  
 
     # Parse the arguments
-    args = parser.parse_args(args = cmdargs)  
+    args = parser.parse_args(args = cmdargs) 
+    print(args.llm_engine)
+ 
 
     question_set:Dict[str,List[Prompt]]
     if args.question_type == "tqa":
@@ -286,10 +283,9 @@ def main(cmdargs=None):
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name)
+    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.llm_engine)
 
-    # await 
-    noodle(
+    await noodle(
              qaPipeline=qaPipeline
            , question_set=question_set
            , paragraph_file= args.paragraph_file
@@ -301,5 +297,5 @@ def main(cmdargs=None):
            )
 
 if __name__ == "__main__":
-    # asyncio.run(main())
-    main()
+    asyncio.run(main())
+    # main()

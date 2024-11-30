@@ -1,7 +1,9 @@
 import datetime
+from json import JSONDecodeError
 import os
 import random
 from typing import Optional
+from httpx import URL
 from openai import OpenAI
 import openai
 import requests
@@ -22,12 +24,15 @@ from .davinci_to_runs_with_text import *
     # }
 
 
-if os.environ['OPENAI_API_KEY'] is None:
-    raise RuntimeError ("Must set environment variable \"OPENAI_API_KEY\"")
-
-client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
 
 
+def createOpenAIClient(api_key:str|None=os.getenv('OPENAI_API_KEY'), base_url:str|URL|None=None):
+    if api_key is None:
+        raise RuntimeError ("api_key must either be set as argument or via environment variable \"OPENAI_API_KEY\"")
+
+    return OpenAI(api_key=api_key,base_url=base_url)
+
+client = createOpenAIClient()
 
 
 class OpenAIRateLimiter:
@@ -37,13 +42,17 @@ class OpenAIRateLimiter:
         self.remaining_requests = max_requests_per_minute
         self.remaining_tokens = max_tokens_per_minute
         self.start_time = time.time()
+        
 
     def wait_if_needed(self):
         if self.remaining_requests <= 0 or self.remaining_tokens <= 0:
-            time.sleep(max(60 - (time.time() - self.start_time), 0))
-            self.remaining_requests = self.max_requests_per_minute
-            self.remaining_tokens = self.max_tokens_per_minute
-            self.start_time = time.time()
+            wait_secs = max(60 - (time.time() - self.start_time),0)
+            if wait_secs > 0:
+                print(f"OpenAIRateLimiter waiting {wait_secs} seconds. {self}")
+                time.sleep(wait_secs)
+                self.remaining_requests = self.max_requests_per_minute
+                self.remaining_tokens = self.max_tokens_per_minute
+                self.start_time = time.time()
 
     def update_limits(self, used_tokens):
         self.remaining_requests -= 1
@@ -56,7 +65,7 @@ class OpenAIRateLimiter:
         return ""
 
 # Initialize rate limiter
-rate_limiter = OpenAIRateLimiter()
+global_rate_limiter = OpenAIRateLimiter()
 
  
 # define a retry decorator
@@ -103,25 +112,107 @@ def retry_with_exponential_backoff(
  
     return wrapper
 
-def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int):
+def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int, use_chat_interface:bool, client=client,  rate_limiter:OpenAIRateLimiter=global_rate_limiter):
     result = []
 
     rate_limiter.wait_if_needed()
 
-    messages = [{"role":"user", "content":prompt}]
-    completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens) 
+    if use_chat_interface:
+        messages = [{"role":"user", "content":prompt}]
+        completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens) 
+        result = [choice.message.content.strip() for choice in completion.choices]
+    else:
+        print("Vllm v1 protocol")
+        completion = retry_with_exponential_backoff(func=client.completions.create)(model=gpt_model,prompt=prompt, max_tokens=max_tokens) 
+        result = [choice.text.strip() for choice in completion.choices]
 
-    result = [choice.message.content.strip() for choice in completion.choices]
 
     # Update rate limits
     usage = dict(completion).get('usage')
 
-    print("usage", usage)
+    # print("usage", usage)
     if usage is not None:
         used_tokens = dict(usage).get('total_tokens')
         rate_limiter.update_limits(used_tokens)
     else:
         raise RuntimeError("usage not provided")
 
-    print(rate_limiter)
+    # print(rate_limiter)
     return result[0]
+
+
+
+
+
+class FetchGptJson:
+    def __init__(self, gpt_model:str, max_tokens:int, client=openai.OpenAI, use_chat_protocol:bool=True):
+        self.client = client
+        self.gpt_model = gpt_model
+        self.max_tokens = max_tokens
+        self.use_chat_protocol = use_chat_protocol
+
+
+    def set_json_instruction(self, json_instruction:str, field_name:str):
+        self._json_instruction = json_instruction
+        self._field_name = field_name
+
+
+    def generation_info(self):
+        return {"gpt_model":self.gpt_model
+                , "format_instruction":"json"
+                , "prompt_target": self._field_name
+                }
+
+
+    def __is_list_of_strings(self, lst):
+        return isinstance(lst, list) and all(isinstance(item, str) for item in lst)
+
+    def __is_int(self, i):
+        return isinstance(i,int)
+
+    def _parse_json_response(self, gpt_response:str) -> Optional[str]:
+        cleaned_gpt_response=""
+        if gpt_response.strip().startswith("{"):
+            cleaned_gpt_response=gpt_response.strip()
+        elif gpt_response.startswith("```json"):
+            cleaned_gpt_response= re.sub(r'```json|```', '', gpt_response).strip()
+        else:
+            print(f"Not sure how to parse ChatGPT response from json:\n {gpt_response}")
+            cleaned_gpt_response=gpt_response
+
+        try:
+            response = json.loads(cleaned_gpt_response)
+            grade = response.get(self._field_name)
+            if(self.__is_int(grade)) is not None:
+                return f"{grade}"
+            else:
+                return None
+        except JSONDecodeError as e:
+            print(e)
+            return None
+
+    def _generate(self, prompt:str, gpt_model:str,max_tokens:int, rate_limiter:OpenAIRateLimiter)->str:
+        answer = query_gpt_batch_with_rate_limiting( prompt, gpt_model=gpt_model, max_tokens=max_tokens, client=self.client, rate_limiter=rate_limiter, use_chat_interface=self.use_chat_protocol)
+        return answer
+
+    async def generate_request(self, prompt:str, rate_limiter:OpenAIRateLimiter)->Optional[str]:
+        full_prompt = prompt+self._json_instruction
+
+        # print("\n\n"+full_prompt+"\n\n")
+
+        tries = 3
+        while tries>0:
+            response = self._generate( prompt=full_prompt
+                                      , gpt_model=self.gpt_model
+                                      , max_tokens=self.max_tokens
+                                      , rate_limiter=rate_limiter
+                                      )
+            # print(response)
+            reqs = self._parse_json_response(response)
+            if reqs is not None:
+                return reqs
+            else:
+                tries-=1
+                print(f"Receiving unparsable response: {response}. Tries left: {tries}")
+        return None
+
