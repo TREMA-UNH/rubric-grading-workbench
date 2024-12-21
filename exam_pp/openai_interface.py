@@ -32,8 +32,15 @@ def createOpenAIClient(api_key:str|None=os.getenv('OPENAI_API_KEY'), base_url:st
 
     return OpenAI(api_key=api_key,base_url=base_url)
 
-client = createOpenAIClient()
+# client = createOpenAIClient()
 
+_client:Optional[OpenAI] = None
+
+def default_openai_client() -> OpenAI:
+    global _client
+    if _client is None:
+        _client = createOpenAIClient()
+    return _client
 
 class OpenAIRateLimiter:
     def __init__(self, max_requests_per_minute=5000, max_tokens_per_minute=40000):
@@ -112,7 +119,12 @@ def retry_with_exponential_backoff(
  
     return wrapper
 
-def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int, use_chat_interface:bool, client=client,  rate_limiter:OpenAIRateLimiter=global_rate_limiter):
+def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int, use_chat_interface:bool, client=None,  rate_limiter:OpenAIRateLimiter=None):
+    if client is None:
+        client = default_openai_client()
+    if rate_limiter is None:
+        rate_limiter = global_rate_limiter
+
     result = []
 
     rate_limiter.wait_if_needed()
@@ -144,8 +156,8 @@ def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int
 
 
 class FetchGptJson:
-    def __init__(self, gpt_model:str, max_tokens:int, client=openai.OpenAI, use_chat_protocol:bool=True):
-        self.client = client
+    def __init__(self, gpt_model:str, max_tokens:int, client=None, use_chat_protocol:bool=True):
+        self.client = client if client is not None else default_openai_client()
         self.gpt_model = gpt_model
         self.max_tokens = max_tokens
         self.use_chat_protocol = use_chat_protocol

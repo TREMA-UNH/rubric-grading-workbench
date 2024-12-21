@@ -44,7 +44,7 @@ PromptGeneratorQC = Callable[[Prompt],Dict[str,str]]
 
 
 def create_gpt_client()->openai.OpenAI:
-    return openai_interface.createOpenAIClient()
+    return openai_interface.default_openai_client()
 
 def create_vllm_client(base_url:str|None=os.getenv('VLLM_URL'))->openai.OpenAI:
     if base_url is None and os.getenv('VLLM_URL') is None:
@@ -188,11 +188,12 @@ class HfTransformersQaPromptRunner(PromptRunner):
 
 
 class HfTransformersPromptRunner(PromptRunner):
-    def __init__(self, pipeline:transformers.Pipeline, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer):
+    def __init__(self, pipeline:transformers.Pipeline, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer, question_batch_size:int, max_output_tokens:int=-1):
         self.hf_pipeline:transformers.Pipeline =pipeline
         self.max_token_len = MAX_TOKEN_LEN
+        self.max_new_tokens = max_output_tokens if max_output_tokens >0 else MAX_TOKEN_LEN
         self.tokenizer = tokenizer
-        self.question_batchSize=100
+        self.question_batchSize=question_batch_size
 
 
     async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
@@ -218,7 +219,7 @@ class HfTransformersPromptRunner(PromptRunner):
 
 
 class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
-    def __init__(self, model, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer):
+    def __init__(self, model, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer, max_output_tokens:int=-1):
         self.model=model
         # in order to support batching in Llama
         self.tokenizer.pad_token_id = self.model.config.eos_token_id
@@ -233,7 +234,7 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
                                        , use_fast=True
                                        , model_kwargs={"torch_dtype": torch.bfloat16, "quantization_config": {"load_in_4bit": True}}
                                        )
-        super().__init__(pipeline=pipeline, MAX_TOKEN_LEN=MAX_TOKEN_LEN,tokenizer=tokenizer)
+        super().__init__(pipeline=pipeline, MAX_TOKEN_LEN=MAX_TOKEN_LEN,tokenizer=tokenizer, max_output_tokens=max_output_tokens, question_batch_size=self.question_batchSize)
 
         self.terminators = [
                     self.tokenizer.eos_token_id,
@@ -244,7 +245,7 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
         def processBatch(prompts):
             answers=list()
             resps = self.hf_pipeline(prompts
-                                    , max_new_tokens=100 #, max_length=MAX_TOKEN_LEN, 
+                                    , max_new_tokens=self.max_new_tokens #, max_length=MAX_TOKEN_LEN, 
                                     , eos_token_id=self.terminators
                                     , pad_token_id = self.tokenizer.pad_token_id
                                     , do_sample=True
@@ -258,8 +259,6 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
 
                 answers.append(answer)
 
-                # print("Llama pipeline outputs:\n", output)
-            # answers:List[str] = [output['generated_text'][-1]  for output in outputs]
             return zip(prompts, answers, strict=True)
 
         return list(itertools.chain.from_iterable(
@@ -286,11 +285,31 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
 #     def finish(self):
 #         self.batcher.finish()
 
+    # def batchChunker(self, iterable):
+    #     iterator = iter(iterable)
+    #     while True:
+    #         batch = list(itertools.islice(iterator, self.question_batchSize))
+    #         if not batch or len(batch)<1:
+    #             break
+    #         yield batch
+
+
+    # async def call_qa_pipeline(self, prompts: List[Dict[str,str]]) -> List[str]:
+    #     resps:List[str] = await self.prompt_runner.call_qa_pipeline(prompts)
+    #     return resps
+
+    # async def call_pipeline(self, prompts: List[str]) -> List[str]:
+    #     resps:List[str] = await self.prompt_runner.call_pipeline(prompts)
+    #     return resps
+
+
+
 class OpenAIPromptRunner(PromptRunner):
-    def __init__(self, fetcher:FetchGptGrade, tokenizer:AutoTokenizer, max_token_len:int=2000):
+    def __init__(self, fetcher:FetchGptGrade, tokenizer:AutoTokenizer, max_token_len:int=2000, max_output_tokens:int=2000):
         self.openai_fetcher = fetcher
         self.tokenizer = tokenizer
         self.max_token_len = max_token_len
+        self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
     async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
         anyprompt=prompts[0]
@@ -317,13 +336,13 @@ class OpenAIPromptRunner(PromptRunner):
         pass
 
 class VllmPromptRunner(PromptRunner):
-    def __init__(self, fetcher:FetchGptGrade, tokenizer:AutoTokenizer, max_token_len:int):
+    def __init__(self, fetcher:FetchGptGrade, tokenizer:AutoTokenizer, max_token_len:int, max_output_tokens:int):
         print(fetcher.client.base_url)
         self.vllm_fetcher = fetcher
-        # self.rate_limiter = OpenAIRateLimiter(max_requests_per_minute= 100000,max_tokens_per_minute=100000 )
-        self.rate_limiter = OpenAIRateLimiter(max_requests_per_minute= 600,max_tokens_per_minute=1000000 )
+        self.rate_limiter = OpenAIRateLimiter(max_requests_per_minute= 1000000,max_tokens_per_minute=1000000 )
         self.tokenizer = tokenizer
         self.max_token_len = max_token_len
+        self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
     async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
         anyprompt=prompts[0]
@@ -364,14 +383,16 @@ class LlmPipeline():
 
         self.prompt_runner:PromptRunner
         if(llm_engine == LlmEngine.OPEN_AI):
-            self.tokenizer = GPT2TokenizerFast.from_pretrained("openai-community/gpt2") # AutoTokenizer.from_pretrained("google/flan-t5-large")  # use tiktoken
+            self.tokenizer = GPT2TokenizerFast.from_pretrained("openai-community/gpt2") # todo use tiktoken
             open_ai_fetcher = FetchGptGrade(gpt_model=self.modelName, max_tokens=self.max_output_tokens, client=create_gpt_client(), use_chat_protocol=True)
-            self.prompt_runner = OpenAIPromptRunner(fetcher=open_ai_fetcher, tokenizer = self.tokenizer, max_token_len=max_token_len)
+            self.prompt_runner = OpenAIPromptRunner(fetcher=open_ai_fetcher, tokenizer = self.tokenizer, max_token_len=max_token_len, max_output_tokens=max_output_tokens)
 
         elif(llm_engine == LlmEngine.VLLM):
-            self.tokenizer = GPT2TokenizerFast.from_pretrained("openai-community/gpt2")  # AutoTokenizer.from_pretrained("google/flan-t5-large")  # use tiktoken
-            vllm_fetcher = FetchGptGrade(gpt_model=self.modelName, max_tokens=self.max_output_tokens, client=create_vllm_client(), use_chat_protocol=True)
-            self.prompt_runner = VllmPromptRunner(fetcher=vllm_fetcher, tokenizer = self.tokenizer, max_token_len=max_token_len)
+            # Start VLLM with:  HF_TOKEN="<token>" tmp/bin/vllm serve meta-llama/Llama-3.3-70B-Instruct  --max-model-len 500 --device=cuda --tensor-parallel-size 2
+
+            self.tokenizer = GPT2TokenizerFast.from_pretrained("openai-community/gpt2")  # todo use tiktoken
+            vllm_fetcher = FetchGptGrade(gpt_model=self.modelName, max_tokens=self.max_output_tokens, client=create_vllm_client(base_url=os.getenv('VLLM_URL')), use_chat_protocol=True)
+            self.prompt_runner = VllmPromptRunner(fetcher=vllm_fetcher, tokenizer = self.tokenizer, max_token_len=max_token_len, max_output_tokens=max_output_tokens)
 
         else: # if(llm_engine == LlmEngine.HF_TF):
 
@@ -382,7 +403,7 @@ class LlmPipeline():
                 self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
 
                 hf_pipeline = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
-                self.prompt_runner = HfTransformersPromptRunner(pipeline=hf_pipeline, MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer=self.tokenizer)
+                self.prompt_runner = HfTransformersPromptRunner(pipeline=hf_pipeline, MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer=self.tokenizer, max_output_tokens=self.max_output_tokens, question_batch_size=self.question_batchSize)
 
             if hf_pipeline_type == HfPipeline.textgeneration:
                 self.model = AutoModelForCausalLM.from_pretrained(self.modelName)
@@ -396,32 +417,12 @@ class LlmPipeline():
                                        , use_fast=True
                                        )
                 self.prompt_runner = HfTransformersPromptRunner(pipeline=hf_pipeline
-                , MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer=self.tokenizer)
+                , MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer=self.tokenizer, max_output_tokens=self.max_output_tokens, question_batch_size=self.question_batchSize)
 
             elif hf_pipeline_type == HfPipeline.llama:
                 self.model = AutoModelForCausalLM.from_pretrained(self.modelName)
                 self.tokenizer = AutoTokenizer.from_pretrained(self.modelName)
-                self.prompt_runner = HfLlamaTransformersPromptRunner(model=self.model, MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer = self.tokenizer)
-
-                # # in order to support batching in Llama
-                # self.tokenizer.pad_token_id = self.model.config.eos_token_id
-                # self.tokenizer.padding_side ='left'
-
-                # terminators = [
-                #     self.tokenizer.eos_token_id,
-                #     self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-                # ]
-
-                # hf_pipeline = pipeline('text-generation'
-                #                        , model=self.model
-                #                        , tokenizer=self.tokenizer
-                #                        , device=device
-                #                        , batch_size=BATCH_SIZE
-                #                        , use_fast=True
-                #                        , model_kwargs={"torch_dtype": torch.bfloat16, "quantization_config": {"load_in_4bit": True}}
-                #                        )
-                # self.prompt_runner = HfTransformersPromptRunner(pipeline=hf_pipeline
-                # , MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer=self.tokenizer)
+                self.prompt_runner = HfLlamaTransformersPromptRunner(model=self.model, MAX_TOKEN_LEN=MAX_TOKEN_LEN, tokenizer = self.tokenizer, max_output_tokens=self.max_output_tokens)
 
             elif hf_pipeline_type == HfPipeline.qa:
 
@@ -434,7 +435,7 @@ class LlmPipeline():
                 print(f"QaPipeline model config: { self.model.config}")
                 # print("maxBatchSize",computeMaxBatchSize(self.model.config))
                 # self.promptGenerator = promptGenerator
-                self.max_token_len = 512
+                self.max_token_len = max_token_len
 
                 # Create a Hugging Face pipeline
                 qa_pipeline = pipeline('question-answering', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
@@ -451,23 +452,6 @@ class LlmPipeline():
     def finish(self):
         self.prompt_runner.finish()
 
-    # def batchChunker(self, iterable):
-    #     iterator = iter(iterable)
-    #     while True:
-    #         batch = list(itertools.islice(iterator, self.question_batchSize))
-    #         if not batch or len(batch)<1:
-    #             break
-    #         yield batch
-
-
-    # async def call_qa_pipeline(self, prompts: List[Dict[str,str]]) -> List[str]:
-    #     resps:List[str] = await self.prompt_runner.call_qa_pipeline(prompts)
-    #     return resps
-
-    # async def call_pipeline(self, prompts: List[str]) -> List[str]:
-    #     resps:List[str] = await self.prompt_runner.call_pipeline(prompts)
-    #     return resps
-
 
 
     async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
@@ -481,7 +465,7 @@ class Text2TextPipeline(LlmPipeline):
     """Pipeline for text2text"""
 
     def __init__(self, model_name:str, llm_engine:LlmEngine):
-        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.text2text, llm_engine=llm_engine, max_token_len=512, max_output_tokens=MAX_TOKEN_LEN)
+        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.text2text, llm_engine=llm_engine, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_TOKEN_LEN)
 
 
 
@@ -489,7 +473,7 @@ class TextGenerationPipeline(LlmPipeline):
     """Pipeline for text-generation"""
 
     def __init__(self, model_name:str, llm_engine:LlmEngine):
-        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.textgeneration, llm_engine=llm_engine, max_token_len=512, max_output_tokens=MAX_TOKEN_LEN) 
+        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.textgeneration, llm_engine=llm_engine, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_TOKEN_LEN) 
 
 
 
@@ -497,14 +481,14 @@ class LlamaTextGenerationPipeline(LlmPipeline):
     """Pipeline for llama text-generation"""
 
     def __init__(self, model_name:str, llm_engine:LlmEngine):
-        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.llama, llm_engine=llm_engine, max_token_len=512, max_output_tokens=MAX_TOKEN_LEN) 
+        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.llama, llm_engine=llm_engine, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_TOKEN_LEN) 
 
 
 class QaPipeline(LlmPipeline):
     """QA Pipeline for text2text based question answering"""
 
     def __init__(self, model_name:str, llm_engine:LlmEngine):
-        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.qa, llm_engine=llm_engine, max_token_len=512, max_output_tokens=50) #max_tokens=max_tokens, client=client)
+        super().__init__(model_name=model_name, hf_pipeline_type=HfPipeline.qa, llm_engine=llm_engine, max_token_len=MAX_TOKEN_LEN, max_output_tokens=50)
 
 
 

@@ -219,7 +219,6 @@ async def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    parser.add_argument('--llm-engine', type=LlmEngine.from_string, metavar='Choice', choices=list(LlmEngine), help='LLM backend to be used, choices: '+",".join([str(x) for x in LlmEngine]))
 
     modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name, llm_engine=LlmEngine.HF_TF)
                 ,'question-answering': lambda model_name:  QaPipeline(model_name, llm_engine=LlmEngine.HF_TF)
@@ -257,7 +256,6 @@ async def main(cmdargs=None):
 
     # Parse the arguments
     args = parser.parse_args(args = cmdargs) 
-    print(args.llm_engine)
  
 
     question_set:Dict[str,List[Prompt]]

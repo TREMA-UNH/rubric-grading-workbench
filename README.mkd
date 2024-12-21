@@ -409,6 +409,69 @@ Then ask your administrator to edit the nix config file (`/etc/nix/nix.conf`) an
 Command line utilities are directly called via `python -O -m <command>`
 
 
+# Experimental Features
+
+
+Grading via OpenAI and vLLM (in addition to native hugginface pipelines)
+
+Grading with huggingface transformers pipelines (previously supported)
+
+Here FLAN-T5 via text2text pipeline, you can use most models with the text-generation pipeline, for SQUAD2 you set the question-answering pipeline
+
+# Grading via huggingface pipelines
+
+If you need to authenticate via huggingface, set the token and run RUBRIC as follows
+
+```bash
+export HF_TOKEN="..."
+
+python -m exam_pp.exam_grading ...  --model-pipeline text2text --model-name google/flan-t5-large   ...
+
+# alternatively for Causal LM pipeline
+python -m exam_pp.exam_grading ...  --model-pipeline text-generation --model-name gpt2   ...
+
+# alternatively for Squad tuned models
+python -m exam_pp.exam_grading ...  --model-pipeline qa --model-name ...   ...
+
+
+```
+
+# Grading with OpenAI (uses JSON)
+
+```bash
+# set open AI Key
+export OPENAI_API_KEY="..."
+
+python -m exam_pp.exam_grading ... --model-pipeline OpenAI --model-name gpt-3.5-turbo ...
+```
+
+# Grading with vLLM (uses JSON)
+
+I am using Gwen for example, you will need a model that reliably responds in the requested JSON format.
+
+You will need to first start the vLLM server in the background, for example like this:
+
+```bash
+    ./bin/vllm serve Qwen/Qwen2-7B-Instruct-GPTQ-Int4 --device=cuda --max-model-len 1024
+    
+```
+
+or
+```bash
+     HF_TOKEN="..." ./bin/vllm serve mistralai/Mistral-Nemo-Instruct-2407 --device=cuda  --max-model-len 400 --port 8889 --host 0.0.0.0
+```
+
+Then configure RUBRIC as a vLLM client as follows. 
+
+```bash
+    # configure end point 
+    export VLLM_URL=http://localhost:8000/v1   # alternative for IPv6: export VLLM_URL=http://[::0]:8000/v1
+
+    # run with VLLM client
+    python -m exam_pp.exam_grading ...   --model-pipeline vLLM --model-name Qwen/Qwen2-7B-Instruct-GPTQ-Int4 ...
+```
+
+
 
 
 

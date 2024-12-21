@@ -9,7 +9,7 @@ import trec_car.read_data as trec_car
 
 from .question_bank_loader import ExamQuestion, QueryQuestionBank, emit_test_bank_entry, write_single_query_test_bank, writeTestBank
 
-from .openai_interface import query_gpt_batch_with_rate_limiting
+from .openai_interface import default_openai_client, query_gpt_batch_with_rate_limiting
 from .davinci_to_runs_with_text import *
 
 
@@ -61,7 +61,7 @@ class FetchGptJson:
             return None
 
     def _generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+        answer = query_gpt_batch_with_rate_limiting(prompt, use_chat_interface=True, client=default_openai_client(), gpt_model=gpt_model, max_tokens=max_tokens)
         return answer
 
     def generate_question(self, prompt:str):
