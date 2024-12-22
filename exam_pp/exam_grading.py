@@ -128,7 +128,7 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
     #     noodle_one_paragraph(para)
 
 
-async def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -182,10 +182,10 @@ async def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, qaPipeline, max_paragraphs)
+                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 
@@ -193,7 +193,7 @@ async def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file
             # out_file.write('\n')
             file.flush()
 
-        qaPipeline.finish()
+        llmPipeline.finish()
         file.close()
 
 
@@ -203,12 +203,18 @@ async def main(cmdargs=None):
     import argparse
 
     desc = f'''EXAM grading, verifying which paragraphs answer which questions with a Q/A system. \n
-              The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
+              The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file. Info about JSON schema with --help-schema
+             '''
+      
+    help_schema=f'''The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
               \n  
                   [query_id, [FullParagraphData]] \n
               \n
                where `FullParagraphData` meets the following structure \n
              {FullParagraphData.schema_json(indent=2)}
+             \n
+             Create a compatible file with 
+             exam_pp.data_model.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])
              '''
     
     parser = argparse.ArgumentParser(description="EXAM grading"
@@ -219,15 +225,17 @@ async def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    MAX_TOKEN_LEN=512
-    MAX_OUT_TOKENS=512
+    parser.add_argument('--max-tokens', type=int, metavar="N", default=512, help="total number of tokens for input+output (for generative LLMs, just input)")
+    parser.add_argument('--max-out-tokens', type=int, metavar="N", default=512, help="total number of tokens for generated output (not used by some HF pipelines)")
+    # MAX_TOKEN_LEN=512
+    # MAX_OUT_TOKENS=512
 
-    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
-                ,'question-answering': lambda model_name:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
-                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
-                ,'vLLM': lambda model_name:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                ,'OpenAI': lambda model_name:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+    modelPipelineOpts = {'text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
+                ,'question-answering': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'text-generation': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -255,10 +263,15 @@ async def main(cmdargs=None):
     parser.add_argument('--restart-paragraphs-file', type=str, metavar='exam-xxx.jsonl.gz', help='Restart logic: Input file name with partial exam grade annotations that we want to copy from. Copies while queries are defined (unless --restart-from-query is set)')
     parser.add_argument('--restart-from-query', type=str, metavar='QUERY_ID', help='Restart logic: Once we encounter Query Id, we stop copying and start re-running the pipeline (Must also set --restart-paragraphs-file)')
  
+    parser.add_argument('--help-schema', action='store_true', help="Additional info on required JSON.GZ input format")
+
 
     # Parse the arguments
     args = parser.parse_args(args = cmdargs) 
  
+    if args.help_schema:
+        print(help_schema)
+        sys.exit()
 
     question_set:Dict[str,List[Prompt]]
     if args.question_type == "tqa":
@@ -285,10 +298,10 @@ async def main(cmdargs=None):
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name)
+    llmPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.max_tokens, args.max_out_tokens)
 
     await noodle(
-             qaPipeline=qaPipeline
+             llmPipeline=llmPipeline
            , question_set=question_set
            , paragraph_file= args.paragraph_file
            , out_file = args.out_file
