@@ -550,6 +550,8 @@ class PromptTruncater():
         num_special_tokens = tokenizer.num_special_tokens_to_add()
         available_tokens_for_context = max_length - len(question_tokens) - num_special_tokens -5 # 5 for good measure
 
+        if available_tokens_for_context <=0:
+            raise RuntimeError(f"Question too long, no remaining tokens left for context. max_length={max_length}, question_length={len(question_tokens)} question:\n{question}")
         # Tokenize and truncate the context
         truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
 

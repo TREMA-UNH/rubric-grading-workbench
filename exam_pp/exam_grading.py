@@ -219,13 +219,15 @@ async def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
+    MAX_TOKEN_LEN=512
+    MAX_OUT_TOKENS=512
 
-    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name, llm_engine=LlmEngine.HF_TF)
-                ,'question-answering': lambda model_name:  QaPipeline(model_name, llm_engine=LlmEngine.HF_TF)
-                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.HF_TF) 
-                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name, llm_engine=LlmEngine.HF_TF)
-                ,'vLLM': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.VLLM) 
-                ,'OpenAI': lambda model_name:  TextGenerationPipeline(model_name, llm_engine=LlmEngine.OPEN_AI) 
+    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
+                ,'question-answering': lambda model_name:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'vLLM': lambda model_name:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                ,'OpenAI': lambda model_name:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
