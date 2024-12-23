@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 
+from dataclasses import dataclass
 import itertools
 import json
 import math
@@ -8,7 +9,7 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable
+from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable, Union
 import typing
 import openai
 import torch
@@ -17,6 +18,7 @@ from transformers import pipeline, T5ForConditionalGeneration, GPT2TokenizerFast
 from json import JSONDecodeError
 
 import transformers
+from .exam_llm import *
 from . import openai_interface
 from .openai_interface import query_gpt_batch_with_rate_limiting, OpenAIRateLimiter, FetchGptJson
 
@@ -112,12 +114,12 @@ class HfPipeline(Enum):
         
 class PromptRunner(ABC):
     @abstractmethod
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
+    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
         pass
     
 
     @abstractmethod
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
         pass
     
     @abstractmethod
@@ -145,7 +147,7 @@ class HfTransformersQaPromptRunner(PromptRunner):
         self.tokenizer = tokenizer
         self.question_batchSize=100
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
+    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_dict_pipeline(dict_prompts=converted_prompts)
 
@@ -159,7 +161,7 @@ class HfTransformersQaPromptRunner(PromptRunner):
                         (processBatch(batch) for batch in self.batchChunker(dict_prompts)) 
                         )) 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
         raise RuntimeError("QA pipeline only supports Dict-prompts")
 
 
@@ -180,12 +182,12 @@ class HfTransformersPromptRunner(PromptRunner):
         self.question_batchSize=question_batch_size
 
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
+    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_pipeline(prompts=converted_prompts)
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
         def processBatch(prompts):
             resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True)
             return [resp['generated_text'] for resp in resps]
@@ -225,7 +227,7 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
                     self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
                 ]
 
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
         def processBatch(prompts):
             answers=list()
             resps = self.hf_pipeline(prompts
@@ -295,7 +297,7 @@ class OpenAIPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
+    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         # anyprompt.configure_json_gpt_fetcher(self.openai_fetcher)
         self.openai_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
@@ -304,13 +306,17 @@ class OpenAIPromptRunner(PromptRunner):
         return await self.call_pipeline(prompts=converted_prompts)
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
-        responses_might_be_none:list[Optional[str]] =   [await self.openai_fetcher.generate_request(prompt, openai_interface.global_rate_limiter) for prompt in prompts]
-        for p,resp in zip(prompts, responses_might_be_none):
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+        responses:list[Union[str, LlmResponseError]] =   [await self.openai_fetcher.generate_request(prompt, openai_interface.global_rate_limiter) for prompt in prompts]
+        for p,resp in zip(prompts, responses):
             if resp is None:
-                sys.stderr.write(f"Could not obtain OpenAI response for prompt {p}")
+                raise RuntimeError(f"Obtained None, but should have recevied an LlmResponseError. Prompt {p}")
+                # sys.stderr.write(f"Could not obtain OpenAI response for prompt {p}")
+            if isinstance(resp, LlmResponseError):
+                sys.stderr.write(f"OpenAIPromptRunner.call_pipeline: Stumbled upon LlmResponse error {resp}")
 
-        return list(filter(None, responses_might_be_none))
+        # return list(filter(None, responses_might_be_none))
+        return responses
 
 
     def get_tokenizer(self):
@@ -319,6 +325,7 @@ class OpenAIPromptRunner(PromptRunner):
     def finish(self):
         pass
 
+    
 class VllmPromptRunner(PromptRunner):
     def __init__(self, fetcher:FetchGptGrade, tokenizer:AutoTokenizer, max_token_len:int, max_output_tokens:int):
         print(fetcher.client.base_url)
@@ -328,7 +335,7 @@ class VllmPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[str]:
+    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         self.vllm_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
@@ -336,13 +343,18 @@ class VllmPromptRunner(PromptRunner):
         return await self.call_pipeline(prompts=converted_prompts)
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[str]:
-        responses_might_be_none:list[Optional[str]] =   [await self.vllm_fetcher.generate_request(prompt, self.rate_limiter) for prompt in prompts]
-        for p,resp in zip(prompts, responses_might_be_none):
-            if resp is None:
-                sys.stderr.write(f"Could not obtain VLLM response for prompt {p}. Rater limiter: {self.rate_limiter}")
 
-        return list(filter(None, responses_might_be_none))
+    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+        responses =   [await self.vllm_fetcher.generate_request(prompt, self.rate_limiter) for prompt in prompts]
+
+        for p,resp in zip(prompts, responses):
+            if resp is None:
+                raise RuntimeError(f"Obtained None, but should have recevied an LlmResponseError. Prompt {p}")
+        #         sys.stderr.write(f"Could not obtain VLLM response for prompt {p}, reason {resp}. Rater limiter: {self.rate_limiter}")
+            if isinstance(resp, LlmResponseError):
+                sys.stderr.write(f"OpenAIPromptRunner.call_pipeline: Stumbled upon LlmResponse error {resp}")
+
+        return responses
 
     def get_tokenizer(self):
         return self.tokenizer
@@ -374,11 +386,15 @@ class LlmPipeline():
 
 
 
-    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, str]]:
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
         """Run question answering over batches of questions, and tuples it up with the answers"""
-        answers:List[str] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt)
-        return list(zip(prompts, answers, strict=True))
+        answers:List[Union[str, LlmResponseError]] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt)
 
+        if len(answers) != len(prompts):
+            raise RuntimeError("Missing prompt response\mPrompts: {prompts}\n Answers: {answers}")
+        
+        return list(zip(prompts, answers, strict=True))
+        # todo Catch errors
 
 class VllmPipeline(LlmPipeline):
     """Pipeline for vLLM"""

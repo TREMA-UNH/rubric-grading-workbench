@@ -1,6 +1,9 @@
+import asyncio
 import gzip
 import concurrent.futures
 
+import itertools
+from pathlib import Path
 from typing import *
 
 from .query_loader import direct_grading_prompts, json_query_loader
@@ -53,6 +56,11 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
             paragraph_txt = para.text
 
             answerTuples = await qaPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt)
+
+            for p,answer in answerTuples:
+                if isinstance(answer, LlmResponseError):
+                    raise RuntimeError("Obtained LlmresponseError {answer}")
+                    # todo handle this case
 
             # for q,a in answerTuples:
                 # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
@@ -110,14 +118,19 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
         
         (_, answer) = answerTuples[0]
 
-        grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
-                           , answer=answer
-                           , self_ratings= grading_prompt.check_answer_rating(answer)
-                           , llm = qaPipeline.exp_modelName()
-                           , llm_options={}
-                           , prompt_type= grading_prompt.prompt_type()
-                           , prompt_info = grading_prompt.prompt_info()
-                        )
+        if isinstance(answer, LlmResponseError):
+            raise RuntimeError("Obtained LlmresponseError {answer}")
+        
+        else:
+
+            grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
+                            , answer=answer
+                            , self_ratings= grading_prompt.check_answer_rating(answer)
+                            , llm = qaPipeline.exp_modelName()
+                            , llm_options={}
+                            , prompt_type= grading_prompt.prompt_type()
+                            , prompt_info = grading_prompt.prompt_info()
+                            )
         
         if para.grades is None:
             para.grades = list()
@@ -270,6 +283,9 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     parser.add_argument('--custom-prompt-name', type=str,required=False, metavar="NAME"
                         , help="Name for the custom prompt. This name will be used instead of --prompt-class during post-processing and leaderboard evaluation")
 
+
+    parser.add_argument('--max-queries', type=int, metavar="n", default=-1, help="Limit number of queries to be processed")
+    parser.add_argument('--max-paragraphs', type=int, metavar="n", default=-1, help="Limit number of paragraphs to be processed")
 
     parser.add_argument('--restart-paragraphs-file', type=str, metavar='exam-xxx.jsonl.gz', help='Restart logic: Input file name with partial exam grade annotations that we want to copy from. Copies while queries are defined (unless --restart-from-query is set)')
     parser.add_argument('--restart-from-query', type=str, metavar='QUERY_ID', help='Restart logic: Once we encounter Query Id, we stop copying and start re-running the pipeline (Must also set --restart-paragraphs-file)')

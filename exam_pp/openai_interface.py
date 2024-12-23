@@ -11,6 +11,8 @@ import time
 import datetime
 
 import trec_car.read_data as trec_car
+
+from .exam_llm import LlmResponseError
 from .davinci_to_runs_with_text import *
 
     # # Parse rate limit information
@@ -209,7 +211,7 @@ class FetchGptJson:
         answer = query_gpt_batch_with_rate_limiting( prompt, gpt_model=gpt_model, max_tokens=max_tokens, client=self.client, rate_limiter=rate_limiter, use_chat_interface=self.use_chat_protocol)
         return answer
 
-    async def generate_request(self, prompt:str, rate_limiter:OpenAIRateLimiter)->Optional[str]:
+    async def generate_request(self, prompt:str, rate_limiter:OpenAIRateLimiter)->Optional[Union[str, LlmResponseError]]:
         full_prompt = prompt+self._json_instruction
 
         # print("\n\n"+full_prompt+"\n\n")
@@ -228,5 +230,5 @@ class FetchGptJson:
             else:
                 tries-=1
                 print(f"Receiving unparsable response: {response}. Tries left: {tries}")
-        return None
+        return LlmResponseError(failure_reason=f"Could not obtain parsable response after {tries} tries. Response {response}")
 
