@@ -194,7 +194,32 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
 
 
 ## -------------------------------------------
-        
+
+def simple_prompt_loader(test_banks:typing.Sequence[QueryQuestionBank])-> List[Tuple[str, List[Prompt]]]:
+    prompt_dict: Dict[str, List[Prompt]]
+    prompt_dict = defaultdict(list)
+    prompt:Prompt
+
+    for bank in test_banks:
+        question_bank = bank
+        query_id = question_bank.query_id
+        for question in question_bank.get_questions():
+            if not question.query_id == query_id:
+                    raise RuntimeError(f"query_ids don't match between QueryQuestionBank ({query_id}) and contained ExamQuestion ({question.query_id}) ")
+
+            prompt = QuestionSelfRatedUnanswerablePromptWithChoices(question_id = question.question_id
+                                                                    , question = question.question_text
+                                                                    , query_id = question_bank.query_id
+                                                                    , facet_id = question.facet_id
+                                                                    , query_text = question_bank.query_text
+                                                                    , unanswerable_expressions = set()
+                                                                    , self_rater_tolerant=False
+                                                                    )
+            prompt_dict[query_id].append(prompt)
+
+    return list(prompt_dict.items())
+
+
 
 def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices", custom_prompt:Optional[str]=None, custom_prompt_name:Optional[str]=None)-> List[Tuple[str, List[Prompt]]]:
     '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
