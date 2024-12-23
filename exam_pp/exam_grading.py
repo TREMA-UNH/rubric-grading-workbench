@@ -202,8 +202,21 @@ async def main(cmdargs=None):
 
     import argparse
 
-    desc = f'''EXAM grading, verifying which paragraphs answer which questions with a Q/A system. \n
-              The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file. Info about JSON schema with --help-schema
+    desc = f'''EXAM grading, verifying which paragraphs answer which questions or contain nuggets via LLMs. 
+    
+            \n
+The entries of the given RUBRIC input file will be augmented with exam grades, to be written to a new file
+1. Create a RUBRIC inputfile as *JSONL.GZ file. Info about JSON schema with --help-schema
+2. Load RUBRIC grading questions via  --question-path $file 
+3. Set prompt template via --prompt-class $class
+4. Configure the LLM via --name-model $hf_model (as named on huggingface)
+5. Different LLM backends and Huggingface pipelines are supported via --model-pipeline these may require additional configuration            
+\n
+* For vLLM you need to set the url via `export VLLM_URL=http://127.0.0.1:8000/v1`  (also works with ssh port tunnels)
+\n
+* For OpenAI you need to set the token via `export OPENAI_API_KEY=...`
+\n
+* For the other pipelines you may need to set the huggingface token via `export HF_TOKEN=...`
              '''
       
     help_schema=f'''The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
@@ -225,8 +238,6 @@ async def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    parser.add_argument('--max-tokens', type=int, metavar="N", default=512, help="total number of tokens for input+output (for generative LLMs, just input)")
-    parser.add_argument('--max-out-tokens', type=int, metavar="N", default=512, help="total number of tokens for generated output (not used by some HF pipelines)")
     # MAX_TOKEN_LEN=512
     # MAX_OUT_TOKENS=512
 
@@ -239,16 +250,16 @@ async def main(cmdargs=None):
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
-    parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or file)')
-    parser.add_argument('--question-type', type=str, choices=['tqa','genq', 'question-bank','direct'], required=True, metavar='PATH', help='Question type to read from question-path')
+    parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read grading rubric exam questions/nuggets from (can be tqa directory or file)')
+    parser.add_argument('--use-nuggets', action='store_true', help="if set, assumed --question-path contains nuggets instead of questions")
+    parser.add_argument('--question-type', type=str, choices=['question-bank','direct''tqa','genq'], default="question-bank", metavar='PATH', help='Grading rubric file format for reading from --question-path')
     
 
-    parser.add_argument('--max-queries', type=int, metavar='INT', default=None, help='limit the number of queries that will be processed (for debugging)')
-    parser.add_argument('--max-paragraphs', type=int, metavar='INT', default=None, help='limit the number of paragraphs that will be processed (for debugging)')
     parser.add_argument('--model-pipeline', type=str, choices=modelPipelineOpts.keys(), required=True, metavar='MODEL', help='the huggingface pipeline used to answer questions. For example, \'sjrhuschlee/flan-t5-large-squad2\' is designed for the question-answering pipeline, where \'google/flan-t5-large\' is designed for the text2text-generation pipeline. Choices: '+", ".join(modelPipelineOpts.keys()))
     parser.add_argument('--model-name', type=str, metavar='MODEL', help='the huggingface model used to answer questions')
+    parser.add_argument('--max-tokens', type=int, metavar="N", default=512, help="total number of tokens for input+output (for generative LLMs, just input)")
+    parser.add_argument('--max-out-tokens', type=int, metavar="N", default=512, help="total number of tokens for generated output (not used by some HF pipelines)")
 
-    parser.add_argument('--use-nuggets', action='store_true', help="if set uses nuggets instead of questions")
 
     parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
