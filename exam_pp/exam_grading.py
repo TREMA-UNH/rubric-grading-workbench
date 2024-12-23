@@ -252,7 +252,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read grading rubric exam questions/nuggets from (can be tqa directory or file)')
     parser.add_argument('--use-nuggets', action='store_true', help="if set, assumed --question-path contains nuggets instead of questions")
-    parser.add_argument('--question-type', type=str, choices=['question-bank','direct''tqa','genq'], default="question-bank", metavar='PATH', help='Grading rubric file format for reading from --question-path')
+    parser.add_argument('--question-type', type=str, choices=['question-bank','direct', 'tqa','genq'], default="question-bank", metavar='PATH', help='Grading rubric file format for reading from --question-path')
     
 
     parser.add_argument('--model-pipeline', type=str, choices=modelPipelineOpts.keys(), required=True, metavar='MODEL', help='the huggingface pipeline used to answer questions. For example, \'sjrhuschlee/flan-t5-large-squad2\' is designed for the question-answering pipeline, where \'google/flan-t5-large\' is designed for the text2text-generation pipeline. Choices: '+", ".join(modelPipelineOpts.keys()))
