@@ -42,12 +42,14 @@ class ExamGrades(BaseModel):
     correctAnswered: List[str]               # [question_id]
     wrongAnswered: List[str]                 # [question_id]
     answers: List[Tuple[str, str]]           # [ [question_id, answer_text]] 
+    llm_response_errors: Optional[List[Tuple[str,str]]] = None
     llm: str                                 # huggingface model name
     llm_options: Dict[str,Any]               # anything that seems relevant
     exam_ratio: float                        # correct / all questions
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[List[SelfRating]] # if availabel: self-ratings (question_id, rating)
     prompt_type: Optional[str]
+    relevance_label:Optional[int]=None       # store the predicted relevance label           
 
     def self_ratings_as_iterable(self)->List[SelfRating]:
         if self.self_ratings is None:
@@ -68,11 +70,13 @@ class ExamGrades(BaseModel):
 class Grades(BaseModel):
     correctAnswered: bool               # true if relevant,  false otherwise
     answer: str                        #  llm_response_text
+    llm_response_error:Optional[str] = None       # When an Llm error occurs (e.g. non-parsable response)
     llm: str                                 # huggingface model name  google/flan-t5-large
     llm_options: Dict[str,Any]               # anything that seems relevant
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
     self_ratings: Optional[int]         #  if available: self-rating (e.g. 0-5)
     prompt_type: Optional[str]
+    relevance_label:Optional[int]=None       # store the predicted relevance label           
 
     def self_ratings_as_iterable(self):
         if self.self_ratings is None:
@@ -112,7 +116,7 @@ class Grades(BaseModel):
         if self.self_ratings is not None:
             self_ratings = [SelfRating(question_id="direct",nugget_id="direct",self_rating=self.self_ratings)]
 
-        return ExamGrades(correctAnswered=correctAnswered
+        examGrades= ExamGrades(correctAnswered=correctAnswered
                           , wrongAnswered=wrongAnswered
                           , answers=[("direct",self.answer)]
                           , exam_ratio=exam_ratio
@@ -122,7 +126,13 @@ class Grades(BaseModel):
                           , prompt_info=self.prompt_info
                           , prompt_type=DirectGradingPrompt.my_prompt_type
         )
-@dataclass
+
+        if self.llm_response_error is not None:
+            examGrades.llm_response_errors=[("direct",self.llm_response_error)]
+        if self.relevance_label is not None:
+            examGrades.relevance_label = self.relevance_label 
+        return examGrades
+    
 class GradeFilter():
     model_name: Optional[str]
     prompt_class: Optional[str]

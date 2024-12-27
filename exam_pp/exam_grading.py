@@ -42,7 +42,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -72,7 +72,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
             
             if len(ratedQs)==0:
                 ratedQs = None
-
+                
 
             correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
             numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
@@ -80,19 +80,27 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
             if numAll > 0: # can't provide exam when no questions are answered.
                 print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
 
+                correct_answered = [qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
                 # adding exam data to the JSON file
-                exam_grades = ExamGrades( correctAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
+                exam_grades = ExamGrades( correctAnswered=correct_answered
                                         , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples ]
+                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if not isinstance(answer, LlmResponseError)]
+                                        , llm_response_errors= [(qpc.prompt_id(), (cast(LlmResponseError,answer).failure_reason)) for qpc,answer in answerTuples if isinstance(answer, LlmResponseError)]
                                         , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                         , llm = qaPipeline.exp_modelName()
                                         , llm_options={}
                                         , prompt_type= anyPrompt.prompt_type()
                                         , prompt_info = anyPrompt.prompt_info()
                                         , self_ratings = ratedQs
-                                ) 
+                                        ) 
                 if para.exam_grades is None:
                     para.exam_grades = list()
+                
+                if ratedQs is not None:
+                    exam_grades.relevance_label = max([rating.self_rating for rating in ratedQs])
+                else:
+                    exam_grades.relevance_label = len(correct_answered)
+
                 para.exam_grades.append(exam_grades)
 
             else:
@@ -107,11 +115,10 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
-
-    async  def noodle_one_paragraph(para):
+    async def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        answerTuples = qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt)
+        answerTuples = await qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt)
         
         (_, answer) = answerTuples[0]
 
@@ -119,16 +126,23 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
             raise RuntimeError("Obtained LlmresponseError {answer}")
         
         else:
-
             grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
-                            , answer=answer
+                            , answer=answer if not isinstance(answer,LlmResponseError) else ""
+                            , llm_response_error= (cast(LlmResponseError,answer).failure_reason) if isinstance(answer, LlmResponseError) else None
                             , self_ratings= grading_prompt.check_answer_rating(answer)
                             , llm = qaPipeline.exp_modelName()
                             , llm_options={}
                             , prompt_type= grading_prompt.prompt_type()
                             , prompt_info = grading_prompt.prompt_info()
                             )
-        
+            
+            if grade_obj.self_ratings is not None:
+                grade_obj.relevance_label = grade_obj.self_ratings
+            else:
+                grade_obj.relevance_label = 1 if grade_obj.correctAnswered else 0
+
+
+
         if para.grades is None:
             para.grades = list()
         para.grades.append(grade_obj)
