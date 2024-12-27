@@ -1452,7 +1452,9 @@ class SelfRatingDirectGradingPrompt(DirectGradingPrompt):
 
     def check_answer_rating(self,answer:str)->int:
         rating = self.self_rater.check_answer_rating(answer)
-        if rating > 2:
+        if rating > self.max_valid_rating():
+            return 0
+        elif rating < 0:
             return 0
         else:
             return rating
@@ -1580,14 +1582,3 @@ Answer:
 '''
     def max_valid_rating(self)->int:
         return 2
-
-    # def check_answer_rating(self,answer:str)->int:
-    #     rating = self.self_rater.check_answer_rating(answer)
-    #     if rating > 2:
-    #         return 0
-    #     else:
-    #         return rating
-
-    # def check_answer(self,answer:str)->bool:
-    #     return self.check_answer_rating(answer=answer) > 0
-        

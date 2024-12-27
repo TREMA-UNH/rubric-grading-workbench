@@ -52,13 +52,13 @@
             trec-car-tools
             ir_datasets
           ];
-        }).overrideAttrs (oldAttrs: {
-          nativeBuildInputs = oldAttrs.nativeBuildInputs;
         });
 
       in {
         lib.pythonOverrides = pythonOverrides;
-        packages.exampp = (pkgs.python3.override {packageOverrides = pythonOverrides;}).pkgs.exampp;
+        packages.exampp = (pkgs.python3.override {
+          packageOverrides = pythonOverrides;
+        }).pkgs.exampp;
 
         devShells.default = self.outputs.devShells.${system}.cuda;
         devShells.cpu = mkShell "cpu";

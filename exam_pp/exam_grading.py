@@ -99,10 +99,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
                 print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
         
     await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
-    ## loop = asyncio.get_running_loop()
-    # for para in  itertools.islice(paragraphs, max_paragraphs):
-    #     ## await loop.run_in_executor(None, noodle_one_paragraph(para))
-    #     noodle_one_paragraph(para)
+
 
 
 async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
@@ -137,8 +134,7 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
         para.grades.append(grade_obj)
 
     await asyncio.gather( *(noodle_one_paragraph(para) for para in itertools.islice(paragraphs, max_paragraphs) ))
-    # for para in itertools.islice(paragraphs, max_paragraphs):
-    #     noodle_one_paragraph(para)
+
 
 
 async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None

@@ -373,7 +373,7 @@ If you are getting error message about unfree packages or experimental command, 
 * `nix --extra-experimental-features 'nix-command flakes' develop` 
 * `NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure`
 
-If you are on mac/darwin try this:
+If you are on mac/darwin try this
 
 * `NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 NIXPKGS_ALLOW_BROKEN=1 NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure .#cpu`
 
@@ -622,6 +622,16 @@ Respond only in the following JSON format:
 
 
 --------------------------------
+
+# Internal Notes
+
+We recommend that you use this repository as a reference via pypi or nix.
+
+If you are using `nix` flakes, and want to bump to the latest exampp version, call
+
+```
+    nix flake lock --update-input exampp
+```
 
 
 
