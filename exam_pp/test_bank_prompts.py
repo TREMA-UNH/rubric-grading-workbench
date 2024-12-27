@@ -7,6 +7,10 @@ from dataclasses import dataclass
 
 import hashlib
 
+from .exam_llm import DIRECT_GRADING_PROMPT_TYPE
+
+from .data_model import FullParagraphData
+
 
 def get_md5_hash(input_string: str) -> str:
     # Convert the string to bytes
@@ -438,11 +442,11 @@ class Prompt(abc.ABC):
                 }
 
     @abstractmethod
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         pass
 
     @abstractmethod
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         pass
 
     @abstractmethod
@@ -501,7 +505,7 @@ class QuestionPrompt(Prompt):
     question_id:str
 
     @abstractmethod
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         pass
 
     def answer_match_info(self):
@@ -633,11 +637,11 @@ class QuestionPromptWithChoices(QuestionPrompt):
 
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         question = self.question
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {question}", max_length=max_token_len)
         return prompt
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question = self.question
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {question}", max_length=max_token_len)
         return prompt
@@ -681,7 +685,7 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         return False
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         question_prompt =  f' question: How does this text answer this question: {self.question}'
         context_prompt = f"context: {context};"
         # question =  f'Is this question answerable: {self.question}'
@@ -689,7 +693,7 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'How does this text answer this question: {self.question}'
         context_prompt = context
         # question =  f'Is this question answerable: {self.question}'
@@ -751,14 +755,14 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
 
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
         context_prompt = context
 
@@ -820,14 +824,14 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
         return False
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
         context_prompt = context
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
@@ -881,14 +885,14 @@ class QuestionBriefWithAnswerKey(QuestionPrompt):
         return False
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         # f'''provide a complete and concise answer to the question based on the context. Question: {question}\nContext: {context}'''
         question_prompt =  f'Extract a very short answer from the context for this question: {self.question}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a brief correct answer to the question based on the context. Question: {self.question}'
         context_prompt = context
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
@@ -951,11 +955,11 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionCompleteConc
                 }
         return info
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         raise RuntimeError("This prompt is only for re-grading of previous answers.")
 
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         raise RuntimeError("This prompt is only for re-grading of previous answers.")
 
     def prompt_style(self)->str:
@@ -1014,10 +1018,10 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
         return False
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         raise RuntimeError("This is a post-hoc answer checker")
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         raise RuntimeError("This is a post-hoc answer checker")
 
 
@@ -1083,7 +1087,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         '''
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
 
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}\n'
         context_prompt = f"Context: {context}"
@@ -1092,7 +1096,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}'
         context_prompt = context
 
@@ -1171,12 +1175,12 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
     def has_rating(self):
         return True
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=filled_prompt_text, question="", max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
         context_prompt = context
 
@@ -1250,14 +1254,14 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
         '''
 
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = context
 
@@ -1315,13 +1319,13 @@ class NuggetExtractionPrompt(NuggetPrompt):
     def has_rating(self):
         return False
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         question_prompt =  f'Extract the passage from the text that best relates to the key fact (nugget), ensuring relevance and clarity. Key Fact: {self.nugget_text}\n'
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = context
 
@@ -1359,7 +1363,7 @@ class DirectGradingPrompt(Prompt):
     facet_id:Optional[str]
     facet_text:Optional[str]
 
-    my_prompt_type="direct_grading"
+    my_prompt_type=DIRECT_GRADING_PROMPT_TYPE # "direct_grading"
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
@@ -1367,14 +1371,14 @@ class DirectGradingPrompt(Prompt):
         self.true_false_matcher = TrueFalseMatcher2()
 
     def prompt_id(self)->str:
-        return "direct_grading"
+        return DIRECT_GRADING_PROMPT_TYPE # "direct_grading"
 
     def prompt_type(self)->str:
         return DirectGradingPrompt.my_prompt_type
 
 
     @abstractmethod
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         pass
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
@@ -1389,14 +1393,14 @@ class DirectGradingPrompt(Prompt):
         return  "Is this passage relevant?"
     
 
-    def generate_prompt(self,context:str, model_tokenizer, max_token_len) -> str:
-        empty_prompt =  self.prompt_template(context="")  # measure tokens in prompt template (without context)
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
+        empty_prompt =  self.prompt_template(context="", full_paragraph=full_paragraph)  # measure tokens in prompt template (without context)
         truncated_context = self.prompt_truncater.truncate_context(tokenizer=model_tokenizer, template=empty_prompt, context=context, max_length=max_token_len)
-        prompt =  str.format(self.prompt_template(context=truncated_context))
+        prompt =  str.format(self.prompt_template(context=truncated_context, full_paragraph=full_paragraph))
         return prompt
     
-    def generate_prompt_with_context_QC_no_choices(self,context:str, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  str.format(self.prompt_template(context=""))
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  str.format(self.prompt_template(context="", full_paragraph=full_paragraph))
 
         context_prompt = context
 
@@ -1474,7 +1478,7 @@ Give the response in the following JSON format:
 
 @dataclass
 class FagB(DirectGradingPrompt):
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.
 
 Question: {self.query_text}
@@ -1484,7 +1488,7 @@ Answer:
 
 
 class FagB_few(DirectGradingPrompt):
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: Indicate if the passage is relevant for the question. Respond with 'Yes' or 'No'.
 
 Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependent, so this would be at room temperature. Hope this helps.
@@ -1514,7 +1518,7 @@ Answer:
 
 @dataclass
 class HELM(DirectGradingPrompt):
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: Does the passage answer the que
         ry? Respond with 'Yes' or 'No'.
 
@@ -1526,7 +1530,7 @@ Answer:
 
 @dataclass
 class Sun(DirectGradingPrompt):
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: Given a passage and a query, predict whether the passage includes an answer to the query by producing either "Yes" or "No".
 Query: {self.query_text}
 Passage: {context}
@@ -1535,7 +1539,7 @@ Answer:
     
 @dataclass
 class Sun_few(DirectGradingPrompt):
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: Given a passage and a query, predict whether the passage includes an answer to the query by producing either "Yes" or "No".
 
 Passage: Its 25 drops per ml, you guys are all wrong. If it is water, the standard was changed 15 - 20 years ago to make 20 drops = 1mL. The viscosity of most things is temperature dependent, so this would be at room temperature. Hope this helps.
@@ -1570,7 +1574,7 @@ Answer:
 @dataclass
 class Thomas(SelfRatingDirectGradingPrompt):
     
-    def prompt_template(self, context:str)->str:
+    def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
         return f'''Instruction: You are a search quality rater evaluating the relevance of passages. Given a query and a passage, you must provide a score on an integer scale of 0 to 2 with the following meanings:
 2 = highly relevant, very helpful for this query
 1 = relevant, may be partly helpful but might contain other irrelevant content

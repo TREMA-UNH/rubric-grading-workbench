@@ -18,6 +18,8 @@ from transformers import pipeline, T5ForConditionalGeneration, GPT2TokenizerFast
 from json import JSONDecodeError
 
 import transformers
+
+from .data_model import FullParagraphData
 from .exam_llm import *
 from . import openai_interface
 from .openai_interface import query_gpt_batch_with_rate_limiting, OpenAIRateLimiter, FetchGptJson
@@ -114,7 +116,7 @@ class HfPipeline(Enum):
         
 class PromptRunner(ABC):
     @abstractmethod
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
         pass
     
 
@@ -147,8 +149,8 @@ class HfTransformersQaPromptRunner(PromptRunner):
         self.tokenizer = tokenizer
         self.question_batchSize=100
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
-        converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+        converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_dict_pipeline(dict_prompts=converted_prompts)
 
 
@@ -182,8 +184,8 @@ class HfTransformersPromptRunner(PromptRunner):
         self.question_batchSize=question_batch_size
 
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
-        converted_prompts = [prompt.generate_prompt(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_pipeline(prompts=converted_prompts)
 
 
@@ -297,12 +299,12 @@ class OpenAIPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         # anyprompt.configure_json_gpt_fetcher(self.openai_fetcher)
         self.openai_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
-        converted_prompts = [prompt.generate_prompt(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_pipeline(prompts=converted_prompts)
 
 
@@ -335,11 +337,11 @@ class VllmPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         self.vllm_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
-        converted_prompts = [prompt.generate_prompt(context=context, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_pipeline(prompts=converted_prompts)
 
 
@@ -386,9 +388,9 @@ class LlmPipeline():
 
 
 
-    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
         """Run question answering over batches of questions, and tuples it up with the answers"""
-        answers:List[Union[str, LlmResponseError]] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt)
+        answers:List[Union[str, LlmResponseError]] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt, full_paragraph=full_paragraph)
 
         if len(answers) != len(prompts):
             raise RuntimeError("Missing prompt response\mPrompts: {prompts}\n Answers: {answers}")

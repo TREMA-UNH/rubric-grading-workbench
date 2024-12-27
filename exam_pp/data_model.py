@@ -9,7 +9,9 @@ import json
 from pathlib import Path
 import pathlib
 
-from .test_bank_prompts import DirectGradingPrompt
+from .exam_llm import DIRECT_GRADING_PROMPT_TYPE
+
+# from .test_bank_prompts import DirectGradingPrompt
 
 
 
@@ -124,7 +126,7 @@ class Grades(BaseModel):
                           , llm=self.llm
                           , llm_options=self.llm_options
                           , prompt_info=self.prompt_info
-                          , prompt_type=DirectGradingPrompt.my_prompt_type
+                          , prompt_type=DIRECT_GRADING_PROMPT_TYPE # DirectGradingPrompt.my_prompt_type
         )
 
         if self.llm_response_error is not None:

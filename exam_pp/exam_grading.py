@@ -13,7 +13,7 @@ from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
 from .t5_qa import *
-from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
+from .data_model import ExamGrades, FullParagraphData, Grades, QueryWithFullParagraphList, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
@@ -42,7 +42,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt], llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -55,7 +55,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
             paragraph_id = para.paragraph_id
             paragraph_txt = para.text
 
-            answerTuples = await qaPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt)
+            answerTuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
 
             for p,answer in answerTuples:
                 if isinstance(answer, LlmResponseError):
@@ -87,7 +87,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList, grading_prompts:List
                                         , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if not isinstance(answer, LlmResponseError)]
                                         , llm_response_errors= [(qpc.prompt_id(), (cast(LlmResponseError,answer).failure_reason)) for qpc,answer in answerTuples if isinstance(answer, LlmResponseError)]
                                         , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                        , llm = qaPipeline.exp_modelName()
+                                        , llm = llmPipeline.exp_modelName()
                                         , llm_options={}
                                         , prompt_type= anyPrompt.prompt_type()
                                         , prompt_info = anyPrompt.prompt_info()

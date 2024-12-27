@@ -8,3 +8,5 @@ class LlmResponseError():
     failure_reason:str
     caught_exception: Optional[Exception]
 
+
+DIRECT_GRADING_PROMPT_TYPE="direct_grading"
