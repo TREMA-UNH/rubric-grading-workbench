@@ -57,13 +57,16 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
             paragraph_id = para.paragraph_id
             paragraph_txt = para.text
 
-            answerTuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
+            answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
+            answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
+            just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
 
             if not keep_going_on_llm_parse_error:
-                for p,answer in answerTuples:
-                    if isinstance(answer, LlmResponseError):
-                        raise RuntimeError(f"Obtained LlmresponseError {answer}")
-                        # todo handle this case
+                for p,llm_error in just_answer_errors:
+                    raise RuntimeError(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
+            else:
+                for p,llm_error in just_answer_errors:
+                    print(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
 
             # for q,a in answerTuples:
                 # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
@@ -87,8 +90,8 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
                 # adding exam data to the JSON file
                 exam_grades = ExamGrades( correctAnswered=correct_answered
                                         , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if not isinstance(answer, LlmResponseError)]
-                                        , llm_response_errors= [(qpc.prompt_id(), (cast(LlmResponseError,answer).failure_reason)) for qpc,answer in answerTuples if isinstance(answer, LlmResponseError)]
+                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples]
+                                        , llm_response_errors= [(qpc.prompt_id(), (llm_error.failure_reason)) for qpc,llm_error in just_answer_errors]
                                         , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                         , llm = llmPipeline.exp_modelName()
                                         , llm_options={}
