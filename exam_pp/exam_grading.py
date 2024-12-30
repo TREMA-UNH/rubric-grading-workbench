@@ -91,7 +91,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
                 exam_grades = ExamGrades( correctAnswered=correct_answered
                                         , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
                                         , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples]
-                                        , llm_response_errors= [(qpc.prompt_id(), (llm_error.failure_reason)) for qpc,llm_error in just_answer_errors]
+                                        , llm_response_errors= [(qpc.prompt_id(), llm_error) for qpc,llm_error in just_answer_errors]
                                         , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
                                         , llm = llmPipeline.exp_modelName()
                                         , llm_options={}
