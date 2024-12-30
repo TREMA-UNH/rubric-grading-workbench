@@ -44,7 +44,10 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
 
 async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt]
                                 , llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None 
-                                , keep_going_on_llm_parse_error:bool=False)->None:
+                                , keep_going_on_llm_parse_error:bool=False
+                                , system_message:Optional[str]=None
+                                , **kwargs
+                                )->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -57,7 +60,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
         paragraph_id = para.paragraph_id
         paragraph_txt = para.text
 
-        answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
+        answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para, system_message=system_message, **kwargs)
         answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
         just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
             
@@ -121,6 +124,8 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
 async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
                                           , qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
                                           , keep_going_on_llm_parse_error:bool=False
+                                          , system_message:Optional[str]=None
+                                          , **kwargs
                                           )->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
@@ -129,7 +134,7 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
     async def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        answerTuples = await qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt)
+        answerTuples = await qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt, system_message=system_message, **kwargs)
         
         (_, answer) = answerTuples[0]
 
@@ -166,6 +171,8 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
 async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             , keep_going_on_llm_parse_error:bool=False
+            , system_message:Optional[str]=None
+            , **kwargs
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
 
@@ -218,10 +225,10 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error)
+                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error, system_message=system_message, **kwargs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error, system_message=system_message, **kwargs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 

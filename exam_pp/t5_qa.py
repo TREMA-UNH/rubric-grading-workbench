@@ -19,7 +19,7 @@ from json import JSONDecodeError
 
 import transformers
 
-from .data_model import FullParagraphData
+from .data_model import FullParagraphData, ParagraphData
 from .exam_llm import *
 from . import openai_interface
 from .openai_interface import query_gpt_batch_with_rate_limiting, OpenAIRateLimiter, FetchGptJson
@@ -116,12 +116,12 @@ class HfPipeline(Enum):
         
 class PromptRunner(ABC):
     @abstractmethod
-    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         pass
     
 
     @abstractmethod
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         pass
     
     @abstractmethod
@@ -149,21 +149,21 @@ class HfTransformersQaPromptRunner(PromptRunner):
         self.tokenizer = tokenizer
         self.question_batchSize=100
 
-    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await list(iterable=self.call_dict_pipeline(dict_prompts=converted_prompts))
+        return await list(iterable=self.call_dict_pipeline(dict_prompts=converted_prompts, **kwargs))
 
 
-    async def call_dict_pipeline(self, dict_prompts: List[Dict[str,str]]) -> List[str]:
+    async def call_dict_pipeline(self, dict_prompts: List[Dict[str,str]], **kwargs) -> List[str]:
         def processBatch(prompts):
-            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True)
+            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
             return [resp['answer'] for resp in resps]
 
         return list(itertools.chain.from_iterable(
                         (processBatch(batch) for batch in self.batchChunker(dict_prompts)) 
                         )) 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         raise RuntimeError("QA pipeline only supports Dict-prompts")
 
 
@@ -184,14 +184,14 @@ class HfTransformersPromptRunner(PromptRunner):
         self.question_batchSize=question_batch_size
 
 
-    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await self.call_pipeline(prompts=converted_prompts)
+        return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         def processBatch(prompts):
-            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True)
+            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
             return [resp['generated_text'] for resp in resps]
 
         return list(itertools.chain.from_iterable(
@@ -230,16 +230,17 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
                     self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
                 ]
 
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         def processBatch(prompts):
             answers=list()
-            resps = self.hf_pipeline(prompts
+            resps = self.hf_pipeline(prompts, system_message=system_message
                                     , max_new_tokens=self.max_new_tokens #, max_length=MAX_TOKEN_LEN, 
                                     , eos_token_id=self.terminators
                                     , pad_token_id = self.tokenizer.pad_token_id
                                     , do_sample=True
                                     , temperature=0.6
-                                    , top_p=0.9)
+                                    , top_p=0.9
+                                    , **kwargs)
 
             for index, prompt in enumerate(prompts):
                 # print("Llama output\n", output)
@@ -300,20 +301,20 @@ class OpenAIPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         # anyprompt.configure_json_gpt_fetcher(self.openai_fetcher)
         self.openai_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
         converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await self.call_pipeline(prompts=converted_prompts)
+        return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
-        responses:list[Union[str, LlmResponseError]] =   [await self.openai_fetcher.generate_request(prompt, openai_interface.global_rate_limiter) for prompt in prompts]
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+        responses:list[Union[str, LlmResponseError]] =   [await self.openai_fetcher.generate_request(prompt, openai_interface.global_rate_limiter, system_message=system_message, **kwargs) for prompt in prompts]
         for p,resp in zip(prompts, responses):
-            if resp is None:
-                raise RuntimeError(f"Obtained None, but should have recevied an LlmResponseError. Prompt {p}")
+            # if resp is None:  # We don't return None's anymore
+            #     raise RuntimeError(f"Obtained None, but should have recevied an LlmResponseError. Prompt {p}")
                 # sys.stderr.write(f"Could not obtain OpenAI response for prompt {p}")
             if isinstance(resp, LlmResponseError):
                 sys.stderr.write(f"OpenAIPromptRunner.call_pipeline: Stumbled upon LlmResponse error {resp}")
@@ -338,17 +339,17 @@ class VllmPromptRunner(PromptRunner):
         self.max_token_len = max_token_len
         self.max_output_tokens = max_output_tokens  # todo pass this down to VLLM
 
-    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
         self.vllm_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
         converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await self.call_pipeline(prompts=converted_prompts)
+        return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
 
 
 
-    async def call_pipeline(self, prompts: List[str]) -> List[Union[str, LlmResponseError]]:
-        responses =   [await self.vllm_fetcher.generate_request(prompt, self.rate_limiter) for prompt in prompts]
+    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+        responses =   [await self.vllm_fetcher.generate_request(prompt, self.rate_limiter, system_message=system_message, **kwargs) for prompt in prompts]
 
         for p,resp in zip(prompts, responses):
             if resp is None:
@@ -389,9 +390,9 @@ class LlmPipeline():
 
 
 
-    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
         """Run question answering over batches of questions, and tuples it up with the answers"""
-        answers:List[Union[str, LlmResponseError]] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt, full_paragraph=full_paragraph)
+        answers:List[Union[str, LlmResponseError]] = await self.prompt_runner.run_prompts(prompts=prompts, context=paragraph_txt, full_paragraph=full_paragraph, system_message=system_message, **kwargs)
 
         if len(answers) != len(prompts):
             raise RuntimeError("Missing prompt response\mPrompts: {prompts}\n Answers: {answers}")
@@ -501,7 +502,7 @@ def mainQA():
     # promptGenerator=lambda qpc: qpc.generate_prompt_with_context_QC_no_choices(context='', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
-        answerTuples = qa.grade_paragraph(questions, "")
+        answerTuples = qa.grade_paragraph(questions, "", FullParagraphData.empty())
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
         numAll = len(answerTuples)
         print(f"{query_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}.")
@@ -518,7 +519,7 @@ def mainT2T():
     # promptGenerator=lambda qpc: qpc.generate_prompt(context = '', model_tokenizer = qa.tokenizer, max_token_len = MAX_TOKEN_LEN)
 
     for query_id, questions in lesson_questions:
-        answerTuples = qa.grade_paragraph(questions, "")
+        answerTuples = qa.grade_paragraph(questions, "", ParagraphData.empty())
         numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
         numAll = len(answerTuples)
         print(f"{query_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}.")

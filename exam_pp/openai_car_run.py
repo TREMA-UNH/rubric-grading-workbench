@@ -19,7 +19,7 @@ class FetchGptResponsesForWikipedia:
         return f"Generate a 1000-word long Wikipedia article on \"{query_title}\"."
 
     def generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens, use_chat_interface=True, system_message=None)
         return answer
 
 
@@ -33,8 +33,8 @@ class FetchGptResponsesForQuestion:
     def page_prompt(self, query_title:str)->str:
         return f"{query_title}?"
 
-    def generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+    def generate(self, prompt:str, gpt_model:str,max_tokens:int, system_message:Optional[str]=None, **kwargs)->str:
+        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens, use_chat_interface=True, system_message=system_message,**kwargs)
         return answer
 
 
@@ -48,8 +48,8 @@ class FetchGptResponsesForWeb:
     def page_prompt(self, query_title:str)->str:
         return f"Generate a web page for \"{query_title}\""
 
-    def generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens)
+    def generate(self, prompt:str, gpt_model:str,max_tokens:int, system_message:Optional[str]=None, **kwargs)->str:
+        answer = query_gpt_batch_with_rate_limiting(prompt, gpt_model=gpt_model, max_tokens=max_tokens, system_message=system_message, **kwargs)
         return answer
 
 

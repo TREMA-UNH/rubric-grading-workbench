@@ -121,7 +121,7 @@ def retry_with_exponential_backoff(
  
     return wrapper
 
-def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int, use_chat_interface:bool, client=None,  rate_limiter:OpenAIRateLimiter=None):
+def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int, use_chat_interface:bool, client=None,  rate_limiter:Optional[OpenAIRateLimiter]=None, system_message:Optional[str]=None, **kwargs):
     if client is None:
         client = default_openai_client()
     if rate_limiter is None:
@@ -131,12 +131,16 @@ def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int
 
     rate_limiter.wait_if_needed()
 
+
     if use_chat_interface:
-        messages = [{"role":"user", "content":prompt}]
-        completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens) 
+        messages = list()
+        if system_message is not None:
+            messages.append({"role":"system", "content":system_message})
+        messages.append({"role":"user", "content":prompt})
+        completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens, **kwargs) 
         result = [choice.message.content.strip() for choice in completion.choices]
     else:
-        completion = retry_with_exponential_backoff(func=client.completions.create)(model=gpt_model,prompt=prompt, max_tokens=max_tokens) 
+        completion = retry_with_exponential_backoff(func=client.completions.create)(model=gpt_model,prompt=prompt, max_tokens=max_tokens, **kwargs) 
         result = [choice.text.strip() for choice in completion.choices]
 
 
@@ -207,11 +211,11 @@ class FetchGptJson:
             print(e)
             return None
 
-    def _generate(self, prompt:str, gpt_model:str,max_tokens:int, rate_limiter:OpenAIRateLimiter)->str:
-        answer = query_gpt_batch_with_rate_limiting( prompt, gpt_model=gpt_model, max_tokens=max_tokens, client=self.client, rate_limiter=rate_limiter, use_chat_interface=self.use_chat_protocol)
+    def _generate(self, prompt:str, gpt_model:str,max_tokens:int, rate_limiter:OpenAIRateLimiter, system_message:Optional[str]=None, **kwargs)->str:
+        answer = query_gpt_batch_with_rate_limiting( prompt, gpt_model=gpt_model, max_tokens=max_tokens, client=self.client, rate_limiter=rate_limiter, use_chat_interface=self.use_chat_protocol, system_message=system_message, **kwargs)
         return answer
 
-    async def generate_request(self, prompt:str, rate_limiter:OpenAIRateLimiter)->Optional[Union[str, LlmResponseError]]:
+    async def generate_request(self, prompt:str, rate_limiter:OpenAIRateLimiter, system_message:Optional[str]=None, **kwargs)->Union[str, LlmResponseError]:
         full_prompt = prompt+self._json_instruction
 
         # print("\n\n"+full_prompt+"\n\n")
@@ -223,6 +227,8 @@ class FetchGptJson:
                                         , gpt_model=self.gpt_model
                                         , max_tokens=self.max_tokens
                                         , rate_limiter=rate_limiter
+                                        , system_message=system_message
+                                        , **kwargs
                                         )
                 # print(response)
                 

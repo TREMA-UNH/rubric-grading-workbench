@@ -325,6 +325,11 @@ class FullParagraphData(BaseModel):
     exam_grades : Optional[List[ExamGrades]]
     grades: Optional[List[Grades]]
 
+    @staticmethod
+    def empty()->"FullParagraphData":
+        return FullParagraphData(paragraph_id="empty",text="", exam_grades=None, grades=None, paragraph=None, paragraph_data=ParagraphData(judgments=[], rankings=[]))
+
+    
     def retrieve_exam_grade_any(self, grade_filter:GradeFilter) -> List[ExamGrades]:
             if self.grades is not None:
                 found = next(grade_filter.fetch_any(self.exam_grades, self.grades).__iter__(),None)
@@ -385,6 +390,7 @@ class FullParagraphData(BaseModel):
             return None
         else:
             return next((item for item in self.paragraph_data.rankings if item.method==method_name), None)
+
 
 @dataclass
 class QueryWithFullParagraphList():

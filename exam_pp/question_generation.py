@@ -60,11 +60,11 @@ class FetchGptJson:
             print(e)
             return None
 
-    def _generate(self, prompt:str, gpt_model:str,max_tokens:int)->str:
-        answer = query_gpt_batch_with_rate_limiting(prompt, use_chat_interface=True, client=default_openai_client(), gpt_model=gpt_model, max_tokens=max_tokens)
+    def _generate(self, prompt:str, gpt_model:str,max_tokens:int,system_message:Optional[str]=None, **kwargs)->str:
+        answer = query_gpt_batch_with_rate_limiting(prompt, use_chat_interface=True, client=default_openai_client(), gpt_model=gpt_model, max_tokens=max_tokens, system_message=system_message, **kwargs)
         return answer
 
-    def generate_question(self, prompt:str):
+    def generate_question(self, prompt:str, system_message:Optional[str]=None, **kwargs):
         full_prompt = prompt+self._json_instruction
 
         print("\n\n"+full_prompt+"\n\n")
@@ -73,7 +73,9 @@ class FetchGptJson:
         while tries>0:
             response = self._generate( prompt=full_prompt
                                       , gpt_model=self.gpt_model
-                                      , max_tokens=self.max_tokens)
+                                      , max_tokens=self.max_tokens
+                                      , system_message=system_message
+                                      , **kwargs)
             questions = self._parse_json_response(response)
             if questions is not None:
                 return questions
@@ -125,7 +127,7 @@ def generate_questions_cary3(car_outlines_path:Path
                              , use_nuggets:bool
                              , test_collection:str="cary3"
                              , description:Optional[str]=None
-                             , max_queries:Optional[int]=None):
+                             , max_queries:Optional[int]=None, system_message:Optional[str]=None, **kwargs):
    
     hash=datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
     generation_info = fetcher.generation_info(test_collection=test_collection, hash= hash, description=description)
@@ -149,7 +151,7 @@ def generate_questions_cary3(car_outlines_path:Path
                 prompt = car_section_question_prompt(query_title=title_query, query_subtopic=section_query)
 
 
-            questions = fetcher.generate_question(prompt)
+            questions = fetcher.generate_question(prompt, system_message=system_message, **kwargs)
             emit_test_bank_entry(out_file=out_file
                                  , test_collection=test_collection
                                  , generation_info= generation_info
@@ -181,7 +183,8 @@ def generate_questions_json(query_json:Path
                             , test_collection:str
                             , use_nuggets:bool
                             , description:Optional[str]=None
-                            , max_queries:Optional[int]=None):
+                            , max_queries:Optional[int]=None
+                            , system_message:Optional[str]=None, **kwargs):
 
     hash=datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
     generation_info = fetcher.generation_info(test_collection=test_collection, hash= hash, description=description)
@@ -197,7 +200,7 @@ def generate_questions_json(query_json:Path
             elif use_nuggets:
                 prompt = web_search_nugget_prompt(query_text=query_text)
 
-            questions = fetcher.generate_question(prompt)
+            questions = fetcher.generate_question(prompt, system_message=system_message, **kwargs)
             emit_test_bank_entry(out_file=out_file
                                  , test_collection=test_collection
                                  , generation_info= generation_info
