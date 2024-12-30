@@ -42,7 +42,9 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt], llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt]
+                                , llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None 
+                                , keep_going_on_llm_parse_error:bool=False)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
@@ -57,10 +59,11 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
 
             answerTuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
 
-            for p,answer in answerTuples:
-                if isinstance(answer, LlmResponseError):
-                    raise RuntimeError("Obtained LlmresponseError {answer}")
-                    # todo handle this case
+            if not keep_going_on_llm_parse_error:
+                for p,answer in answerTuples:
+                    if isinstance(answer, LlmResponseError):
+                        raise RuntimeError(f"Obtained LlmresponseError {answer}")
+                        # todo handle this case
 
             # for q,a in answerTuples:
                 # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
@@ -110,7 +113,10 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
 
 
 
-async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None)->None:
+async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
+                                          , qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
+                                          , keep_going_on_llm_parse_error:bool=False
+                                          )->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     paragraphs = queryWithFullParagraphList.paragraphs
@@ -122,8 +128,9 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
         
         (_, answer) = answerTuples[0]
 
-        if isinstance(answer, LlmResponseError):
-            raise RuntimeError("Obtained LlmresponseError {answer}")
+        if not keep_going_on_llm_parse_error:
+            if isinstance(answer, LlmResponseError):
+                raise RuntimeError("Obtained LlmresponseError {answer}")
         
         else:
             grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
@@ -153,6 +160,7 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
 
 async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
+            , keep_going_on_llm_parse_error:bool=False
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
 
@@ -205,10 +213,10 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs)
+                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 
@@ -299,6 +307,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
 
     parser.add_argument('--restart-paragraphs-file', type=str, metavar='exam-xxx.jsonl.gz', help='Restart logic: Input file name with partial exam grade annotations that we want to copy from. Copies while queries are defined (unless --restart-from-query is set)')
     parser.add_argument('--restart-from-query', type=str, metavar='QUERY_ID', help='Restart logic: Once we encounter Query Id, we stop copying and start re-running the pipeline (Must also set --restart-paragraphs-file)')
+    parser.add_argument('-k','--keep-going-on-llm-parse-error', action='store_true', help="Keep going even when parsing of LLM-responses fail. Errors will be logged in ExamGrades/Grades object, but the program will not stop with a raised LlmResponseError")
  
     parser.add_argument('--help-schema', action='store_true', help="Additional info on required JSON.GZ input format")
 
@@ -346,6 +355,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
            , max_paragraphs = args.max_paragraphs
            # Restart logic
            , restart_previous_paragraph_file=args.restart_paragraphs_file, restart_from_query=args.restart_from_query
+           , keep_going_on_llm_parse_error=args.keep_going_on_llm_parse_error
            )
 
 if __name__ == "__main__":
