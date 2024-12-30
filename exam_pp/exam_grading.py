@@ -54,63 +54,65 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
 
     async def noodle_one_paragraph(para:FullParagraphData):
 
-            paragraph_id = para.paragraph_id
-            paragraph_txt = para.text
+        paragraph_id = para.paragraph_id
+        paragraph_txt = para.text
 
-            answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
-            answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
-            just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
-
-            if not keep_going_on_llm_parse_error:
-                for p,llm_error in just_answer_errors:
-                    raise RuntimeError(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
-            else:
-                for p,llm_error in just_answer_errors:
-                    print(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
-
-            # for q,a in answerTuples:
-                # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
-
-            ratedQs: Optional[List[SelfRating]]
-            ratedQs = [self_ratings_from_prompt(prompt=prompt, answer=answer)         
-                                for prompt,answer in answerTuples
-                                if prompt.has_rating()]
+        answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para)
+        answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
+        just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
             
-            if len(ratedQs)==0:
-                ratedQs = None
-                
 
-            correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
-            numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
-            numAll = len(answerTuples)
-            if numAll > 0: # can't provide exam when no questions are answered.
-                print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
+        if not keep_going_on_llm_parse_error:
+            for p,llm_error in just_answer_errors:
+                raise RuntimeError(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
+        else:
+            for p,llm_error in just_answer_errors:
+                print(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
 
-                correct_answered = [qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
-                # adding exam data to the JSON file
-                exam_grades = ExamGrades( correctAnswered=correct_answered
-                                        , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
-                                        , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples]
-                                        , llm_response_errors= {qpc.prompt_id(): llm_error for qpc,llm_error in just_answer_errors}
-                                        , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
-                                        , llm = llmPipeline.exp_modelName()
-                                        , llm_options={}
-                                        , prompt_type= anyPrompt.prompt_type()
-                                        , prompt_info = anyPrompt.prompt_info()
-                                        , self_ratings = ratedQs
-                                        ) 
-                if para.exam_grades is None:
-                    para.exam_grades = list()
-                
-                if ratedQs is not None:
-                    exam_grades.relevance_label = max([rating.self_rating for rating in ratedQs])
-                else:
-                    exam_grades.relevance_label = len(correct_answered)
+        # for q,a in answerTuples:
+            # print(f'{a} -  {q.question}\n{paragraph_txt}\n')
 
-                para.exam_grades.append(exam_grades)
+        ratedQs: Optional[List[SelfRating]]
+        ratedQs = [self_ratings_from_prompt(prompt=prompt, answer=answer)         
+                            for prompt,answer in answerTuples
+                            if prompt.has_rating()]
+        
+        if len(ratedQs)==0:
+            ratedQs = None
+            
 
+        correctQs = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples if qpc.check_answer(answer)]
+        numRight = sum(qpc.check_answer(answer) for qpc,answer in answerTuples)
+        numAll = len(answer_or_error_tuples)
+        if numAll > 0: # can't provide exam when no questions are answered.
+            print(f"{query_id}, {paragraph_id}: {numRight} of {numAll} answers are correct. Ratio = {((1.0 * numRight) / (1.0*  numAll))}. {correctQs}")
+
+            correct_answered = [qpc.prompt_id() for qpc,answer in answerTuples if qpc.check_answer(answer)]
+            # adding exam data to the JSON file
+            exam_grades = ExamGrades( correctAnswered=correct_answered
+                                    , wrongAnswered=[qpc.prompt_id() for qpc,answer in answerTuples if not qpc.check_answer(answer)]
+                                    , answers = [(qpc.prompt_id(), answer) for qpc,answer in answerTuples]
+                                    , llm_response_errors= {qpc.prompt_id(): llm_error for qpc,llm_error in just_answer_errors}
+                                    , exam_ratio = ((1.0 * numRight) / (1.0*  numAll))
+                                    , llm = llmPipeline.exp_modelName()
+                                    , llm_options={}
+                                    , prompt_type= anyPrompt.prompt_type()
+                                    , prompt_info = anyPrompt.prompt_info()
+                                    , self_ratings = ratedQs
+                                    ) 
+            if para.exam_grades is None:
+                para.exam_grades = list()
+            
+            if ratedQs is not None:
+                exam_grades.relevance_label = max([rating.self_rating for rating in ratedQs])
             else:
-                print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
+                exam_grades.relevance_label = len(correct_answered)
+
+            para.exam_grades.append(exam_grades)
+
+        else:
+            print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
+
         
     await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
 

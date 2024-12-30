@@ -218,17 +218,21 @@ class FetchGptJson:
 
         tries = 3
         while tries>0:
-            response = self._generate( prompt=full_prompt
-                                      , gpt_model=self.gpt_model
-                                      , max_tokens=self.max_tokens
-                                      , rate_limiter=rate_limiter
-                                      )
-            # print(response)
-            reqs = self._parse_json_response(response, request=full_prompt)
-            if reqs is not None:
-                return reqs
-            else:
-                tries-=1
-                print(f"Receiving unparsable response: {response}. Tries left: {tries}")
+            try:
+                response = self._generate( prompt=full_prompt
+                                        , gpt_model=self.gpt_model
+                                        , max_tokens=self.max_tokens
+                                        , rate_limiter=rate_limiter
+                                        )
+                # print(response)
+                
+                reqs = self._parse_json_response(response, request=full_prompt)
+                if reqs is not None:
+                    return reqs
+                else:
+                    tries-=1
+                    print(f"Receiving unparsable response: {response}. Tries left: {tries}")
+            except openai.BadRequestError as ex:
+                return LlmResponseError(failure_reason="Exception from Llm:", response="",prompt=prompt, caught_exception=ex.message)
         return LlmResponseError(failure_reason="Could not parse LLM response after 3 tries.", response=response, prompt=prompt, caught_exception=None)
 
