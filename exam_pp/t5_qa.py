@@ -209,6 +209,7 @@ class HfTransformersPromptRunner(PromptRunner):
 class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
     def __init__(self, model, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer, max_output_tokens:int=-1):
         self.model=model
+        self.tokenizer=tokenizer
         # in order to support batching in Llama
         self.tokenizer.pad_token_id = self.model.config.eos_token_id
         self.tokenizer.padding_side ='left'
