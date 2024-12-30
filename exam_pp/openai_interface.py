@@ -230,5 +230,5 @@ class FetchGptJson:
             else:
                 tries-=1
                 print(f"Receiving unparsable response: {response}. Tries left: {tries}")
-        return LlmResponseError(failure_reason=f"Could not obtain parsable response after {tries} tries. Response {response}")
+        return LlmResponseError(failure_reason=f"Could not obtain parsable response after {tries} tries. Response {response}", caught_exception=None)
 

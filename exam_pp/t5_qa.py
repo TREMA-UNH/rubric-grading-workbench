@@ -151,7 +151,7 @@ class HfTransformersQaPromptRunner(PromptRunner):
 
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await self.call_dict_pipeline(dict_prompts=converted_prompts)
+        return await list(iterable=self.call_dict_pipeline(dict_prompts=converted_prompts))
 
 
     async def call_dict_pipeline(self, dict_prompts: List[Dict[str,str]]) -> List[str]:
