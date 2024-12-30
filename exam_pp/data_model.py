@@ -44,7 +44,7 @@ class ExamGrades(BaseModel):
     correctAnswered: List[str]               # [question_id]
     wrongAnswered: List[str]                 # [question_id]
     answers: List[Tuple[str, str]]           # [ [question_id, answer_text]] 
-    llm_response_errors: Optional[List[Tuple[str,LlmResponseError]]] = None
+    llm_response_errors: Optional[Dict[str,LlmResponseError]] = None
     llm: str                                 # huggingface model name
     llm_options: Dict[str,Any]               # anything that seems relevant
     exam_ratio: float                        # correct / all questions
