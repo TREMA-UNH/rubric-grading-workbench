@@ -1379,6 +1379,10 @@ class DirectGradingPrompt(Prompt):
 
     @abstractmethod
     def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
+        '''
+        Override to return the prompt template with variables filled in. 
+        Can use variables {self.query_text}, {self.query_id}, {self.facet_text} and {self.facet_id}
+        '''
         pass
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
@@ -1396,11 +1400,11 @@ class DirectGradingPrompt(Prompt):
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         empty_prompt =  self.prompt_template(context="", full_paragraph=full_paragraph)  # measure tokens in prompt template (without context)
         truncated_context = self.prompt_truncater.truncate_context(tokenizer=model_tokenizer, template=empty_prompt, context=context, max_length=max_token_len)
-        prompt =  str.format(self.prompt_template(context=truncated_context, full_paragraph=full_paragraph))
+        prompt =  self.prompt_template(context=truncated_context, full_paragraph=full_paragraph)
         return prompt
     
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  str.format(self.prompt_template(context="", full_paragraph=full_paragraph))
+        question_prompt =  self.prompt_template(context="", full_paragraph=full_paragraph)
 
         context_prompt = context
 
@@ -1519,8 +1523,7 @@ Answer:
 @dataclass
 class HELM(DirectGradingPrompt):
     def prompt_template(self, context:str, full_paragraph:FullParagraphData)->str:
-        return f'''Instruction: Does the passage answer the que
-        ry? Respond with 'Yes' or 'No'.
+        return f'''Instruction: Does the passage answer the query? Respond with 'Yes' or 'No'.
 
 Query: {self.query_text}
 Passage: {context}

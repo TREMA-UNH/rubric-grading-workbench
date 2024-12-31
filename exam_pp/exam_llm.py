@@ -1,6 +1,6 @@
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Dict
 from pydantic.v1 import BaseModel
 
 # @dataclass
