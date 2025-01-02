@@ -654,14 +654,19 @@ def main(cmdargs=None):
 
     print("EXAM Post Pipeline")
     desc = f'''EXAM Post Pipeline \n
-              The input file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
-              \n  
-                  [query_id, [FullParagraphData]] \n
-              \n
-               where `FullParagraphData` meets the following structure \n
-             {FullParagraphData.schema_json(indent=2)}
+              The input file (i.e, exam_annotated_file) has to be a *JSONL.GZ file more info with --help-schema
              '''
     
+    help_schema=f'''The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
+                \n  
+                    [query_id, [FullParagraphData]] \n
+                \n
+                where `FullParagraphData` meets the following structure \n
+                {FullParagraphData.schema_json(indent=2)}
+                \n
+                Create a compatible file with 
+                exam_pp.data_model.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])
+                '''
 
     parser = argparse.ArgumentParser(description="EXAM pipeline"
                                    , epilog=desc
@@ -674,7 +679,7 @@ def main(cmdargs=None):
     parser.add_argument('--qrel-query-facets', action='store_true', help='If set, will use query facets for qrels (prefix of question_ids). (applies only to -q)', default=None)
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard. (applies only to -q)', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval (applies only to -q)', default=None)
-    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Relevance cutoff level for trec_eval. If not set, multiple levels will be tried (applies only to -q)', default=None)
+    parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Obsolete. Use --min_relevant-judgment instead.  Relevance cutoff level for trec_eval. If not set, multiple levels will be tried (applies only to -q)', default=None)
     parser.add_argument('--trec-eval-metric', type=str, metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Cover Leaderboard to this file (alternative to -q)', default=None)
@@ -703,7 +708,7 @@ def main(cmdargs=None):
     prompt_type_choices=[QuestionPrompt.my_prompt_type, NuggetPrompt.my_prompt_type, DirectGradingPrompt.my_prompt_type]
     parser.add_argument('--prompt-type', type=str, choices=prompt_type_choices, required=False,  metavar="PROMPT_TYPE", help=f"Manually set the prompt_type when setting --dont-check-prompt-class (it will otherwise be automatically set based on known prompt_classes). Choices: {prompt_type_choices}")
 
-
+    parser.add_argument('--help-schema', action='store_true', help="Additional info on required JSON.GZ input format")
 
 
     # Parse the arguments
@@ -711,6 +716,13 @@ def main(cmdargs=None):
         args = parser.parse_args(args=cmdargs)    
     else:
         args = parser.parse_args()
+
+
+
+    if args.help_schema:
+        print(help_schema)
+        sys.exit()
+
 
 
     if not args.dont_check_prompt_class:
@@ -790,7 +802,7 @@ def main(cmdargs=None):
         if args.run_dir is not None:
             run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
                                  ,run_dir=Path(args.run_dir)
-                                 , min_level=args.min_trec_eval_level
+                                 , min_level=args.min_trec_eval_level or args.min_self_rating
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
@@ -813,7 +825,7 @@ def main(cmdargs=None):
             # TODO turn into run_qrel_variance_leaderboard
             run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
-                                 , min_level=args.min_trec_eval_level
+                                 , min_level=args.min_trec_eval_level or args.min_self_rating
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
