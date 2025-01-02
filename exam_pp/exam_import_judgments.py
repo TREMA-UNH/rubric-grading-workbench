@@ -44,35 +44,6 @@ def read_query_file(query_file:Path, max_queries:Optional[int]=None) -> Dict[str
     return query_dict
 
 
-
-# class LLMJudgeDocument(BaseModel):
-#     docid:str
-#     doc:str
-
-# def parseLLMJudgeDocument(line:str) -> LLMJudgeDocument:
-#     # Parse the JSON content of the line
-#     # print(line)
-#     return LLMJudgeDocument.parse_raw(line)
-
-# def loadLLMJudgeCorpus(file_path:Path, max_paragraphs:Optional[int]) -> List[LLMJudgeDocument]:
-#     '''Load LLMJudge document corpus'''
-
-#     result:List[LLMJudgeDocument] = list()
-#     try: 
-#         with open(file_path, 'rt', encoding='utf-8') as file:
-#             # return [parseQueryWithFullParagraphList(line) for line in file]
-#             for line in itertools.islice(file.readlines(), max_paragraphs):
-#                 result.append(parseLLMJudgeDocument(line))
-#     except  EOFError as e:
-#         print(f"Warning: File EOFError on {file_path}. Use truncated data....\nFull Error:\n{e} \n offending line: \n {line}")
-#     return result
-
-# def write_query_file(file_path:Path, queries:Dict[str,str])->None:
-#     with open(file_path, 'wt', encoding='utf-8') as file:
-#         json.dump(obj=queries,fp=file)
-
-
-
 def convert_paragraphs(input_qrels_by_qid:Dict[str,List[QrelEntry]]
                        , rubric_data:List[QueryWithFullParagraphList]
                        , query_str_by_qid:Dict[str,str]
@@ -123,7 +94,7 @@ def main(cmdargs=None):
 
     import argparse
 
-    desc = f'''Convert LLMJudge data to inputs for EXAM/RUBRIC. \n
+    desc = f'''Augment an EXAM/RUBRIC file with TREC Qrel data, either as judgments or as grades. \n
               The RUBRIC input will to be a *JSONL.GZ file.  Info about JSON schema with --help-schema
              '''
     help_schema=f'''The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
@@ -146,18 +117,12 @@ def main(cmdargs=None):
                         )
 
 
-    # parser.add_argument('llmjudge_corpus', type=str, metavar='xxx.jsonl.gz'
-    #                     , help='input json file with corpus from the LLMJudge collection'
-    #                     )
-
-
     parser.add_argument('-o', '--output', type=str, metavar='xxx.jsonl.gz'
                         , help='output path for RUBRIC file in jsonl.gz format.'
                         )
 
     parser.add_argument('--query-path', type=str, metavar='PATH', help='Path to read LLMJudge queries')
     parser.add_argument('--input-qrel-path', type=str, metavar='PATH', help='Path to read LLMJudge qrels (to be completed)')
-    # parser.add_argument('--query-out', type=str, metavar='PATH', help='Path to write queries for RUBRIC/EXAM to')
 
     parser.add_argument('--as-grade',  action='store_true',  help='store qrel info as grade')
     parser.add_argument('--prompt-class',  type=str,  help=f'if set, will be used as prompt-class name, otherwise it is set to {QREL_IMPORT_PROMPT_CLASS}')
@@ -171,7 +136,6 @@ def main(cmdargs=None):
 
     parser.add_argument('--help-schema', action='store_true', help="Additional info on required JSON.GZ input format")
 
-    # Parse the arguments
     args = parser.parse_args(args = cmdargs)  
 
     if args.help_schema:
@@ -191,15 +155,6 @@ def main(cmdargs=None):
         input_qrels_by_qid[qrel_entry.query_id].append(qrel_entry)
         # print(f"{qrel_entry}")
 
-    
-
-    # print(f"query_set = {query_set}")
-
-    # load the paragraph data
-    # corpus = loadLLMJudgeCorpus(file_path = args.llmjudge_corpus, max_paragraphs = args.max_paragraphs)
-    # corpus_by_para_id = {para.docid: para  for para in corpus}
-
-    # print(f"corpus = {corpus}")
     
 
     rubric_in_file:List[QueryWithFullParagraphList] 
