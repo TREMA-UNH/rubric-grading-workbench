@@ -829,6 +829,7 @@ def main(cmdargs=None):
                                  , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
+                                , grade_filter = grade_filter
                                  )
 
     if args.inter_annotator_out is not None or args.correlation_out is not None:

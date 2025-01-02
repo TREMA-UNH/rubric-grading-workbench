@@ -106,13 +106,18 @@ def main(cmdargs=None):
 
     print("EXAM Post Pipeline")
     desc = f'''EXAM Post Pipeline \n
-              The input file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
-              \n  
-                  [query_id, [FullParagraphData]] \n
-              \n
-               where `FullParagraphData` meets the following structure \n
-             {FullParagraphData.schema_json(indent=2)}
+              The input file (i.e, exam_annotated_file) has to be a *JSONL.GZ file more info with --help-schema
              '''
+    help_schema=f'''The input and output file (i.e, exam_annotated_file) has to be a *JSONL.GZ file that follows this structure: \n
+                \n  
+                    [query_id, [FullParagraphData]] \n
+                \n
+                where `FullParagraphData` meets the following structure \n
+                {FullParagraphData.schema_json(indent=2)}
+                \n
+                Create a compatible file with 
+                exam_pp.data_model.writeQueryWithFullParagraphs(file_path:Path, queryWithFullParagraphList:List[QueryWithFullParagraphList])
+                '''
     
 
     parser = argparse.ArgumentParser(description="EXAM pipeline"
@@ -146,10 +151,19 @@ def main(cmdargs=None):
     parser.add_argument('--question-path', type=str, metavar='PATH', help='Path to read exam questions from (can be tqa directory or question-bank file) -- only needed for direct grading with facets')
     # parser.add_argument('--testset', type=str, choices=["cary3","dl19"], required=True, metavar="SET ", help='Which question set to use. Options: tqa or naghmeh ')
     # parser.add_argument('--official-leaderboard', type=str, metavar="JSON-FILE", help='Use leaderboard JSON file instead (format {"methodName":rank})', default=None)
-    
+
+    parser.add_argument('--help-schema', action='store_true', help="Additional info on required JSON.GZ input format")
+
 
     # Parse the arguments
     args = parser.parse_args(args=cmdargs)
+
+
+    if args.help_schema:
+        print(help_schema)
+        sys.exit()
+
+
     grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
 
 
@@ -212,6 +226,7 @@ def main(cmdargs=None):
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
                                  , leaderboard_sort=args.leaderboard_sort
+                                 , grade_filter=grade_filter
                                  )
 
 
