@@ -135,6 +135,7 @@ class Grades(BaseModel):
             examGrades.relevance_label = self.relevance_label 
         return examGrades
     
+@dataclass    
 class GradeFilter():
     model_name: Optional[str]
     prompt_class: Optional[str]
