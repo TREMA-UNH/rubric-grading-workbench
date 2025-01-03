@@ -683,6 +683,7 @@ def main(cmdargs=None):
     parser.add_argument('--trec-eval-metric', type=str, metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Cover Leaderboard to this file (alternative to -q)', default=None)
+    parser.add_argument('-s', '--leaderboard-sort', type=str, metavar="SORT", help='Key to sort the leaderboard (exam, n-exam) or None for sort by method name.')
 
 
     parser.add_argument('--correlation-out', type=str, metavar="FILE", help='Deprecated option, use --inter-annotator-out instead!', default=None)
@@ -800,12 +801,22 @@ def main(cmdargs=None):
 
     if args.trec_eval_qrel_correlation is not None:
         if args.run_dir is not None:
-            run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
+            # run_qrel_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
+            #                      ,run_dir=Path(args.run_dir)
+            #                      , min_level=args.min_trec_eval_level or args.min_self_rating
+            #                      , official_leaderboard=official_leaderboard
+            #                      , leaderboard_out=args.qrel_leaderboard_out
+            #                      , trec_eval_metric=args.trec_eval_metric
+            #                      )
+
+            run_qrel_variance_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level or args.min_self_rating
-                                 , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
+                                 , leaderboard_sort=args.leaderboard_sort
+                                 , official_leaderboard=official_leaderboard
+                                 , grade_filter=grade_filter
                                  )
 
 
@@ -822,15 +833,25 @@ def main(cmdargs=None):
         print("qrel leaderboard")
 
         if args.run_dir is not None:
-            # TODO turn into run_qrel_variance_leaderboard
-            run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            # run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
+            #                      ,run_dir=Path(args.run_dir)
+            #                      , min_level=args.min_trec_eval_level or args.min_self_rating
+            #                      , official_leaderboard=official_leaderboard
+            #                      , leaderboard_out=args.qrel_leaderboard_out
+            #                      , trec_eval_metric=args.trec_eval_metric
+            #                     # , grade_filter = grade_filter
+            #                      )
+
+            run_qrel_variance_leaderboard(qrels_file=Path(args.qrel_out)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level or args.min_self_rating
-                                 , official_leaderboard=official_leaderboard
                                  , leaderboard_out=args.qrel_leaderboard_out
                                  , trec_eval_metric=args.trec_eval_metric
-                                # , grade_filter = grade_filter
+                                 , leaderboard_sort=args.leaderboard_sort
+                                 , official_leaderboard=official_leaderboard
+                                 , grade_filter=grade_filter
                                  )
+
 
     if args.inter_annotator_out is not None or args.correlation_out is not None:
         correlation_out = args.inter_annotator_out if args.inter_annotator_out is not None else args.correlation_out
