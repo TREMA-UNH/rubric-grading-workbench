@@ -622,15 +622,16 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
 The following settings assume you: 
 
-1. have a graded RUBRIC data file, for example  `data/four-prompt-aggregate-dev.jsonl.gz` 
-2. know the prompt class that created the relevance labels, for example `FourAggregationPrompt`
+1. have a graded RUBRIC data file, for example  `rubric.jsonl.gz` 
+2. know the prompt class that created the relevance labels, for example `MyPromptClass`
 3. optionally you can also add other filter criteria supported by our `GradeFilter`, such as model names or test-banks, for those please see `--help`.
 
 ## Export LLM judgments as a TREC_EVAL qrels file
 
 Simplest step is to export the relevance labels as a qrels file that is compatible with trec_eval.
 
-    python -O -m exam_pp.exam_evaluation data/four-prompt-aggregate-dev.jsonl.gz --prompt-class FourAggregationPrompt  -q out.qrels
+    python -O -m exam_pp.exam_evaluation rubric.jsonl.gz --prompt-class MyPromptClass \
+      -q out.qrels
 
 * The qrels file will be written to `out.qrels`
 
@@ -644,7 +645,9 @@ Simplest step is to export the relevance labels as a qrels file that is compatib
 * if you have graded judgments, don't forget `-r` option.
 
 
-      python -O -m exam_pp.exam_evaluation data/four-prompt-aggregate-dev.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2  -r  --run-dir data/runs/ -q out.qrel 
+      python -O -m exam_pp.exam_evaluation rubric.jsonl.gz --prompt-class MyPromptClass \
+      --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2  -r \
+      --run-dir data/runs/ -q out.qrel 
 
 * the leaderboard is written to `out.tsv`
 
@@ -683,7 +686,10 @@ Note:
 * when using a non-standard prompt class, disable checks with `--dont-check-prompt-class` and provide a prompt type, e.g. ` --prompt-type question`,` --prompt-type nugget`, or `--prompt-type direct`.
 
 
-      python -O -m exam_pp.exam_post_pipeline data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2 -r  --run-dir data/marco_runs/ -q out.qrel --dont-check-prompt-class --prompt-type nugget --official-leaderboard official_leaderboard.json 
+      python -O -m exam_pp.exam_post_pipeline rubric.jsonl.gz \
+      --prompt-class MyPromptClass --qrel-leaderboard-out out.tsv  --trec-eval-metric map \
+       --min-self-rating 2 -r  --run-dir data/runs/ -q out.qrel --dont-check-prompt-class \
+       --prompt-type nugget --official-leaderboard official_leaderboard.json 
 
 The leaderboard is wtitten to `out.tsv`
 
@@ -700,9 +706,12 @@ Note,
 
 Example:
 
-```bash
-      python -O -m exam_pp.exam_post_pipeline rubric-llm-judge/data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  -r  --run-dir rubric-llm-judge/data/marco_runs/ -q out.qrel --dont-check-prompt-class --prompt-type nugget --min-self-rating 4 --official-leaderboard rubric-llm-judge/official_leaderboard.json   --qrel-analysis-out analysis.tsv  --trec-eval-metric ndcg_cut.10 map recip_rank
-```
+
+      python -O -m exam_pp.exam_post_pipeline rubric.jsonl.gz --prompt-class MyPromptClass \ 
+      --qrel-leaderboard-out out.tsv  -r  --run-dir data/runs/ -q out.qrel \
+      --dont-check-prompt-class --prompt-type nugget --min-self-rating 4 \ 
+      --official-leaderboard official_leaderboard.json   --qrel-analysis-out analysis.tsv \
+      --trec-eval-metric ndcg_cut.10 map recip_rank
 
 This will write:
 * leaderboard rank correlation analysis to `analysis.tsv`
@@ -718,7 +727,9 @@ Note:
 
   * For TREC Deep Learning collections, only judgments of 2 or better are indicating relevance. For those collections, set `--min-relevant-judgment 2 `
 
-        python -O -m exam_pp.exam_post_pipeline data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --correlation-out interannotator.tex -r --prompt-class FourAggregationPrompt  --dont-check-prompt-class --prompt-type nugget  --min-relevant-judgment 1
+        python -O -m exam_pp.exam_post_pipeline rubric.jsonl.gz \ 
+        --correlation-out interannotator.tex -r --prompt-class MyPromptClass  \
+         --dont-check-prompt-class --prompt-type nugget  --min-relevant-judgment 1
 
 This will write a LaTex table of inter-annotator agreement to `interannotator.tex`. Visualize with `pdflatex` or `pandoc`.
 
