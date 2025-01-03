@@ -184,7 +184,7 @@ def compatible_kendalltau(ranks1, ranks2)->Tuple[float,float]:
         return result.correlation, result.pvalue
 
 
-def leaderboard_rank_correlation(systemEval:Dict[str,float], official_leaderboard:Dict[str,int])->CorrelationStats:
+def leaderboard_rank_correlation(systemEval:Dict[str,float], official_leaderboard:Dict[str,float])->CorrelationStats:
     methods = list(official_leaderboard.keys())
     ranks1 = [official_leaderboard[method] for method in methods]
 
@@ -233,7 +233,7 @@ def print_leaderboard_eval_file(exam_result_file:Path, grade_filter:GradeFilter)
     pass
 
 
-def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,int]
+def leaderboard_table(evals:List[ExamCoverEvals], official_leaderboard:Dict[str,float]
                       , nExamCorrelation:Optional[CorrelationStats], examCorrelation:Optional[CorrelationStats], sortBy:Optional[str]=None)->[str]:
     
     evals_ = sorted (evals, key= lambda eval: eval.method)
@@ -308,14 +308,14 @@ def read_exam_result_file(exam_result_file:Path)->List[ExamCoverEvals]:
     with gzip.open(exam_result_file, 'rt', encoding='utf-8') as file:
         return [ExamCoverEvals.parse_raw(line) for line in file]
 
-def leaderboard_correlation_files(exam_result_file:Path, official_leaderboard:Dict[str,int]):
+def leaderboard_correlation_files(exam_result_file:Path, official_leaderboard:Dict[str,float]):
     evals = read_exam_result_file(exam_result_file)
 
     nExamCorrelation, examCorrelation = leaderboard_correlation(evals, official_leaderboard=official_leaderboard)
     print(f' nExam:{nExamCorrelation}')
     print(f' exam:{examCorrelation}')
 
-def leaderboard_correlation(evals:Iterable[ExamCoverEvals], official_leaderboard:Dict[str,int])->Tuple[CorrelationStats,CorrelationStats]:
+def leaderboard_correlation(evals:Iterable[ExamCoverEvals], official_leaderboard:Dict[str,float])->Tuple[CorrelationStats,CorrelationStats]:
     '''Compute Leaderboard correlation. 
     Load necessary data with `read_exam_result_file()` or use the convenience method `leaderboard_correlation_files`
     '''
@@ -359,7 +359,7 @@ def main():
     # Parse the arguments
     args = parser.parse_args(args)    
     
-    official_leaderboard:Dict[str,int]
+    official_leaderboard:Dict[str,float]
     if args.testset == "cary3":
         official_leaderboard = exam_leaderboard_correlation.official_CarY3_leaderboard 
     elif args.testset == "dl19":

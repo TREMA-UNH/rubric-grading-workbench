@@ -601,11 +601,10 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
 
     def gpt_json_prompt(self) ->Tuple[str,str]:
         json_instruction= r'''
-Respond only in the following JSON format:
-```json
-{ "grade": int }
-```
-'''
+  Respond only in the following JSON format:
+  ```json
+  { "grade": int }
+  ```
         return (json_instruction, "grade")
 
     
@@ -615,9 +614,29 @@ Respond only in the following JSON format:
     def check_answer_rating(self,answer:str)->int:
         return self.self_rater.check_answer_rating(answer)
     
-```
 
 
+--------------------------------
+
+# Evaluation of Systems (leaderboards)
+
+The following settings assume you: 
+
+1. have a graded RUBRIC data file, for example  `data/four-prompt-aggregate-dev.jsonl.gz` 
+2. know the prompt class that created the relevance labels, for example `FourAggregationPrompt`
+3. optionally you can also add other filter criteria supported by our `GradeFilter`, such as model names or test-banks, for those please see `--help`.
+
+## Export LLM judgments as a TREC_EVAL qrels file
+
+Simplest step is to export the relevance labels as a qrels file that is compatible with trec_eval. Here written to `out.qrels`
+
+    python -O -m exam_pp.exam_evaluation data/four-prompt-aggregate-dev.jsonl.gz --prompt-class FourAggregationPrompt  -q out.qrels
+
+
+
+
+
+# Evaluation of LLM-relevance labels
 
 
 
@@ -636,6 +655,8 @@ If you are using `nix` flakes, and want to bump to the latest exampp version, ca
 
 
 [flan]: https://huggingface.co/google/flan-t5-large
+
+
 
 <!-- 
 ## Usage
@@ -698,5 +719,7 @@ examEvaluationPerQuery:Dict[str,float] = resultsPerMethod['my_method'].examCover
 # Export Exam Cover Evaluation Scores
 write_exam_results("exam-eval.jsonl.gz", resultsPerMethod)
 ```
+
+
 
  -->

@@ -301,7 +301,7 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
         if x is None:
             return ' '
         else:
-            return f'{x:.3f}':447
+            return f'{x:.3f}'
     
     
     print(f'run_dir={run_dir}')
