@@ -244,7 +244,7 @@ def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out
 
 
             table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values())
-                                                                   , official_leaderboard=official_leaderboardofficial_leaderboard
+                                                                   , official_leaderboard=official_leaderboard
                                                                    , nExamCorrelation=None
                                                                    , examCorrelation=None
                                                                    , sortBy=leaderboard_sort) 
@@ -301,7 +301,8 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
         if x is None:
             return ' '
         else:
-            return f'{x:.3f}'
+            return f'{x:.3f}':447
+    
     
     print(f'run_dir={run_dir}')
 
