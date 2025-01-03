@@ -628,16 +628,98 @@ The following settings assume you:
 
 ## Export LLM judgments as a TREC_EVAL qrels file
 
-Simplest step is to export the relevance labels as a qrels file that is compatible with trec_eval. Here written to `out.qrels`
+Simplest step is to export the relevance labels as a qrels file that is compatible with trec_eval.
 
     python -O -m exam_pp.exam_evaluation data/four-prompt-aggregate-dev.jsonl.gz --prompt-class FourAggregationPrompt  -q out.qrels
 
+* The qrels file will be written to `out.qrels`
+
+## Export a Leaderboard with TREC_EVAL
+
+* replace data/runs/ with path to the run files
+* the run files in the run dir must match the file pattern `$methodname.run` 
+* you have to export the qrel file also (with -q) but this can be temporary file 
+* choose eval metric such as `map` or `ndcg_cut.10`
+* with the exception of ndcg, set the minimum grade for relevance with `--min-self-rating $grade` (this is communicated to trec_eval via the --level_for_rel num option)
+* if you have graded judgments, don't forget `-r` option.
 
 
+      python -O -m exam_pp.exam_evaluation data/four-prompt-aggregate-dev.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2  -r  --run-dir data/runs/ -q out.qrel 
+
+* the leaderboard is written to `out.tsv`
 
 
 # Evaluation of LLM-relevance labels
 
+
+## Leaderboard rank correlation 
+
+One way to measure the quality of LLM-judgments is to see how well the leaderboard (system ranking) under LLM-judgments agrees with an official leaderboard that is usually developed with manual judgments.
+
+With the `exam_post_pipeline` module, RUBRIC supports different leaderboard rank correlation measures, such as kendall's tau and Spearman's rank correlation coefficient. 
+
+The command line arguments are similar to `exam_evaluation`, but it is more powerful and there are some crucial differences:
+
+
+**Official Leaderboard File**
+
+First create a json file called `official_leaderboard.json` that represents the official leaderboard of method to rank (these ranks can be float, and they can be tied),  example:
+
+```json
+{
+    "duo-bert":1,
+    "mono-bert":2,
+    "bm25":3,
+    "tfidf":4
+}
+```
+
+**Automatic Leaderboard**
+We can produce the same leaderboard as above with a call like this:
+
+Note:
+
+* pass in the leaderboard file
+* when using a non-standard prompt class, disable checks with `--dont-check-prompt-class` and provide a prompt type, e.g. ` --prompt-type question`,` --prompt-type nugget`, or `--prompt-type direct`.
+
+
+      python -O -m exam_pp.exam_post_pipeline data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2 -r  --run-dir data/marco_runs/ -q out.qrel --dont-check-prompt-class --prompt-type nugget --official-leaderboard official_leaderboard.json 
+
+The leaderboard is wtitten to `out.tsv`
+
+
+**leaderboard Rank Correlation**
+
+To obtain leaderboard correlation statistics for different experiments add `--qrel-analysis-out analysis.tsv`, the file where the analysis will be written to.
+
+Note,
+
+* the analysis will be run for multiple  `--min-self-rating` values (1-5)
+* multiple `--trec-eval-metric` can be configured, such as map, ndcg, and reciprocal rank, e.g.  `--trec-eval-metric ndcg_cut.10 map recip_rank`
+* Note that `trec_eval` will ignore the relevance cutoff (`--min-self-rating`) for nDCG metrics.
+
+Example:
+
+      python -O -m exam_pp.exam_post_pipeline rubric-llm-judge/data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --prompt-class FourAggregationPrompt --qrel-leaderboard-out out.tsv  -r  --run-dir rubric-llm-judge/data/marco_runs/ -q out.qrel --dont-check-prompt-class --prompt-type nugget --min-self-rating 4 --official-leaderboard rubric-llm-judge/official_leaderboard.json   --qrel-analysis-out analysis.tsv  --trec-eval-metric ndcg_cut.10 map recip_rank
+
+
+This will write:
+* leaderboard rank correlation analysis to `analysis.tsv`
+* qrel files to `out.qrel`
+* leaderboard for the first eval metric to `out.tsv`
+
+
+# Inter-annotator agreement
+
+Agreement between automatic label predictions and manual judgments can be measures with Inter-annotator agreement measures such as Cohen's Kappa.
+
+Note:
+
+  * For TREC Deep Learning collections, only judgments of 2 or better are indicating relevance. For those collections, set `--min-relevant-judgment 2 `
+
+        python -O -m exam_pp.exam_post_pipeline data-naghmeh/test_decomposed_relavance_qrel.jsonl.gz --correlation-out interannotator.tex -r --prompt-class FourAggregationPrompt  --dont-check-prompt-class --prompt-type nugget  --min-relevant-judgment 1
+
+This will write a LaTex table of inter-annotator agreement to `interannotator.tex`. Visualize with `pdflatex` or `pandoc`.
 
 
 --------------------------------
