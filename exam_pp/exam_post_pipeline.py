@@ -221,7 +221,7 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
 
 
-def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), leaderboard_sort:Optional[str]=None):
+def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), official_leaderboard:Dict[str,float] =dict(), leaderboard_sort:Optional[str]=None):
     with open(leaderboard_out, 'wt') as file:
         # min_rating:Optional[int]
 
@@ -244,7 +244,7 @@ def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out
 
 
             table = exam_leaderboard_correlation.leaderboard_table(list(resultsPerMethod.values())
-                                                                   , official_leaderboard=dict()
+                                                                   , official_leaderboard=official_leaderboardofficial_leaderboard
                                                                    , nExamCorrelation=None
                                                                    , examCorrelation=None
                                                                    , sortBy=leaderboard_sort) 
@@ -295,7 +295,7 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 
-def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_leaderboard:Dict[str,int], analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str]):
+def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_leaderboard:Dict[str,float], analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str]):
 
     def f2s(x:Optional[float])->str:
         if x is None:
