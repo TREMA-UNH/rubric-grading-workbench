@@ -75,11 +75,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1730591184,
-        "narHash": "sha256-Mo14g8d3Lsb1Ksa9zgQJe5+gF7fTh+Y5VFrvRYiFYXA=",
+        "lastModified": 1732317483,
+        "narHash": "sha256-64STsLAsUkp8q++Ogpn+MmlgwCTFiLr7SedCdwLK5Vo=",
         "ref": "refs/heads/master",
-        "rev": "c15bcfce6bbcdc0b5a98b9753334573b5fe87777",
-        "revCount": 46,
+        "rev": "0e3d3a88b8987f58094f481bccc449345b4f47fc",
+        "revCount": 47,
         "type": "git",
         "url": "https://git.smart-cactus.org/ben/dspy-nix"
       },

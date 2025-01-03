@@ -644,10 +644,11 @@ Simplest step is to export the relevance labels as a qrels file that is compatib
 * with the exception of ndcg, set the minimum grade for relevance with `--min-self-rating $grade` (this is communicated to trec_eval via the --level_for_rel num option)
 * if you have graded judgments, don't forget `-r` option.
 
-
-      python -O -m exam_pp.exam_evaluation rubric.jsonl.gz --prompt-class MyPromptClass \
-      --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2  -r \
-      --run-dir data/runs/ -q out.qrel 
+  ```bash
+  python -O -m exam_pp.exam_evaluation rubric.jsonl.gz --prompt-class MyPromptClass \
+    --qrel-leaderboard-out out.tsv  --trec-eval-metric map  --min-self-rating 2  -r \
+    --run-dir data/runs/ -q out.qrel 
+  ```
 
 * the leaderboard is written to `out.tsv`
 
