@@ -138,7 +138,7 @@ def run_interannotator_agreement(correlation_out_file:Path, grade_filter, use_ra
 
 
 
-def cover_leaderboard_analysis(grade_filter_list:List[GradeFilter], query_paragraphs:List[QueryWithFullParagraphList], official_leaderboard:Dict[str,int], analysis_out:Path, min_levels: List[int]):
+def cover_leaderboard_analysis(grade_filter_list:List[GradeFilter], query_paragraphs:List[QueryWithFullParagraphList], official_leaderboard:Dict[str,float], analysis_out:Path, min_levels: List[int]):
 
     def f2s(x:Optional[float])->str:
         if x is None:
@@ -187,7 +187,7 @@ def cover_leaderboard_analysis(grade_filter_list:List[GradeFilter], query_paragr
 
 
 
-def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   official_leaderboard:Dict[str,int], min_self_rating = Optional[int]):
+def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   official_leaderboard:Dict[str,float], min_self_rating = Optional[int]):
     with open(leaderboard_file, 'wt') as file:
         min_rating:Optional[int]
 
@@ -295,7 +295,7 @@ def run_minimal_qrel_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:
     print(f"exam-qrels leaderboard written to {leaderboard_out}")
 
 
-def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_leaderboard:Dict[str,float], analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str]):
+def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_leaderboard:Dict[str,float], analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str], grade_filter:Optional[GradeFilter]=None):
 
     def f2s(x:Optional[float])->str:
         if x is None:
@@ -309,6 +309,8 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
     with open(analysis_out, 'wt') as file:
         file.write("Leaderboard Rank Correlation Analysis Exam-Qrels\n")
         file.write(f"run_dir\t{run_dir}\n")
+        if grade_filter is not None: 
+            file.write(f"grade_filter\t{grade_filter}\n")
 
 
         file.write('\t'.join(["method"
@@ -336,11 +338,11 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
 
         file.writelines(["\n","\n"])
         file.close()
-    print(f"exam-qrels leaderboard written to {analysis_out}")
+    print(f"exam-qrels leaderboard analysis written to {analysis_out}")
 
 
 
-def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,int], leaderboard_out:Path, min_level: Optional[int], trec_eval_metric:str ="P.20"):
+def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,float], leaderboard_out:Path, min_level: Optional[int], trec_eval_metric:str ="P.20"):
     with open(leaderboard_out, 'wt') as file:
         file.write("based on Exam-Qrels\n")
 
@@ -681,7 +683,11 @@ def main(cmdargs=None):
     parser.add_argument('--run-dir', type=str, metavar="DIR", help='Directory of trec_eval run-files. These must be uncompressed, the filename must match the pattern "${methodname}.run" where methodname refers to the method name in the official leaderboard. If set, will use the exported qrel file to determine correlation with the official leaderboard. (applies only to -q)', default=None)
     parser.add_argument('--trec-eval-qrel-correlation',  type=str, metavar="IN-FILE", help='Will use this qrel file to measure leaderboard correlation with trec_eval (applies only to -q)', default=None)
     parser.add_argument('--min-trec-eval-level',  type=int, metavar="LEVEL", help='Obsolete. Use --min_relevant-judgment instead.  Relevance cutoff level for trec_eval. If not set, multiple levels will be tried (applies only to -q)', default=None)
-    parser.add_argument('--trec-eval-metric', type=str, metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
+    parser.add_argument('--trec-eval-metric', type=str, nargs='+', metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
+
+    parser.add_argument('--qrel-analysis-out', type=str, metavar="FILE", help='Export Rank Correlations to this file.', default=None)
+
+
 
     parser.add_argument('--leaderboard-out', type=str, metavar="FILE", help='Export Cover Leaderboard to this file (alternative to -q)', default=None)
     parser.add_argument('-s', '--leaderboard-sort', type=str, metavar="SORT", help='Key to sort the leaderboard (exam, n-exam) or None for sort by method name.')
@@ -807,19 +813,21 @@ def main(cmdargs=None):
             #                      , min_level=args.min_trec_eval_level or args.min_self_rating
             #                      , official_leaderboard=official_leaderboard
             #                      , leaderboard_out=args.qrel_leaderboard_out
-            #                      , trec_eval_metric=args.trec_eval_metric
+            #                      , trec_eval_metric=args.trec_eval_metric[0]
             #                      )
 
             run_qrel_variance_leaderboard(qrels_file=Path(args.trec_eval_qrel_correlation)
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level or args.min_self_rating
                                  , leaderboard_out=args.qrel_leaderboard_out
-                                 , trec_eval_metric=args.trec_eval_metric
+                                 , trec_eval_metric=args.trec_eval_metric[0]
                                  , leaderboard_sort=args.leaderboard_sort
                                  , official_leaderboard=official_leaderboard
                                  , grade_filter=grade_filter
                                  )
 
+
+            
 
     if args.qrel_out is not None:
         export_qrels(query_paragraphs=query_paragraphs
@@ -839,7 +847,7 @@ def main(cmdargs=None):
             #                      , min_level=args.min_trec_eval_level or args.min_self_rating
             #                      , official_leaderboard=official_leaderboard
             #                      , leaderboard_out=args.qrel_leaderboard_out
-            #                      , trec_eval_metric=args.trec_eval_metric
+            #                      , trec_eval_metric=args.trec_eval_metric[0]
             #                     # , grade_filter = grade_filter
             #                      )
 
@@ -847,11 +855,23 @@ def main(cmdargs=None):
                                  ,run_dir=Path(args.run_dir)
                                  , min_level=args.min_trec_eval_level or args.min_self_rating
                                  , leaderboard_out=args.qrel_leaderboard_out
-                                 , trec_eval_metric=args.trec_eval_metric
+                                 , trec_eval_metric=args.trec_eval_metric[0]
                                  , leaderboard_sort=args.leaderboard_sort
                                  , official_leaderboard=official_leaderboard
                                  , grade_filter=grade_filter
                                  )
+
+
+
+    if args.qrel_analysis_out is not None:
+        qrel_leaderboard_analysis(qrels_files=[Path(args.trec_eval_qrel_correlation or args.qrel_out)]
+                                , run_dir=Path(args.run_dir)
+                                , min_levels=[1,2,3,4,5]
+                                , official_leaderboard=official_leaderboard
+                                , analysis_out=args.qrel_analysis_out
+                                , trec_eval_metrics=args.trec_eval_metric # ["ndcg_cut.10", "map", "recip_rank"]
+                                , grade_filter=grade_filter
+                                )
 
 
     if args.inter_annotator_out is not None or args.correlation_out is not None:
