@@ -68,10 +68,10 @@
     );
 
   nixConfig = {
-    substituters = [ "https://dspy-nix.cachix.org" ];
-    trusted-public-keys = [ "dspy-nix.cachix.org-1:VJ553D0iJVoA8ov2+ly+dLnGHarfSQpemzVW6dY6CfE=" ];
+    substituters = [ "https://cache.nixos.org" "https://dspy-nix.cachix.org" ];
+    trusted-public-keys = [ "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" "dspy-nix.cachix.org-1:VJ553D0iJVoA8ov2+ly+dLnGHarfSQpemzVW6dY6CfE=" ];
   };
-}
+  }
 
 
         # checks.default = pkgs.stdenv.mkDerivation {
