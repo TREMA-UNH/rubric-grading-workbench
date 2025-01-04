@@ -20,7 +20,7 @@ from . import exam_to_qrels
 from . import exam_leaderboard_correlation
 from . import exam_judgment_correlation
 from .exam_judgment_correlation import ConfusionStats
-from .exam_run_trec_eval import compute_exam_qrels_scores, parse_trec_eval_variance, run_trec_eval_variance, trec_eval_leaderboard
+from .exam_run_trec_eval import compute_exam_qrels_scores, parse_trec_eval_per_query, run_trec_eval_variance, trec_eval_leaderboard
 from . import print_correlation_table
 from . import exam_cover_metric
 
@@ -230,7 +230,7 @@ def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out
             resultsPerMethod:Dict[str, ExamCoverEvals]
             
             trec_eval_out =run_trec_eval_variance(run_dir=run_dir, qrels=qrels_file, min_level=min_level_x, trec_eval_metric=trec_eval_metric)
-            trec_eval_parsed=parse_trec_eval_variance(trec_eval_out)
+            trec_eval_parsed=parse_trec_eval_per_query(trec_eval_out)
             resultsPerMethod = compute_exam_qrels_scores(trec_eval_parsed)
 
 

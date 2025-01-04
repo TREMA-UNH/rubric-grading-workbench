@@ -2,16 +2,17 @@ from collections import defaultdict
 from math import sqrt
 from pathlib import Path
 import re
-from statistics import mean, stdev
+# from statistics import mean, stdev
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
+
 from .exam_cover_metric import OVERALL_ENTRY, ExamCoverEvals, ExamCoverEvalsDict, systemMeanStderr
 
-def run_trec_eval_variance(run_dir:Path, qrels:Path, min_level:Optional[int], trec_eval_metric:str):
+def run_trec_eval_variance(run_dir:Path, qrels:Path, min_level:Optional[int], trec_eval_metric:str, trec_eval_args:str="-n -c")->str:
     # Define the command to be executed
     l_arg = f" -l {min_level} " if min_level is not None else ""
-    command = f"for f in *.run; do  res=`trec_eval -n -c -q -m {trec_eval_metric} {l_arg} {qrels.resolve().as_posix()} $f`; echo \"$f $res\"; done"
+    command = f"for f in *.run; do  res=`trec_eval -q {trec_eval_args} -m {trec_eval_metric} {l_arg} {qrels.resolve().as_posix()} $f`; echo \"$f $res\"; done"
     print(f'Running trec_eval command:\n{command}\nin directory: {run_dir}')
 
     # Run the command and capture the output
@@ -31,7 +32,7 @@ def run_trec_eval_variance(run_dir:Path, qrels:Path, min_level:Optional[int], tr
     return output
 
 
-def parse_trec_eval_variance(command_output:str)-> Dict[str,List[Tuple[str,float]]]:
+def parse_trec_eval_per_query(command_output:str)-> Dict[str,List[Tuple[str,float]]]:
     # eval_parse_pattern = r"^(\S+)\.run.*\s([0-9.]+)$"
     # eval_parse_pattern = r"^(\S+)\.run.*?\s+\S+\s+(\S+)\s+([0-9.]+)$"
     eval_parse_pattern = r"^(?:(\S+)\.run)?\s*\S+\s+(\S+)\s+([0-9.]+)$"
@@ -63,7 +64,7 @@ def parse_trec_eval_variance(command_output:str)-> Dict[str,List[Tuple[str,float
         else:
             raise RuntimeError(f"Can't parse trec_eval output. Offending line: \"{line}\".\nFull command output:\n{command_output}")
 
-    method_per_query_results = defaultdict(list)
+    method_per_query_results:Dict[str,List[Tuple[str,float]]] = defaultdict(list)
     prev_method=""
     for line in command_output.split("\n"):
         if len(line.strip())>0:
