@@ -371,7 +371,7 @@ def main(cmdargs=None):
     if args.question_set != "tqa":
         raise RuntimeError("Only tqa questions can be re-verified (correct answers are required)")
         
-    grade_filter = parse.GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
+    grade_filter = parse.GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(args.prompt_class), data_set=None)
 
 
     # graded_query_paragraphs_file = "squad2-t5-qa-tqa-exam--benchmarkY3test-exam-qrels-runs-with-text.jsonl.gz"
@@ -425,7 +425,7 @@ def main_messaround():
     graded_query_paragraphs = parse.parseQueryWithFullParagraphs(graded_query_paragraphs_file)
 
     prompt_class = "QuestionCompleteConcisePromptWithAnswerKey"
-    grade_filter = parse.GradeFilter(model_name="google/flan-t5-large", prompt_class=None, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(args.prompt_class))
+    grade_filter = parse.GradeFilter(model_name="google/flan-t5-large", prompt_class=None, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(args.prompt_class), data_set=None)
 
     query2questions_plain = fix_car_query_id(tqa_loader.load_all_tqa_questions())
     query2questions:Dict[str,Dict[str, tqa_loader.Question]]

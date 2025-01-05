@@ -13,7 +13,7 @@ def main_other():
     exam_input_file = "./t5-cc-rating-exam-qrel-result.jsonl.gz"
 
 
-    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class))
+    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class), data_set=None)
 
     print('other', grade_filter)
 
@@ -62,7 +62,7 @@ def main_rating():
     exam_input_file = "./t5-cc-rating-exam-qrel-result.jsonl.gz"
 
 
-    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class))
+    grade_filter = GradeFilter(model_name=model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set="tqa", prompt_type=get_prompt_type_from_prompt_class(prompt_class), data_set=None)
 
     print('rating', grade_filter)
 

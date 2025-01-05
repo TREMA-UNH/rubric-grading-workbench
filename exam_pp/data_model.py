@@ -150,7 +150,7 @@ class GradeFilter():
 
     @staticmethod
     def noFilter():
-        return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None, prompt_type=None)
+        return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None, prompt_type=None, data_set=None)
 
     @staticmethod
     def question_type(grade:Union[ExamGrades,Grades]):
@@ -280,6 +280,7 @@ class GradeFilter():
                            , min_self_rating=min_self_rating
                            , question_set=self.question_set
                            , prompt_type= self.prompt_type
+                           , data_set=self.data_set
                            )
 
 class Judgment(BaseModel):

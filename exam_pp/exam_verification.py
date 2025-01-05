@@ -305,15 +305,15 @@ def main(cmdargs=None):
 
     graded = parseQueryWithFullParagraphs(args.exam_graded_file)
 
-    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+    grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None, data_set=None)
     
     if args.verify_grading:
-        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
-        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None, data_set=None)
+        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None, data_set=None)
         verify_grade_extraction(graded= graded, question_bank= question_set, rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
     if args.grid_display:
-        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
-        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None)
+        grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None, data_set=None)
+        answer_grade_filter = GradeFilter(model_name=args.model, prompt_class = args.prompt_class_answer, is_self_rated=None, min_self_rating=None, question_set=args.question_path, prompt_type=None, data_set=None)
         grid_display(graded= graded, question_bank= question_set, file_path=Path(args.grid_display),  rate_grade_filter= grade_filter, answer_grade_filter=answer_grade_filter)
     if args.uncovered_passages:
         identify_uncovered_passages(graded=graded, question_bank= question_set, min_judgment= args.min_judgment, min_rating= args.min_rating, grade_filter= grade_filter)

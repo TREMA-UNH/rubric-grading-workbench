@@ -133,7 +133,7 @@ def main(cmdargs=None):
         qrel_files:List[Path] = list()
 
         for prompt_class in args.prompt_class:
-            grade_filter = GradeFilter(model_name=args.model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(prompt_class))
+            grade_filter = GradeFilter(model_name=args.model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(prompt_class), data_set=None)
             qrel_file_name = f"{args.qrel_dir}/{prompt_class}.qrel"
 
             # no need to worry about min_judgment grade, as that is reflected in the official leaderboard.
@@ -158,7 +158,7 @@ def main(cmdargs=None):
             
 
     if args.cover_analysis_out:
-        grade_filter_list = [GradeFilter(model_name=args.model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(prompt_class)) 
+        grade_filter_list = [GradeFilter(model_name=args.model, prompt_class = prompt_class, is_self_rated=None, min_self_rating=None, question_set=args.question_set, prompt_type=get_prompt_type_from_prompt_class(prompt_class), data_set=None) 
                                for prompt_class in args.prompt_class]
 
 
