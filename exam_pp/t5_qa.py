@@ -33,11 +33,13 @@ device:Optional[int] = None
 deviceStr = os.environ.get("GPU_DEVICE")
 if deviceStr is not None:
     try:
-        device = int(deviceStr)
+        device = str(deviceStr)
     except ValueError:
         print(f'Cant parse device number from \"{device}\"')
         device = None
 
+print(torch.cuda.is_available())
+torch.device(deviceStr)
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1"))
 MAX_TOKEN_LEN = 200
 print(f'Device = {device}; BATCH_SIZE = {BATCH_SIZE}')
@@ -457,8 +459,8 @@ class EmbeddingText2TextPipeline(LlmPipeline):
     def __init__(self, model_name:str, max_token_len:int):
         super().__init__(model_name=model_name, max_token_len=max_token_len, max_output_tokens=max_token_len)
 
-
         self.model:T5ForConditionalGeneration = T5ForConditionalGeneration.from_pretrained(self.modelName)
+        self.model.to(device)
         self.tokenizer:T5TokenizerFast = T5TokenizerFast.from_pretrained(self.modelName)
 
         # hf_pipeline = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
@@ -547,6 +549,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
 
         # num_beams = 1
         tokens = self.tokenizer(prompts, return_tensors='pt', padding=True, truncation=True)
+        tokens.to(device)
         #out = model(**t, decoder_input_ids=t['input_ids'])
         out = self.model.generate(
             **tokens,
