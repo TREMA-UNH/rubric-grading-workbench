@@ -195,10 +195,17 @@ def load_TQA_prompts(self_rater_tolerant:bool,tqa_file:Path, prompt_class:str="Q
 
         # hack to only include one direct prompt for each query.
         # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
-        return [(query_id,  [
-                             direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
-                            ])  
-                for query_id, questions in query_questions if len(questions)>0]
+
+        result = list()
+        for query_id, questions in query_questions:
+            if len(questions)>0:
+                grading_prompt:Optional[Prompt] = direct_grading_prompt(prompt_class=prompt_class, query_id=query_id, query_text=questions[0].query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
+                if grading_prompt is not None:
+                    result.append((query_id, [grading_prompt]))
+                else:
+                    print(f"Warning: prompt {prompt_class} is not a direct grading_prompt")
+
+        return result
 
 
     if get_prompt_type_from_prompt_class(prompt_class) == QuestionPrompt.my_prompt_type:

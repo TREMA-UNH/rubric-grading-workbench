@@ -34,6 +34,7 @@
               nltk
               ir_datasets
               fuzzywuzzy
+              duckdb
             ];
             doCheck = false;
           };
@@ -51,6 +52,7 @@
             pylatex
             trec-car-tools
             ir_datasets
+            duckdb
           ];
         });
 

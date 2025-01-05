@@ -143,6 +143,7 @@ class GradeFilter():
     min_self_rating: Optional[int]
     question_set:Optional[str]
     prompt_type:Optional[str]
+    data_set:Optional[str]
 
     def print_name(self)->str:
         return f"{self.prompt_class} {self.model_name} {self.question_set}"

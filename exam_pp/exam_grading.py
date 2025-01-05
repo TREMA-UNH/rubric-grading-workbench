@@ -6,6 +6,8 @@ import itertools
 from pathlib import Path
 from typing import *
 
+from .vector_db import EmbeddingDb
+
 from .query_loader import direct_grading_prompts, json_query_loader
 
 from . import question_bank_loader 
@@ -46,24 +48,52 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
                                 , llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None 
                                 , keep_going_on_llm_parse_error:bool=False
                                 , system_message:Optional[str]=None
+                                , embedding_db:Optional[EmbeddingDb]=None
                                 , **kwargs
                                 )->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
     anyPrompt = grading_prompts[0]
+    prompt_class=anyPrompt.prompt_info()["prompt_class"]
 
     paragraphs = queryWithFullParagraphList.paragraphs
 
-    async def noodle_one_paragraph(para:FullParagraphData):
 
+    async def noodle_one_paragraph(para:FullParagraphData):
         paragraph_id = para.paragraph_id
         paragraph_txt = para.text
 
-        answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts, paragraph_txt=paragraph_txt, full_paragraph=para, system_message=system_message, **kwargs)
+        print(f"Query: {query_id} / Para: {para.paragraph_id}")
+
+        def record_embeddings(prompts:List[str], embeddings:torch.Tensor, answers:List[str]):
+            if embedding_db is not None:
+                # print(f"Recording Embedding")
+                true_relevance = None
+                judg = para.get_any_judgment()
+                if judg is not None:
+                    true_relevance = [f"{judg.relevance}"]
+                embedding_db.add_embeddings(query_id=query_id
+                                            , passage_id=paragraph_id
+                                            , prompt_class=prompt_class
+                                            , test_bank_ids = [p.prompt_id() for p in grading_prompts]
+                                            , prompt_texts=prompts
+                                            , embeddings=embeddings
+                                            , answers=answers
+                                            , true_labels=true_relevance)
+
+
+
+        answer_or_error_tuples = await llmPipeline.grade_paragraph(grading_prompts
+                                                                   , paragraph_txt=paragraph_txt
+                                                                   , full_paragraph=para
+                                                                   , system_message=system_message
+                                                                   , record_embeddings=record_embeddings
+                                                                   , **kwargs)
         answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
         just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
-            
+
+        # print(f"Received {len(answer_or_error_tuples)} answers from LLM")            
 
         if not keep_going_on_llm_parse_error:
             for p,llm_error in just_answer_errors:
@@ -116,15 +146,16 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
 
-        
-    await asyncio.gather( *(noodle_one_paragraph(para) for para in  itertools.islice(paragraphs, max_paragraphs)))
-
+    async with asyncio.TaskGroup() as tg:
+        for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+            tg.create_task(noodle_one_paragraph(para))
 
 
 async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
                                           , qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
                                           , keep_going_on_llm_parse_error:bool=False
                                           , system_message:Optional[str]=None
+                                          , embedding_db:Optional[EmbeddingDb]=None
                                           , **kwargs
                                           )->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
@@ -134,7 +165,28 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
     async def noodle_one_paragraph(para):
         paragraph_txt = para.text
 
-        answerTuples = await qaPipeline.grade_paragraph([grading_prompt], paragraph_txt=paragraph_txt, system_message=system_message, **kwargs)
+        def record_embeddings(prompts:List[str], embeddings:torch.Tensor, answers:List[str]):
+            if embedding_db is not None:
+                true_relevance = None
+                judg = para.get_any_judgment()
+                if judg is not None:
+                    true_relevance = [f"{judg.relevance}"]
+                embedding_db.add_embeddings(query_id=queryWithFullParagraphList.queryId
+                                            , passage_id=para.paragraph_id
+                                            , prompt_class=grading_prompt.prompt_info()["prompt_class"]
+                                            , test_bank_ids = [grading_prompt.prompt_id()]
+                                            , prompt_texts=prompts
+                                            , embeddings=embeddings
+                                            , answers=answers
+                                            , true_labels=true_relevance)
+
+
+
+        answerTuples = await qaPipeline.grade_paragraph([grading_prompt]
+                                                        , paragraph_txt=paragraph_txt
+                                                        , system_message=system_message
+                                                        , record_embeddings=record_embeddings
+                                                        , **kwargs)
         
         (_, answer) = answerTuples[0]
 
@@ -164,14 +216,16 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
             para.grades = list()
         para.grades.append(grade_obj)
 
-    await asyncio.gather( *(noodle_one_paragraph(para) for para in itertools.islice(paragraphs, max_paragraphs) ))
-
+    async with asyncio.TaskGroup() as tg:
+        for para in itertools.islice(paragraphs, max_paragraphs):
+            tg.create_task(noodle_one_paragraph(para))
 
 
 async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             , keep_going_on_llm_parse_error:bool=False
             , system_message:Optional[str]=None
+            , embedding_db:Optional[EmbeddingDb]=None
             , **kwargs
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -187,7 +241,7 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
             restart_previous_query_paragraphs_iter = itertools.islice(restart_previous_query_paragraphs, max_queries)
             take_previous_paragraphs = True
 
-        for queryWithFullParagraphList in itertools.islice(query_paragraphs, max_queries):
+        for queryWithFullParagraphList in (itertools.islice(query_paragraphs, max_queries) if max_queries>0 else query_paragraphs):
             query_id = queryWithFullParagraphList.queryId
             grading_prompts = question_set.get(query_id)
             if grading_prompts is None or len(grading_prompts)==0:
@@ -225,10 +279,24 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    await  noodle_grading_rubric(queryWithFullParagraphList, grading_prompts, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error, system_message=system_message, **kwargs)
+                    await  noodle_grading_rubric( queryWithFullParagraphList= queryWithFullParagraphList
+                                                 , grading_prompts= grading_prompts
+                                                 , llmPipeline= llmPipeline
+                                                 , max_paragraphs= max_paragraphs
+                                                 , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
+                                                 , system_message=system_message
+                                                 , embedding_db=embedding_db
+                                                 , **kwargs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        await noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, llmPipeline, max_paragraphs, keep_going_on_llm_parse_error=keep_going_on_llm_parse_error, system_message=system_message, **kwargs)
+                        await noodle_one_query_direct_grading(queryWithFullParagraphList= queryWithFullParagraphList
+                                                              , grading_prompt= grading_prompt
+                                                              , llmPipeline= llmPipeline
+                                                              , max_paragraphs= max_paragraphs
+                                                              , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
+                                                              , system_message=system_message
+                                                              , embedding_db = embedding_db
+                                                              , **kwargs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 
@@ -290,6 +358,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
                 , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
                 ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN) 
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -312,6 +381,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
 
     parser.add_argument('--custom-prompt-name', type=str,required=False, metavar="NAME"
                         , help="Name for the custom prompt. This name will be used instead of --prompt-class during post-processing and leaderboard evaluation")
+    parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
 
 
     parser.add_argument('--max-queries', type=int, metavar="n", default=-1, help="Limit number of queries to be processed")
@@ -357,6 +427,11 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
         raise f"args.question_type \'{args.question_type}\' undefined"
     
     llmPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.max_tokens, args.max_out_tokens)
+    
+    embedding_db = None
+    if args.embedding_db is not None:
+        embedding_db = EmbeddingDb(Path(args.embedding_db))
+
 
     await noodle(
              llmPipeline=llmPipeline
@@ -368,6 +443,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
            # Restart logic
            , restart_previous_paragraph_file=args.restart_paragraphs_file, restart_from_query=args.restart_from_query
            , keep_going_on_llm_parse_error=args.keep_going_on_llm_parse_error
+           , embedding_db=embedding_db
            )
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ class BatchedWorker(Generic[Input, Output]):
         '''
         Executes one work item
         '''
+        print('running')
         loop = asyncio.get_running_loop()
         future = loop.create_future() # type: asyncio.Future[Output]
         work_item = WorkItem(input, future)

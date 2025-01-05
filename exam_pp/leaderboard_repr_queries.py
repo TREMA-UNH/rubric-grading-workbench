@@ -1,3 +1,9 @@
+    # Compute Representative queries for trec_eval leaderboard
+    
+    # Runs trec_eval, then identifies a small set of queries that by
+    # themselves most closely obtain a leaderboard (system ranking) that is
+    # most closely to the leaderboard obtained when running on all queries
+
 
 from pathlib import Path
 from typing import Dict,Tuple, List
@@ -7,6 +13,7 @@ import scipy
 from scipy.stats import spearmanr, kendalltau, rankdata
 import scipy.stats
 from . import exam_run_trec_eval
+
 
 
 def compatible_kendalltau(ranks1, ranks2)->float:
@@ -70,7 +77,11 @@ def main(cmdargs=None):
 
     print("Most representative queries")
     desc = f'''Utility to identify most reprentative queries for a system evaluation. \n
-              This will run trec_eval, then find queries that (by themselves) would most closely resemble the overall system ranking of methods.
+
+              Runs trec_eval, then identifies a small set of queries that by
+              themselves most closely obtain a leaderboard (system ranking) that is
+              most closely to the leaderboard obtained when running on all queries
+
               The resemblance is measured with Kendall's Tau.
              '''
     

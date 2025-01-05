@@ -43,6 +43,12 @@ MAX_TOKEN_LEN = 200
 print(f'Device = {device}; BATCH_SIZE = {BATCH_SIZE}')
 
 
+def clean_hf_kwargs(kwargs):
+    hf_kwargs = kwargs.copy()
+    hf_kwargs.pop("record_embeddings", None)
+    return hf_kwargs
+
+
 PromptGenerator = Callable[[Prompt],str]
 PromptGeneratorQC = Callable[[Prompt],Dict[str,str]]
 
@@ -121,7 +127,10 @@ class PromptRunner(ABC):
     
 
     @abstractmethod
-    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self, prompts: List[str]
+                            , system_message:Optional[str]=None
+                            # , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
+                            , **kwargs) -> List[Union[str, LlmResponseError]]:
         pass
     
     @abstractmethod
@@ -151,12 +160,12 @@ class HfTransformersQaPromptRunner(PromptRunner):
 
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         converted_prompts = [prompt.generate_prompt_with_context_QC_no_choices(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
-        return await list(iterable=self.call_dict_pipeline(dict_prompts=converted_prompts, **kwargs))
+        return await list(iterable=self.call_dict_pipeline(dict_prompts=converted_prompts, **clean_hf_kwargs(kwargs)))
 
 
     async def call_dict_pipeline(self, dict_prompts: List[Dict[str,str]], **kwargs) -> List[str]:
         def processBatch(prompts):
-            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
+            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **clean_hf_kwargs(kwargs))
             return [resp['answer'] for resp in resps]
 
         return list(itertools.chain.from_iterable(
@@ -174,9 +183,8 @@ class HfTransformersQaPromptRunner(PromptRunner):
     def finish(self):
         pass
 
-
 class HfTransformersPromptRunner(PromptRunner):
-    def __init__(self, pipeline:transformers.Pipeline, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer, question_batch_size:int, max_output_tokens:int=-1):
+    def __init__(self, pipeline:transformers.Pipeline, MAX_TOKEN_LEN:int, tokenizer:AutoTokenizer, question_batch_size:int, max_output_tokens:int=-1, **kwargs):
         self.hf_pipeline:transformers.Pipeline =pipeline
         self.max_token_len = MAX_TOKEN_LEN
         self.max_new_tokens = max_output_tokens if max_output_tokens >0 else MAX_TOKEN_LEN
@@ -191,7 +199,7 @@ class HfTransformersPromptRunner(PromptRunner):
 
     async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         def processBatch(prompts):
-            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
+            resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **clean_hf_kwargs(kwargs))
             return [resp['generated_text'] for resp in resps]
 
         return list(itertools.chain.from_iterable(
@@ -240,7 +248,7 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
                                     , do_sample=True
                                     , temperature=0.6
                                     , top_p=0.9
-                                    , **kwargs)
+                                    , **clean_hf_kwargs(kwargs))
 
             for index, prompt in enumerate(prompts):
                 # print("Llama output\n", output)
@@ -265,8 +273,8 @@ class HfLlamaTransformersPromptRunner(HfTransformersPromptRunner):
 #         self.max_token_len = MAX_TOKEN_LEN
 #         self.tokenizer = tokenizer
 
-#     async def call_pipeline(self, prompts: List[str]) -> List[str]:
-#         resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True)
+#     async def call_pipeline(self, prompts: List[str], **kwargs) -> List[str]:
+#         resps = self.hf_pipeline(prompts, max_length=self.max_token_len, num_beams=5, early_stopping=True, **clean_hf_kwargs(kwargs))
 #         return [resp['generated_text'] for resp in resps]
 
 #     def get_tokenizer(self):
@@ -310,7 +318,10 @@ class OpenAIPromptRunner(PromptRunner):
         return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
 
 
-    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self
+                            , prompts: List[str]
+                            , system_message:Optional[str]=None
+                            , **kwargs) -> List[Union[str, LlmResponseError]]:
         responses:list[Union[str, LlmResponseError]] =   [await self.openai_fetcher.generate_request(prompt, openai_interface.global_rate_limiter, system_message=system_message, **kwargs) for prompt in prompts]
         for p,resp in zip(prompts, responses):
             # if resp is None:  # We don't return None's anymore
@@ -348,7 +359,10 @@ class VllmPromptRunner(PromptRunner):
 
 
 
-    async def call_pipeline(self, prompts: List[str], system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+    async def call_pipeline(self
+                            , prompts: List[str]
+                            , system_message:Optional[str]=None
+                            , **kwargs) -> List[Union[str, LlmResponseError]]:
         responses =   [await self.vllm_fetcher.generate_request(prompt, self.rate_limiter, system_message=system_message, **kwargs) for prompt in prompts]
 
         for p,resp in zip(prompts, responses):
@@ -435,6 +449,182 @@ class Text2TextPipeline(LlmPipeline):
         self.prompt_runner = HfTransformersPromptRunner(pipeline=hf_pipeline, MAX_TOKEN_LEN=self.max_token_len, tokenizer=self.tokenizer, max_output_tokens=self.max_output_tokens, question_batch_size=self.question_batchSize)
         print(f"Text2Text model config: { self.model.config}")
 
+
+
+class EmbeddingText2TextPipeline(LlmPipeline):
+    """Pipeline that records embeddings of text2text models"""
+
+    def __init__(self, model_name:str, max_token_len:int):
+        super().__init__(model_name=model_name, max_token_len=max_token_len, max_output_tokens=max_token_len)
+
+
+        self.model:T5ForConditionalGeneration = T5ForConditionalGeneration.from_pretrained(self.modelName)
+        self.tokenizer:T5TokenizerFast = T5TokenizerFast.from_pretrained(self.modelName)
+
+        # hf_pipeline = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
+        # self.prompt_runner = EmbeddingRecordingHfTransformersPromptRunner(pipeline=hf_pipeline, MAX_TOKEN_LEN=self.max_token_len, tokenizer=self.tokenizer, max_output_tokens=self.max_output_tokens, question_batch_size=self.question_batchSize)
+        print(f"Embedding Text2Text model config: { self.model.config}")
+
+
+
+    @staticmethod
+    def export_encoder_hidden_state(prefix_token_len:int, batch_sz: int, out: transformers.generation.utils.GenerateBeamEncoderDecoderOutput, layer_no:int=-1) -> torch.Tensor:
+        '''
+        Given out.encoder_hidden_states and the number of prefix tokens
+        produce a tensor of encoder hidden states, omitting the tokens of the prefix/system message
+        Out: [batch_sz][token_len][d_model]'''
+
+        states = out.encoder_hidden_states[-1].cpu()
+        return states[:,prefix_token_len:,:]
+        
+    @staticmethod
+    def export_decoder_hidden_state(batch_sz: int, out: transformers.generation.utils.GenerateBeamEncoderDecoderOutput, layer_no:int=-1) -> torch.Tensor:
+        '''
+        Given out.decoder_hidden_states and out.beam_indices, 
+        produce a tensor of decoder hidden states that represent the best beam.
+        Precondition: num_return_sequences = 1
+        Out: [batch_sz][token_len][d_model]'''
+
+        # Relevant Part of the Object documentation
+        # sequences (`torch.LongTensor` of shape `(batch_size*num_return_sequences, sequence_length)`):
+        #     The generated sequences. The second dimension (sequence_length) is either equal to `max_length` or shorter
+        #     if all batches finished early due to the `eos_token_id`.
+        # 
+        #  beam_indices (`torch.LongTensor`, *optional*, returned when `output_scores=True`):
+        #     Beam indices of generated token id at each generation step. `torch.LongTensor` of shape
+        #    `(batch_size*num_return_sequences, sequence_length)`.
+        #
+        # encoder_hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True`):
+        #     Tuple of `torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer) of
+        #     shape `(batch_size*num_beams*num_return_sequences, sequence_length, hidden_size)`.
+        #
+        # decoder_hidden_states (`tuple(tuple(torch.FloatTensor))`, *optional*, returned when `output_hidden_states=True`):
+        #     Tuple (one element for each generated token) of tuples (one element for each layer of the decoder) of
+        #     `torch.FloatTensor` of shape `(batch_size*num_beams*num_return_sequences, generated_length, hidden_size)`.
+
+        batch_sz, _ = out.sequences.shape
+        
+        beam_indices = out.beam_indices.cpu()
+        _, seq_len1 = beam_indices.shape
+        seq_len2 = len(out.decoder_hidden_states)
+        seq_len = min(seq_len1,seq_len2)
+
+        # Note: it is possible that beam_indices indicate a shorter seq_len than the decoder_hidden states.
+
+        if seq_len1 > seq_len2:
+            print(f"====== Record Embeddings \n seq_len's don't match.\n _, seq_len1 = beam_indices.shape= {beam_indices.shape}\n seq_len2 = len(out.decoder_hidden_states)={len(out.decoder_hidden_states)}")
+            print("beam_indices", beam_indices)
+            print("size of out.decoder_hidden_states:",len(out.decoder_hidden_states), len(out.decoder_hidden_states[0]), out.decoder_hidden_states[0][0].shape)
+                  
+
+        d_model = out.decoder_hidden_states[0][0].shape[2]
+        best_hidden_states = torch.empty(size=(batch_sz, seq_len, d_model))
+        done = torch.zeros((batch_sz,), dtype=torch.bool)
+
+        for tok_idx in range(seq_len):
+            # beam_beam: shape=(batch_sz,)
+            best_beam = beam_indices[:,tok_idx]
+            done |= best_beam == -1
+            #print(best_beam)
+
+            # hidden_states: shape=(batch_sz*num_beams, seq_len, d_model)
+            hidden_states = out.decoder_hidden_states[tok_idx][layer_no].cpu()
+            best_hidden_states[:,tok_idx,:] = hidden_states[best_beam, 0, :]
+            best_hidden_states[done,tok_idx,:] = 0 # pad_token
+
+            # print(best_hidden_states[:,tok_idx,:])
+
+        return best_hidden_states
+
+
+    def embed_model(self, prompts:List[str]
+                    , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
+                    , prompt_prefix_len:int
+                    ,  max_len, num_beams
+                    , early_stopping, **kwargs):
+        # model=transformers.AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-large')
+        # tokenizer=transformers.AutoTokenizer.from_pretrained('google/flan-t5-large')
+
+        # num_beams = 1
+        tokens = self.tokenizer(prompts, return_tensors='pt', padding=True, truncation=True)
+        #out = model(**t, decoder_input_ids=t['input_ids'])
+        out = self.model.generate(
+            **tokens,
+            num_beams=num_beams,
+            max_length=max_len,
+            num_return_sequences=1,
+            return_dict_in_generate=True,
+            output_hidden_states=True,
+            output_scores=True,
+        )
+
+        answers = self.tokenizer.batch_decode(out.sequences.cpu(), skip_special_tokens=True, clean_up_tokenization_spaces=True)
+
+        # batch_size = tokens['input_ids'].shape[0]
+        # final_encoder_hidden_states = out.encoder_hidden_states[-1].cpu()
+
+        final_encoder_hidden_states = EmbeddingText2TextPipeline.export_encoder_hidden_state(out=out, prefix_token_len=prompt_prefix_len, batch_sz=len(prompts))
+        final_decoder_hidden_states = EmbeddingText2TextPipeline.export_decoder_hidden_state(out=out, batch_sz=len(prompts))
+        embeddings = torch.cat(tensors=(final_encoder_hidden_states, final_decoder_hidden_states), dim=1)
+
+        # store embedding in database
+        record_embeddings(prompts, embeddings, answers)
+
+        # hidden_answers = self.tokenizer.batch_decode(torch.argmax(self.model.lm_head(batch_hidden_state_seq), dim=2))
+        # print(hidden_answers)
+
+        return answers
+
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData
+                          , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
+                          , system_message:Optional[str]=None
+                          , **kwargs) -> List[Union[str, LlmResponseError]]:
+        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+        prompt_prefix_len = prompts[0].prompt_prefix_len(model_tokenizer=self.tokenizer, max_token_len=self.max_token_len)
+        return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, record_embeddings=record_embeddings, prompt_prefix_len=prompt_prefix_len, **kwargs)
+
+
+    async def call_pipeline(self, prompts: List[str]
+                            , prompt_prefix_len:int
+                            , system_message:Optional[str]=None
+                            , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
+                            , **kwargs) -> List[Union[str, LlmResponseError]]:
+        if record_embeddings is None:
+            raise RuntimeError(f"To record embeddings, {self.__class__}.call_pipeline() must be called with  `record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]`")
+        else:
+            resps = self.embed_model(prompts, record_embeddings=record_embeddings, prompt_prefix_len=prompt_prefix_len, max_len=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
+            return resps #[resp['generated_text'] for resp in resps]
+
+
+
+    def exp_modelName(self)->str:
+        return self.modelName
+
+
+    def finish(self):
+        pass
+        # self.prompt_runner.finish()
+
+
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData
+                              , system_message:Optional[str]=None
+                              , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
+                              ,  **kwargs
+                              )->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
+        """Run question answering over batches of questions, and tuples it up with the answers"""
+
+        answers:List[Union[str, LlmResponseError]] = await self.run_prompts(prompts=prompts
+                                                            , context=paragraph_txt
+                                                            , full_paragraph=full_paragraph
+                                                            , system_message=system_message
+                                                            , record_embeddings = record_embeddings
+                                                            , **kwargs)
+
+        if len(answers) != len(prompts):
+            raise RuntimeError("Missing prompt response\mPrompts: {prompts}\n Answers: {answers}")
+        
+        return list(zip(prompts, answers, strict=True))
+        # todo Catch errors
 
 
 class TextGenerationPipeline(LlmPipeline):

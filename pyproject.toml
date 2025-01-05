@@ -23,6 +23,7 @@ dependencies = [
     "trec-car-tools ~= 2.6",
     "torch ~= 2.1",
     "transformers ~= 4.37",
+    "duckdb",
 ]
 
 [tool.setuptools]

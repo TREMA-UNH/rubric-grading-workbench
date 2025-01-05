@@ -17,7 +17,7 @@ def json_query_loader(query_json:Path)-> Dict[str,str]:
     raise RuntimeError(f"Could not load any queries from file {file}.")    
 
 
-def direct_grading_prompt(prompt_class:str, query_id:str, query_text:Optional[str], facet_id:Optional[str], facet_text:Optional[str], self_rater_tolerant:bool)->DirectGradingPrompt:
+def direct_grading_prompt(prompt_class:str, query_id:str, query_text:Optional[str], facet_id:Optional[str], facet_text:Optional[str], self_rater_tolerant:bool)->Optional[DirectGradingPrompt]:
     if query_text is None: 
         raise RuntimeError(f"Query_text is None for query_id {query_id}. This is not allowed.")
     
@@ -34,7 +34,8 @@ def direct_grading_prompt(prompt_class:str, query_id:str, query_text:Optional[st
     elif prompt_class == "Thomas":
         return Thomas(query_id=query_id, query_text=query_text,facet_id=facet_id, facet_text=facet_text)
     else:
-        raise RuntimeError(f"Prompt class {prompt_class} not supported by the direct_grading_prompt loader.")\
+        # raise RuntimeError(f"Prompt class {prompt_class} not supported by the direct_grading_prompt loader.")\
+        return None
 
 
 def direct_grading_prompts(queries:Dict[str,str], prompt_class:str, max_queries:Optional[int], self_rater_tolerant:bool)->Dict[str,List[DirectGradingPrompt]]:
@@ -44,7 +45,10 @@ def direct_grading_prompts(queries:Dict[str,str], prompt_class:str, max_queries:
         print(query_id, query_text)
 
         prompt = direct_grading_prompt(prompt_class=prompt_class, query_id = query_id, query_text= query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
-        result[query_id].append(prompt)
+        if prompt is not None:
+            result[query_id].append(prompt)
+        else:
+            print(f"Query Loader Warning: {prompt_class} is not a direct grading prompt.")
 
     return result
 

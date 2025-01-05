@@ -4,6 +4,7 @@ from typing import *
 import re
 from abc import abstractmethod
 from dataclasses import dataclass
+from transformers import AutoTokenizer
 
 import hashlib
 
@@ -444,6 +445,9 @@ class Prompt(abc.ABC):
     @abstractmethod
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         pass
+
+    def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len:int) -> int:
+        return 0
 
     @abstractmethod
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
@@ -1051,6 +1055,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
     self_rater_tolerant:bool
 
 
+
     prompt_truncater = PromptTruncater()
 
     def __post_init__(self):
@@ -1059,6 +1064,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
             self.self_rater = SelfRaterTolerant(self.unanswerable_matcher2)
         else:
             self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
+        self.prompt_prefix_len_cache:Optional[int] = None
 
     def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
         return {"prompt_class": self.__class__.__name__
@@ -1095,6 +1101,16 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
+
+
+    def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:
+        if self.prompt_prefix_len_cache is None:
+            
+            question_prompt_prefix =  f"{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n"
+            prefix = model_tokenizer.encode(question_prompt_prefix, add_special_tokens=True)
+            prefix_len = len(prefix)
+            self.prompt_prefix_len_cache = min(prefix_len,max_token_len)
+        return self.prompt_prefix_len_cache    
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}'
@@ -1188,6 +1204,9 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=filled_prompt_text, max_length=max_token_len)
         return prompt
 
+    def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:
+        return 0
+    
     def check_answer(self, answer:str)->bool:
         return self.self_rater.check_answer(answer)
 
