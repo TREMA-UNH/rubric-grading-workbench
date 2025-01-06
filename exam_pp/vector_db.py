@@ -81,7 +81,7 @@ class EmbeddingDb:
             raise e
 
 
-    def fetch_tensors(self, tensor_ids: List[VectorId]) -> pt.Tensor:
+    def fetch_tensors(self, tensor_ids: List[VectorId], token_length:Optional[int]) -> pt.Tensor:
         tensor_ids = pd.DataFrame(data={'tensor_id': tensor_ids})
         tensor_ids['i'] = tensor_ids.index
         self.db.execute('''

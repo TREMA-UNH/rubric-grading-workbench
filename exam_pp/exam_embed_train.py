@@ -72,9 +72,10 @@ def main():
     dataset = ClassificationItemDataset(db=embedding_db)
 
     ci_ids = get_query_items(embedding_db, ['118440', '121171'])
+    print("ci_ids", ci_ids)
 
     features = get_classification_features(embedding_db, '118440')
-    print(embedding_db.fetch_tensors(features['tensor_id']))
+    print("tensor_ids", embedding_db.fetch_tensors(features['tensor_id']))
 
     tensors = ([dataset[i] for i in ci_ids])
     #print(item)

@@ -463,7 +463,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         super().__init__(model_name=model_name, max_token_len=max_token_len, max_output_tokens=max_token_len)
 
         self.model:T5ForConditionalGeneration = T5ForConditionalGeneration.from_pretrained(self.modelName)
-        self.model.to(device)
+        self.model = self.model.to(device)
         self.model_set = {}
         self.model_set[device] = self.model
         if device.type != "cpu":
@@ -571,15 +571,9 @@ class EmbeddingText2TextPipeline(LlmPipeline):
             return answers
         except torch.OutOfMemoryError:
             # Attempt 2: smaller batches
-
-
+            
             batch_step = 1
             print(f"torch.OutOfMemory error: Attempt 2: retrying batches of {batch_step}")
-            # pivot, _ = divmod(len(prompts),batch_step)
-            # prompts1 = prompts[0:pivot]
-            # prompts2 = prompts[pivot:]
-            # _, embeddings1, answers1 = self.embed_model(prompts = prompts1, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
-            # _, embeddings2, answers2= self.embed_model(prompts = prompts2, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
 
             pivots=list(range(0,len(prompts),2))
             pivots.append(len(prompts))
@@ -593,10 +587,11 @@ class EmbeddingText2TextPipeline(LlmPipeline):
                     _, embeddings_entry, answers_entry = self.embed_model(device=device, prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) 
                     embeddings_list.append(embeddings_entry)
                     answers_list.append(answers_entry)
+                    # _,embeddings_list, answers_list = map(list, zip(*[]))
+
 
                 except torch.OutOfMemoryError:
                     # Attempt 3: run on cpu
-
 
                     cpu_device = torch.device("cpu")
                     print(f"torch.OutOfMemory error: Attempt 3: retrying on {cpu_device}")
@@ -604,11 +599,6 @@ class EmbeddingText2TextPipeline(LlmPipeline):
                     _, embeddings_entry, answers_entry = self.embed_model(device=cpu_device, prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) 
                     embeddings_list.append(embeddings_entry)
                     answers_list.append(answers_entry)
-                    
-
-            # _,embeddings_list, answers_list = map(list, zip(*[]))
-
-            
 
             answers:List[str] = list(itertools.chain(*answers_list))
             embeddings = EmbeddingText2TextPipeline.cat_pad_tensors(tensors=embeddings_list, dim=0)
@@ -628,33 +618,44 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         # tokenizer=transformers.AutoTokenizer.from_pretrained('google/flan-t5-large')
 
         # num_beams = 1
-        tokens = self.tokenizer(prompts, return_tensors='pt', padding=True, truncation=True)
-        tokens.to(device)
-        #out = model(**t, decoder_input_ids=t['input_ids'])
-        out = self.model_set[device].generate(
-            **tokens,
-            num_beams=num_beams,
-            max_length=max_len,
-            num_return_sequences=1,
-            return_dict_in_generate=True,
-            output_hidden_states=True,
-            output_scores=True,
-        )
+        with torch.no_grad():
+            tokens = self.tokenizer(prompts, return_tensors='pt', padding=True, truncation=True)
+            tokens = tokens.to(device)
+            try:
+                #out = model(**t, decoder_input_ids=t['input_ids'])
+                out = self.model_set[device].generate(
+                    **tokens,
+                    num_beams=num_beams,
+                    max_length=max_len,
+                    num_return_sequences=1,
+                    return_dict_in_generate=True,
+                    output_hidden_states=True,
+                    output_scores=True,
+                )
 
-        answers = self.tokenizer.batch_decode(out.sequences.cpu(), skip_special_tokens=True, clean_up_tokenization_spaces=True)
+                answers = self.tokenizer.batch_decode(out.sequences.cpu(), skip_special_tokens=True, clean_up_tokenization_spaces=True)
 
-        # batch_size = tokens['input_ids'].shape[0]
-        # final_encoder_hidden_states = out.encoder_hidden_states[-1].cpu()
+                # batch_size = tokens['input_ids'].shape[0]
+                # final_encoder_hidden_states = out.encoder_hidden_states[-1].cpu()
 
-        final_encoder_hidden_states = EmbeddingText2TextPipeline.export_encoder_hidden_state(out=out, prefix_token_len=prompt_prefix_len, batch_sz=len(prompts))
-        final_decoder_hidden_states = EmbeddingText2TextPipeline.export_decoder_hidden_state(out=out, batch_sz=len(prompts))
-        embeddings = torch.cat(tensors=(final_encoder_hidden_states, final_decoder_hidden_states), dim=1)
+                final_encoder_hidden_states = EmbeddingText2TextPipeline.export_encoder_hidden_state(out=out, prefix_token_len=prompt_prefix_len, batch_sz=len(prompts))
+                final_decoder_hidden_states = EmbeddingText2TextPipeline.export_decoder_hidden_state(out=out, batch_sz=len(prompts))
+                embeddings = torch.cat(tensors=(final_encoder_hidden_states, final_decoder_hidden_states), dim=1)
 
 
-        # hidden_answers = self.tokenizer.batch_decode(torch.argmax(self.model.lm_head(batch_hidden_state_seq), dim=2))
-        # print(hidden_answers)
+                # hidden_answers = self.tokenizer.batch_decode(torch.argmax(self.model.lm_head(batch_hidden_state_seq), dim=2))
+                # print(hidden_answers)
 
-        return prompts, embeddings, answers
+                return prompts, embeddings, answers
+            except torch.OutOfMemoryError as ex:
+                del tokens
+                del out
+                torch.cuda.empty_cache()
+                print(f"Allocated: {torch.cuda.memory_allocated()}")
+                print(f"Reserved: {torch.cuda.memory_reserved()}")
+                raise ex
+
+
 
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData
                           , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
