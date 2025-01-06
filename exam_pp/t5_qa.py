@@ -541,11 +541,39 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         return best_hidden_states
 
 
+    def embed_and_record(self, prompts:List[str]
+                        , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
+                        , prompt_prefix_len:int
+                        ,  max_len, num_beams
+                        , early_stopping, **kwargs)->List[str]:
+
+        try:
+            prompts, embeddings, answers= self.embed_model(prompts = prompts, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
+            # store embedding in database
+            record_embeddings(prompts, embeddings, answers)
+            return answers
+        except torch.OutOfMemoryError:
+            pivot, _ = divmod(len(prompts),2)
+            print(f"torch.OutOfMemory error: retying with half the batch {pivot}")
+            prompts1 = prompts[0:pivot]
+            prompts2 = prompts[pivot:]
+            _, embeddings1, answers1 = self.embed_model(prompts = prompts1, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
+            _, embeddings2, answers2= self.embed_model(prompts = prompts2, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
+
+            answers:List[str] = itertools.chain([answers1, answers2])
+            embeddings = torch.cat(tensors=(embeddings1, embeddings2), dim=0)
+
+
+            # store embedding in database
+            record_embeddings(prompts, embeddings, answers)
+            return answers
+
+
     def embed_model(self, prompts:List[str]
-                    , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
+                    # , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
                     , prompt_prefix_len:int
                     ,  max_len, num_beams
-                    , early_stopping, **kwargs):
+                    , early_stopping, **kwargs)->Tuple[List[str], torch.Tensor, List[str]]:
         # model=transformers.AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-large')
         # tokenizer=transformers.AutoTokenizer.from_pretrained('google/flan-t5-large')
 
@@ -572,13 +600,11 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         final_decoder_hidden_states = EmbeddingText2TextPipeline.export_decoder_hidden_state(out=out, batch_sz=len(prompts))
         embeddings = torch.cat(tensors=(final_encoder_hidden_states, final_decoder_hidden_states), dim=1)
 
-        # store embedding in database
-        record_embeddings(prompts, embeddings, answers)
 
         # hidden_answers = self.tokenizer.batch_decode(torch.argmax(self.model.lm_head(batch_hidden_state_seq), dim=2))
         # print(hidden_answers)
 
-        return answers
+        return prompts, embeddings, answers
 
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData
                           , record_embeddings:Optional[Callable[[List[str], torch.Tensor, List[str]], None]]=None
@@ -597,7 +623,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         if record_embeddings is None:
             raise RuntimeError(f"To record embeddings, {self.__class__}.call_pipeline() must be called with  `record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]`")
         else:
-            resps = self.embed_model(prompts, record_embeddings=record_embeddings, prompt_prefix_len=prompt_prefix_len, max_len=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
+            resps = self.embed_and_record(prompts, record_embeddings=record_embeddings, prompt_prefix_len=prompt_prefix_len, max_len=self.max_token_len, num_beams=5, early_stopping=True, **kwargs)
             return resps #[resp['generated_text'] for resp in resps]
 
 
