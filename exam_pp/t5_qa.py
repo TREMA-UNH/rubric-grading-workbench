@@ -29,17 +29,19 @@ from .test_bank_prompts import Prompt, QuestionPromptWithChoices,QuestionPrompt
 from .batched_worker import BatchedWorker
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
-device:Optional[int] = None
+
+device:torch.device = torch.device("cpu")
 deviceStr = os.environ.get("GPU_DEVICE")
 if deviceStr is not None:
     try:
-        device = str(deviceStr)
+        device = torch.device(deviceStr)
     except ValueError:
-        print(f'Cant parse device number from \"{device}\"')
-        device = None
+        print(f'Cant parse device string from \"{device}\"')
+        print("Cuda available? ",torch.cuda.is_available())
+        device = torch.device("cpu")
 
-print(torch.cuda.is_available())
-torch.device(deviceStr)
+
+
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "1"))
 MAX_TOKEN_LEN = 200
 print(f'Device = {device}; BATCH_SIZE = {BATCH_SIZE}')
