@@ -464,6 +464,11 @@ class EmbeddingText2TextPipeline(LlmPipeline):
 
         self.model:T5ForConditionalGeneration = T5ForConditionalGeneration.from_pretrained(self.modelName)
         self.model.to(device)
+        self.model_set = {}
+        self.model_set[device] = self.model
+        if device.type != "cpu":
+            self.model_set[torch.device("cpu")] = T5ForConditionalGeneration.from_pretrained(self.modelName)
+
         self.tokenizer:T5TokenizerFast = T5TokenizerFast.from_pretrained(self.modelName)
 
         # hf_pipeline = pipeline('text2text-generation', model=self.model, tokenizer=self.tokenizer, device=device, batch_size=BATCH_SIZE, use_fast=True)
@@ -558,15 +563,19 @@ class EmbeddingText2TextPipeline(LlmPipeline):
                         , early_stopping, **kwargs)->List[str]:
 
         try:
-            prompts, embeddings, answers= self.embed_model(prompts = prompts, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
-            # store embedding in database
+            # Attempt 1: run full batch on GPU
+            print(f"Attempt 1: Run full batch on {device}")
+
+            prompts, embeddings, answers= self.embed_model(device=device, prompts = prompts, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
             record_embeddings(prompts, embeddings, answers)
             return answers
         except torch.OutOfMemoryError:
+            # Attempt 2: smaller batches
 
-            batch_step = 2
-            pivot, _ = divmod(len(prompts),batch_step)
-            print(f"torch.OutOfMemory error: retying batches of {batch_step}")
+
+            batch_step = 1
+            print(f"torch.OutOfMemory error: Attempt 2: retrying batches of {batch_step}")
+            # pivot, _ = divmod(len(prompts),batch_step)
             # prompts1 = prompts[0:pivot]
             # prompts2 = prompts[pivot:]
             # _, embeddings1, answers1 = self.embed_model(prompts = prompts1, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
@@ -576,7 +585,28 @@ class EmbeddingText2TextPipeline(LlmPipeline):
             pivots.append(len(prompts))
             prompt_segments = [prompts[pivots[i]:pivots[i+1]] for i in range(len(pivots) - 1)] 
             answers_list:List[List[str]]
-            _,embeddings_list, answers_list = map(list, zip(*[self.embed_model(prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) for prompt_set in prompt_segments]))
+
+            embeddings_list = list()
+            answers_list = list()
+            for prompt_set in prompt_segments:
+                try:
+                    _, embeddings_entry, answers_entry = self.embed_model(device=device, prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) 
+                    embeddings_list.append(embeddings_entry)
+                    answers_list.append(answers_entry)
+
+                except torch.OutOfMemoryError:
+                    # Attempt 3: run on cpu
+
+
+                    cpu_device = torch.device("cpu")
+                    print(f"torch.OutOfMemory error: Attempt 3: retrying on {cpu_device}")
+
+                    _, embeddings_entry, answers_entry = self.embed_model(device=cpu_device, prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) 
+                    embeddings_list.append(embeddings_entry)
+                    answers_list.append(answers_entry)
+                    
+
+            # _,embeddings_list, answers_list = map(list, zip(*[]))
 
             
 
@@ -589,7 +619,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
             return answers
 
 
-    def embed_model(self, prompts:List[str]
+    def embed_model(self, device:torch.device, prompts:List[str]
                     # , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
                     , prompt_prefix_len:int
                     ,  max_len, num_beams
@@ -601,7 +631,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         tokens = self.tokenizer(prompts, return_tensors='pt', padding=True, truncation=True)
         tokens.to(device)
         #out = model(**t, decoder_input_ids=t['input_ids'])
-        out = self.model.generate(
+        out = self.model_set[device].generate(
             **tokens,
             num_beams=num_beams,
             max_length=max_len,
