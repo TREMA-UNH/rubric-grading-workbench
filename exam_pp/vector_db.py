@@ -6,6 +6,7 @@ from pathlib import Path
 import duckdb
 
 VectorId = NewType('VectorId', int)
+ClassificationItemId = NewType('ClassificationItemId', int)
 
 SCHEMA = '''
 CREATE SEQUENCE tensor_storage_id_seq START 1;
@@ -80,7 +81,7 @@ class EmbeddingDb:
             raise e
 
 
-    def read_tensors(self, tensor_ids: List[VectorId]) -> pt.Tensor:
+    def fetch_tensors(self, tensor_ids: List[VectorId]) -> pt.Tensor:
         tensor_ids = pd.DataFrame(data={'tensor_id': tensor_ids})
         tensor_ids['i'] = tensor_ids.index
         self.db.execute('''
@@ -94,7 +95,7 @@ class EmbeddingDb:
         for v in vs.itertuples():
             tsid = v.tensor_storage_id
             if tsid not in self.storage_cache:
-                self.storage_cache[tsid] = pt.load(self._storage_path(tsid))
+                self.storage_cache[tsid] = pt.load(self._storage_path(tsid), weights_only=True)
 
             t = self.storage_cache[tsid][v.index_n]
             if out is None:
@@ -178,7 +179,7 @@ def main() -> None:
         print(tensor_ids)
         accum += tensor_ids
 
-    xs = db.read_tensors(accum)
+    xs = db.fetch_tensors(accum)
     print(xs)
 
 if __name__ == '__main__':

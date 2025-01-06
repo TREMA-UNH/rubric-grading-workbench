@@ -13,6 +13,7 @@ from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable, Uni
 import typing
 import openai
 import torch
+import torch.nn.functional as F
 from transformers import pipeline, T5ForConditionalGeneration, GPT2TokenizerFast, T5TokenizerFast, T5Tokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM, PretrainedConfig,AutoModelForQuestionAnswering,AutoTokenizer
 
 from json import JSONDecodeError
@@ -541,6 +542,15 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         return best_hidden_states
 
 
+    @staticmethod
+    def cat_pad_tensors(tensors: list[torch.Tensor], dim:int)->torch.Tensor:
+        max_dim1 = max(tensor.size(1) for tensor in tensors)
+        padded_tensors = [
+           F.pad(tensor, (0, 0, 0, max_dim1 - tensor.size(1))) for tensor in tensors
+        ]
+        result = torch.cat(padded_tensors, dim=dim)
+        return result
+
     def embed_and_record(self, prompts:List[str]
                         , record_embeddings:Callable[[List[str], torch.Tensor, List[str]], None]
                         , prompt_prefix_len:int
@@ -553,15 +563,25 @@ class EmbeddingText2TextPipeline(LlmPipeline):
             record_embeddings(prompts, embeddings, answers)
             return answers
         except torch.OutOfMemoryError:
-            pivot, _ = divmod(len(prompts),2)
-            print(f"torch.OutOfMemory error: retying with half the batch {pivot}")
-            prompts1 = prompts[0:pivot]
-            prompts2 = prompts[pivot:]
-            _, embeddings1, answers1 = self.embed_model(prompts = prompts1, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
-            _, embeddings2, answers2= self.embed_model(prompts = prompts2, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
 
-            answers:List[str] = itertools.chain([answers1, answers2])
-            embeddings = torch.cat(tensors=(embeddings1, embeddings2), dim=0)
+            batch_step = 2
+            pivot, _ = divmod(len(prompts),batch_step)
+            print(f"torch.OutOfMemory error: retying batches of {batch_step}")
+            # prompts1 = prompts[0:pivot]
+            # prompts2 = prompts[pivot:]
+            # _, embeddings1, answers1 = self.embed_model(prompts = prompts1, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
+            # _, embeddings2, answers2= self.embed_model(prompts = prompts2, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs)
+
+            pivots=list(range(0,len(prompts),2))
+            pivots.append(len(prompts))
+            prompt_segments = [prompts[pivots[i]:pivots[i+1]] for i in range(len(pivots) - 1)] 
+            answers_list:List[List[str]]
+            _,embeddings_list, answers_list = map(list, zip(*[self.embed_model(prompts = prompt_set, prompt_prefix_len=prompt_prefix_len, max_len=max_len, num_beams=num_beams, early_stopping=early_stopping, **kwargs) for prompt_set in prompt_segments]))
+
+            
+
+            answers:List[str] = list(itertools.chain(*answers_list))
+            embeddings = EmbeddingText2TextPipeline.cat_pad_tensors(tensors=embeddings_list, dim=0)
 
 
             # store embedding in database
