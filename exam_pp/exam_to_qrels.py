@@ -18,7 +18,7 @@ class QrelEntry:
     grade:int
 
     def format_qrels(self):
-        return ' '.join([self.query_id, '0', self.paragraph_id, str(self.grade)])+'\n'
+        return ' '.join([str(self.query_id), '0', str(self.paragraph_id), str(self.grade)])+'\n'
 
 def exam_to_qrels_files(exam_input_file:Path, qrel_out_file:Path, grade_filter:GradeFilter):
     query_paragraphs:List[QueryWithFullParagraphList] = parseQueryWithFullParagraphs(exam_input_file)
