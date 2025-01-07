@@ -405,7 +405,13 @@ def parseQueryWithFullParagraphList(line:str) -> QueryWithFullParagraphList:
     # Parse the JSON content of the line
     # print(line)
     data = json.loads(line)
-    return QueryWithFullParagraphList(data[0], [FullParagraphData.parse_obj(paraInfo) for paraInfo in data[1]])
+    query_id = data[0]
+    if query_id is None:
+        raise RuntimeError(f"query_id of None is not supported. query_id must be a string that is unique across the data file." )
+    if not isinstance(query_id,str):
+        print(f"Warning: query_id {query_id} must be of type str, but is provided as type {type(query_id)}. Query_id will be converted to string." )
+        query_id = str(query_id)
+    return QueryWithFullParagraphList(queryId=query_id, paragraphs=[FullParagraphData.parse_obj(paraInfo) for paraInfo in data[1]])
 
 
 # Path to the benchmarkY3test-qrels-with-text.jsonl.gz file

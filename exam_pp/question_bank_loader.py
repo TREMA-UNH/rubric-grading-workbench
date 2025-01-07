@@ -305,7 +305,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                     elif(prompt_class == "QuestionBriefWithAnswerKey"):
                         prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
                                                                             , question = question.question_text
-                                                                            , choices = {}
+                                                                            , choices = None
                                                                             , correct=set(question.gold_answers)
                                                                             , correctKey=None
                                                                             , query_id = question_bank.query_id
@@ -314,10 +314,12 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             # , unanswerable_expressions = option_non_answers
                                                                             )
                     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
+                        if question.gold_answers is None:
+                            raise RuntimeError(f"{prompt_class} requires question.gold_anwers to be set to non-None value, but received: {question}")
                         prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
                                                                             , question = question.question_text
-                                                                            , choices = {}
-                                                                            , correct=set(question.gold_answers)
+                                                                            , choices = None
+                                                                            , correct=question.gold_answers
                                                                             , correctKey=None
                                                                             , query_id = question_bank.query_id
                                                                             , facet_id = question.facet_id
@@ -325,11 +327,12 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             # , unanswerable_expressions = option_non_answers
                                                                             )
                     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey2"):
+                        if question.gold_answers is None:
+                            raise RuntimeError(f"{prompt_class} requires question.gold_anwers to be set to non-None value, but received: {question}")
                         prompt = QuestionCompleteConcisePromptWithAnswerKey2(question_id = question.question_id
                                                                             , question = question.question_text
-                                                                            , choices = {}
-                                                                            , correct=set(question.gold_answers)
-                                                                            , correctKey=None
+                                                                            , choices = None
+                                                                            , correct=question.gold_answers                                                                            , correctKey=None
                                                                             , query_id = question_bank.query_id
                                                                             , facet_id = question.facet_id
                                                                             , query_text = question_bank.query_text

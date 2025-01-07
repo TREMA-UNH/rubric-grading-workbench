@@ -112,6 +112,17 @@ class EmbeddingDb:
 
     
     def fetch_tensors(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
+        """
+        Fetch tensors corresponding to the provided tensor IDs.
+
+        Parameters:
+            tensor_ids (List[VectorId]): List of tensor IDs to fetch.
+            token_length (Optional[int]): Length of tokens to retrieve (default is full length).
+            align (Align): Alignment mode, either Align.ALIGN_BEGIN or Align.ALIGN_END.
+
+        Returns:
+            pt.Tensor: A batch of tensors with shape [batch_size, token_length, model_dim].
+        """
         tensor_ids_df = pd.DataFrame(data={'tensor_id': tensor_ids})
         tensor_ids_df['i'] = tensor_ids_df.index
         self.db.execute('''
@@ -148,6 +159,90 @@ class EmbeddingDb:
 
         assert out is not None
         return out
+
+
+#  -------------------------
+
+    def get_tensor_metadata(self, classification_item_id: List[ClassificationItemId], prompt_class: str):
+        classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
+        classification_item_ids_df['i'] = classification_item_ids_df.index
+
+        # Register DataFrame as a temporary table
+        self.db.register('classification_item_ids_df', classification_item_ids_df)
+
+        # Query to fetch tensor metadata along with tensor IDs
+        result = self.db.execute('''
+            SELECT 
+                needles.i,
+                tensor.tensor_id,
+                tensor.tensor_storage_id,
+                tensor.index_n,
+                classification_feature.metadata->>'$.test_bank' AS test_bank_id
+            FROM classification_feature
+            INNER JOIN classification_item_ids_df AS needles 
+            ON classification_feature.classification_item_id = needles.classification_item_id
+            INNER JOIN tensor
+            ON classification_feature.tensor_id = tensor.tensor_id
+            WHERE classification_feature.metadata->>'$.prompt_class' = ?
+            ORDER BY needles.i ASC, tensor.index_n ASC;
+        ''', (prompt_class,))
+
+        return result.df()  # Return a DataFrame with all required metadata
+
+    def fetch_tensors_from_metadata(self, metadata_df: pd.DataFrame, token_length: Optional[int] = None, align: Align = Align.ALIGN_BEGIN) -> pd.DataFrame:
+        """
+        Fetch tensors based on the metadata DataFrame, ensuring one tensor per unique 'i',
+        and store the result in a new column 'pt_tensor' in the DataFrame.
+
+        Parameters:
+            metadata_df (pd.DataFrame): DataFrame with tensor metadata, grouped by 'i'.
+            token_length (Optional[int]): Length of tokens to retrieve (default is full length).
+            align (Align): Alignment mode, either Align.ALIGN_BEGIN or Align.ALIGN_END.
+
+        Returns:
+            pd.DataFrame: The updated DataFrame with a new column 'pt_tensor' containing the tensors.
+        """
+        # Initialize storage cache and ensure tensor dimensions are determined dynamically
+
+        metadata_df["pt_tensor"] = None 
+
+        for i, group in metadata_df.groupby('i'):
+            tensors = []
+
+            # Fetch all tensors for this group
+            for _, row in group.iterrows():
+                tsid = row['tensor_storage_id']
+                index_n = row['index_n']
+
+                # Load tensor storage into cache if not already cached
+                if tsid not in self.storage_cache:
+                    self.storage_cache[tsid] = pt.load(self._storage_path(tsid), weights_only=True)
+
+                t: pt.Tensor = self.storage_cache[tsid][index_n]  # Fetch tensor slice
+                tensors.append(t)
+
+            # Aggregate tensors for this group
+            aggregated_tensor = pt.cat(tensors, dim=0)  # Concatenate along token dimension
+            token_len = token_length or aggregated_tensor.shape[0]
+            take_tokens = min(token_len, aggregated_tensor.shape[0])
+
+            # Adjust tensor based on alignment
+            if align == Align.ALIGN_BEGIN:
+                out = aggregated_tensor[:take_tokens, :]
+            elif align == Align.ALIGN_END:
+                out = aggregated_tensor[-take_tokens:, :]
+
+            # Update group with computed tensor
+            # metadata_df.loc[group.index, "pt_tensor"] = out
+            metadata_df.loc[group.index, "pt_tensor"] = [out] * len(group) 
+
+        # Clear storage cache after processing
+        self.storage_cache.clear()
+
+        return metadata_df
+
+#  -------------------------
+
 
 
     def add_embeddings(self,

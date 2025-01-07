@@ -798,7 +798,7 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
 class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
     question_id:str
     question:str
-    choices:Dict[str,str]
+    choices:Optional[Dict[str,str]]
     correct:Set[str]
     correctKey:Optional[str]
     query_id:str

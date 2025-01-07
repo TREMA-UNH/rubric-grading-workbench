@@ -521,10 +521,11 @@ class EmbeddingText2TextPipeline(LlmPipeline):
 
         # Note: it is possible that beam_indices indicate a shorter seq_len than the decoder_hidden states.
 
-        if seq_len1 > seq_len2:
-            print(f"====== Record Embeddings \n seq_len's don't match.\n _, seq_len1 = beam_indices.shape= {beam_indices.shape}\n seq_len2 = len(out.decoder_hidden_states)={len(out.decoder_hidden_states)}")
-            print("beam_indices", beam_indices)
-            print("size of out.decoder_hidden_states:",len(out.decoder_hidden_states), len(out.decoder_hidden_states[0]), out.decoder_hidden_states[0][0].shape)
+        # yep, that happens because of some lazy growing of tensor arrays. We just deal with it.
+        # if seq_len1 > seq_len2:
+        #     print(f"====== Record Embeddings \n seq_len's don't match.\n _, seq_len1 = beam_indices.shape= {beam_indices.shape}\n seq_len2 = len(out.decoder_hidden_states)={len(out.decoder_hidden_states)}")
+        #     print("beam_indices", beam_indices)
+        #     print("size of out.decoder_hidden_states:",len(out.decoder_hidden_states), len(out.decoder_hidden_states[0]), out.decoder_hidden_states[0][0].shape)
                   
 
         d_model = out.decoder_hidden_states[0][0].shape[2]
