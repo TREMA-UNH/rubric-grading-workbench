@@ -1,12 +1,20 @@
 import torch as pt
 import pandas as pd
 import numpy as np
-from typing import NewType, List, Optional
+from typing import NewType, List, Optional, Dict, Any
 from pathlib import Path
+import torch.nn.functional as F
+from enum import Enum, auto
+
 import duckdb
 
 VectorId = NewType('VectorId', int)
 ClassificationItemId = NewType('ClassificationItemId', int)
+
+
+class Align(Enum):
+    ALIGN_END = auto()
+    ALIGN_BEGIN = auto()
 
 SCHEMA = '''
 CREATE SEQUENCE tensor_storage_id_seq START 1;
@@ -47,7 +55,7 @@ class EmbeddingDb:
         self.db = duckdb.connect(path / 'embeddings.duckdb')
         if needs_init:
             self.db.execute(SCHEMA)
-        self.storage_cache = {}
+        self.storage_cache:Dict[Any,Any] = dict()
 
 
     def _storage_path(self, tsid: int) -> Path:
@@ -80,31 +88,63 @@ class EmbeddingDb:
             self.db.rollback()
             raise e
 
+    @staticmethod
+    def cat_cut_pad_dim1_tensors(tensors: list[pt.Tensor], dim_len:Optional[int])->pt.Tensor:
+        dim = 1  # if you want to affect other dimensions, then some pieces of the code below need to change also
 
-    def fetch_tensors(self, tensor_ids: List[VectorId], token_length:Optional[int]) -> pt.Tensor:
-        tensor_ids = pd.DataFrame(data={'tensor_id': tensor_ids})
-        tensor_ids['i'] = tensor_ids.index
+        max_dim1 = max(tensor.size(dim) for tensor in tensors)
+        min_dim1 = min(tensor.size(dim) for tensor in tensors)
+
+        if max_dim1 == min_dim1 and (dim_len is None or max_dim1 == dim_len):
+                # all tensors have desired length
+                return pt.cat(tensors, dim=dim)
+        else:
+            adjusted_tensors = list()
+            for tensor in tensors:
+                if tensor.size(dim) < dim_len:  
+                    # Pad if shorter
+                    adjusted_tensors.append(F.pad(tensor, (0, 0, 0, dim_len - tensor.size(dim))))
+                else:  
+                    # Chop if longer
+                    adjusted_tensors.append(tensor[:, :dim_len, :])
+            return pt.cat(adjusted_tensors, dim=dim)
+
+
+    
+    def fetch_tensors(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
+        tensor_ids_df = pd.DataFrame(data={'tensor_id': tensor_ids})
+        tensor_ids_df['i'] = tensor_ids_df.index
         self.db.execute('''
             SELECT needles.i, tensor_storage_id, index_n
             FROM tensor
-            INNER JOIN (SELECT * FROM tensor_ids) AS needles ON tensor.tensor_id = needles.tensor_id
+            INNER JOIN (SELECT * FROM tensor_ids_df) AS needles ON tensor.tensor_id = needles.tensor_id
             ORDER BY needles.i ASC;
         ''')
         vs = self.db.df()
         out = None
+        out_shape=None
         for v in vs.itertuples():
             tsid = v.tensor_storage_id
             if tsid not in self.storage_cache:
                 self.storage_cache[tsid] = pt.load(self._storage_path(tsid), weights_only=True)
 
-            t = self.storage_cache[tsid][v.index_n]
-            if out is None:
-                size = (len(tensor_ids),) + t.shape
-                out = pt.empty(size=size, dtype=pt.float)
-            else:
-                assert t.shape == out.shape[1:]
+            t:pt.Tensor = (self.storage_cache[tsid])[v.index_n]  # [tok_len, d_model]
 
-            out[v.i] = t
+            batch_sz = len(tensor_ids)
+            token_len = token_length or t.shape[0]
+            model_dim = t.shape[1]
+            if out is None:
+                out_shape = (batch_sz, token_len, model_dim)
+                out = pt.zeros(size=out_shape, dtype=pt.float)
+
+            take_tokens = min(token_len, t.shape[0])
+            assert(t.shape[1]==out_shape[2])
+            if align == Align.ALIGN_BEGIN:
+                out[v.i,0:take_tokens,:] = t[0:take_tokens,:]
+            elif align == Align.ALIGN_END:
+                out[v.i, -take_tokens:, :] = t[-take_tokens:, :]
+
+        self.storage_cache = dict()
 
         assert out is not None
         return out

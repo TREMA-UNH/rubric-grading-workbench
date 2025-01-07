@@ -358,7 +358,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
                 , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
                 ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN) 
+                , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
