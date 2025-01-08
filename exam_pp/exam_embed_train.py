@@ -171,34 +171,49 @@ def main():
     # tensors = ([dataset[i] for i in ci_ids])
     # print(tensors)
 
-    queries = get_queries(db=embedding_db)[:10]
-    classification_items_train = [ example for query in queries 
-                                           for example in get_query_items(db=embedding_db, query=[query])[:10] 
+    queries = get_queries(db=embedding_db)[:5]
+
+
+    classification_items_train:List[ClassificationItemId]
+    classification_items_train =[ example for query in queries 
+                                           for example in get_query_items(db=embedding_db, query=[query])[::2] 
+                                 ]
+    classification_items_test:List[ClassificationItemId]
+    classification_items_test = [ example for query in queries 
+                                           for example in get_query_items(db=embedding_db, query=[query])[1::2] 
                                  ]
         
-    print("train items", classification_items_train)
+    # print("test items", classification_items_test)
 
-    classification_data = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
-    print(classification_data)
-    # for index, row in classification_data.iterrows():
-    #     print(f"classification_data {index}: {row.to_dict()}")
+    # query, passage, labels
+    classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
+    classification_data_test:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_test)
+    # print(classification_data_test)
 
-    train_tensors:pd.DataFrame = get_tensor_ids(embedding_db, classification_item_id=classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
-    
+    train_tensors:pd.DataFrame = get_tensor_ids(embedding_db
+                                                , classification_item_id=classification_items_train
+                                                , prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    test_tensors:pd.DataFrame = get_tensor_ids(embedding_db
+                                               , classification_item_id=classification_items_test
+                                               , prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+    # print("test_tensors", test_tensors)
+
     class ClassificationItemDataset(Dataset):
-        def __init__(self, train_tensor_df:pd.DataFrame, db:EmbeddingDb):
-            self.tensor_df = train_tensor_df
+        def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb):
+            self.tensor_df = tensor_df
             self.db = db
 
 
         def __getitem__(self, index) -> pt.Tensor:
-            tensor_ids = train_tensors.loc[index,"tensor_ids"]
+            tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
             # print(f"{index}: {row.to_dict()}")
             tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
-            print(tensor.shape)
-            print("-------")
+            # print(tensor.shape)
+            # print("-------")
             return tensor
 
+        def __len__(self) -> int:
+            return len(self.tensor_df)
         
 
         # def __getitems__(self, indices: List) -> List[T_co]:
@@ -208,35 +223,70 @@ def main():
         def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
             return ConcatDataset([self, other])
 
+    class EmbeddingStackDataset(torch.utils.data.Dataset):
+        def __init__(self, embedding, label_one_hot, label_id):
+            # Check that all datasets have the same first dimension
+            if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
+                raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
+            self.embedding = embedding
+            self.label_one_hot = label_one_hot
+            self.label_id = label_id
+
+        def __len__(self):
+            return self.embedding.size(0)
+
+        def __getitem__(self, idx):
+            return {
+                "embedding": self.embedding[idx],
+                "label_one_hot": self.label_one_hot[idx],
+                "label_id": self.label_id[idx],
+            }
+        
         
 
-    dataset = ClassificationItemDataset(db=embedding_db, train_tensor_df=train_tensors)
-
-    print(dataset[3].shape)
-
-
-    
-    # print("train_tensors", train_tensors)
-    # for tuple in train_tensors[:1].itertuples():
-    #     # print(f"{index}: {row.to_dict()}")
-    #     tensors = embedding_db.fetch_tensors(tensor_ids=tuple.tensor_ids, token_length=2)
-    #     print(tuple.i, tensors.shape)
-    #     print("-------")
+    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors)
+    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors)
+    # print("len(dataset_embedding_test)", len(dataset_embedding_test))
 
 
+    example_label_list_train = [d.true_labels[0] for d in  classification_data_train.itertuples() ]
+    example_label_list_test = [d.true_labels[0] for d in  classification_data_test.itertuples() ]
+    # print(example_label_list_test)
 
+    classes = sorted(list(set(example_label_list_train)))
+    label_idx = {c:i for i,c in enumerate(classes)}
+
+    example_label_id_list_train = [label_idx[label] 
+                                   for label in example_label_list_train]
+    example_label_id_list_test = [label_idx[label] 
+                                   if label_idx.get(label) is not None else label_idx['0'] # no training data for this label
+                                   for label in example_label_list_test]
+
+    example_label_id_train = torch.tensor(example_label_id_list_train, dtype=torch.long)  # [num_examples]
+    example_label_id_test = torch.tensor(example_label_id_list_test, dtype=torch.long)  # [num_examples]
+    # Generate one-hot encoding for labels
+    example_label_one_hot_train = nn.functional.one_hot(example_label_id_train, num_classes=len(classes)).to(torch.float32)
+    example_label_one_hot_test = nn.functional.one_hot(example_label_id_test, num_classes=len(classes)).to(torch.float32)
+
+    print(f'train embedding={len(dataset_embedding_train)}, label_one_hot={example_label_one_hot_train.shape}, label_id={example_label_id_train.shape}')
+    print(f'test embedding={len(dataset_embedding_test)}, label_one_hot={example_label_one_hot_test.shape}, label_id={example_label_id_test.shape}')
+    print(f'train labels: example_label_id_train',example_label_id_train)
+    print(f'test labels: example_label_id_train',example_label_id_test)
+
+    train_ds = EmbeddingStackDataset(embedding=dataset_embedding_train
+                                     , label_one_hot=example_label_one_hot_train
+                                     , label_id=example_label_id_train)
+    test_ds = EmbeddingStackDataset(embedding=dataset_embedding_test
+                                    , label_one_hot=example_label_one_hot_test
+                                    , label_id=example_label_id_test)
+
+
+    # print("train_ds", train_ds[3])
+    # print("test_ds", test_ds[3])
+
+    return (train_ds, test_ds, label_idx)
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
-    # print(tensor_ids[0:1])
-    # for index, row in tensor_ids.iterrows():
-        # print(f"{index}: {row.to_dict()}")
-
-    # tensor = tensor_ids.iloc[0]['pt_tensor']     
-
-    # print(tensor_ids.keys())
-
-    # print("tensor_ids", embedding_db.fetch_tensors(features['tensor_id'], token_length=10, align=Align.ALIGN_END))
-    # train_tensors = embedding_db.fetch_tensors(tensor_ids, token_length=10)
-
+    
 
 
 if __name__ == '__main__':
