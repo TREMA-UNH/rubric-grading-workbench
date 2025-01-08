@@ -1,10 +1,11 @@
 from pathlib import Path
+import sys
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
 from torch import nn
 import torch as pt
 from torch.nn import TransformerEncoder
 from torch.utils.data import StackDataset, ConcatDataset, TensorDataset, Dataset, DataLoader, Subset
-from typing import Dict, Set, Tuple, List, Optional
+from typing import Any, Dict, Set, Tuple, List, Optional
 import collections
 import io
 import itertools
@@ -13,6 +14,9 @@ import numpy as np
 import sklearn.model_selection
 import torch
 import pandas as pd
+
+from . test_bank_prompts import get_prompt_classes
+from . import attention_classify
 
 # import torchinfo
 from .vector_db import Align, EmbeddingDb, ClassificationItemId
@@ -26,7 +30,7 @@ class ClassificationItemDataset(Dataset):
 
     def __getitem__(self, item: ClassificationItemId) -> pt.Tensor:
         self.db.db.execute(
-            '''
+            '''--sql
             SELECT tensor_id
             FROM classification_feature
             WHERE classification_item_id = ?
@@ -39,7 +43,7 @@ class ClassificationItemDataset(Dataset):
 
 def get_queries(db:EmbeddingDb)-> Set[str]:
     db.db.execute(
-        '''
+        '''--sql
         SELECT DISTINCT classification_item.metadata->>'$.query' as query
         FROM classification_item
         '''
@@ -50,7 +54,7 @@ def get_queries(db:EmbeddingDb)-> Set[str]:
 
 def get_query_items(db: EmbeddingDb, query: List[str]) -> Set[ClassificationItemId]:
     db.db.execute(
-        '''
+        '''--sql
         SELECT classification_item_id
         FROM classification_item
         WHERE (metadata->>'$.query') in ?
@@ -62,11 +66,13 @@ def get_query_items(db: EmbeddingDb, query: List[str]) -> Set[ClassificationItem
 def lookup_queries_paragraphs_judgments(db:EmbeddingDb, classification_item_id: List[ClassificationItemId]):
     classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
     classification_item_ids_df['i'] = classification_item_ids_df.index
-    db.db.execute('''
+    db.db.execute(
+        '''--sql
         SELECT needles.i,
                    classification_item.metadata->>'$.query' as query,
                    classification_item.metadata->>'$.passage' as passage,
-                   label_assignment.true_labels
+                   label_assignment.true_labels,
+                   classification_item.classification_item_id as classification_item_id
 
         FROM classification_item
         INNER JOIN (SELECT * FROM classification_item_ids_df) AS needles ON classification_item.classification_item_id = needles.classification_item_id
@@ -79,20 +85,20 @@ def lookup_queries_paragraphs_judgments(db:EmbeddingDb, classification_item_id: 
 def get_classification_features(db: EmbeddingDb, query:str):
 
     db.db.execute(
-        '''
-select
-  classification_item.classification_item_id,
-  classification_feature.tensor_id,
-  classification_item.metadata->>'$.query' as query,
-  classification_item.metadata->>'$.passage' as passage,
-  classification_feature.metadata->>'$.prompt_class' as prompt_class,
-  classification_feature.metadata->>'$.test_bank' as test_bank_id,
-  label_assignment.true_labels
-from classification_item
-inner join classification_feature on classification_feature.classification_item_id = classification_item.classification_item_id
-inner join label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
-where classification_item.metadata->>'$.query' = ?
-;
+        '''--sql
+        select
+        classification_item.classification_item_id,
+        classification_feature.tensor_id,
+        classification_item.metadata->>'$.query' as query,
+        classification_item.metadata->>'$.passage' as passage,
+        classification_feature.metadata->>'$.prompt_class' as prompt_class,
+        classification_feature.metadata->>'$.test_bank' as test_bank_id,
+        label_assignment.true_labels
+        from classification_item
+        inner join classification_feature on classification_feature.classification_item_id = classification_item.classification_item_id
+        inner join label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
+        where classification_item.metadata->>'$.query' = ?
+        ;
         ''',
         (query,)
     )
@@ -114,23 +120,24 @@ where classification_item.metadata->>'$.query' = ?
 def get_tensor_ids(db:EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class:str):
     classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
     classification_item_ids_df['i'] = classification_item_ids_df.index
-    db.db.execute('''
-    SELECT 
-        needles.i,
-        array_agg(tensor_id) AS tensor_ids,
-        array_agg(classification_feature.metadata->>'$.test_bank') AS test_bank_ids
-    FROM classification_feature
-    INNER JOIN 
-        (SELECT * FROM classification_item_ids_df) AS needles 
-    ON 
-        classification_feature.classification_item_id = needles.classification_item_id
-    WHERE 
-        classification_feature.metadata->>'$.prompt_class' = ?
-    GROUP BY 
-        needles.i
-    ORDER BY 
-        needles.i ASC;
-    ''', (prompt_class,))
+    db.db.execute(
+        '''--sql
+        SELECT 
+            needles.i,
+            array_agg(tensor_id) AS tensor_ids,
+            array_agg(classification_feature.metadata->>'$.test_bank') AS test_bank_ids
+        FROM classification_feature
+        INNER JOIN 
+            (SELECT * FROM classification_item_ids_df) AS needles 
+        ON 
+            classification_feature.classification_item_id = needles.classification_item_id
+        WHERE 
+            classification_feature.metadata->>'$.prompt_class' = ?
+        GROUP BY 
+            needles.i
+        ORDER BY 
+            needles.i ASC;
+        ''', (prompt_class,))
     return db.db.df()
 
 
@@ -147,8 +154,29 @@ def lookup_classification_tensors(db:EmbeddingDb, classification_item_id: List[C
     #     print(f"Index: {row['i']}, Tensor: {row['pt_tensor']}")
     # return metadata_df
 
-def main():
-    embedding_db = EmbeddingDb(Path("embedding_db_try2/exam_grading"))
+def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
+    embedding_db.db.execute(
+        '''--sql
+        SELECT classification_item.metadata->>'$.query' as query,
+        classification_item.metadata->>'$.passage' as passage,
+               label_assignment.true_labels as true_labels,
+               classification_item.classification_item_id as classification_item_id
+        FROM classification_item
+        INNER JOIN label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
+        WHERE len(label_assignment.true_labels) = 1
+        '''
+    )
+    df = embedding_db.db.fetch_df()
+    df['positive'] = df['true_labels'].apply(lambda x: '0' in x)
+    by_label = df.groupby('positive')
+    counts = by_label['classification_item_id'].count()
+    n = counts.min()
+    sampled = by_label.sample(n)
+    sampled.drop(columns=['positive'], inplace=True)
+    return sampled
+
+
+def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset, Dataset, Set[int]]:
     # dataset = ClassificationItemDataset(db=embedding_db)
 
     # ci_ids = get_query_items(embedding_db, ['118440', '121171'])
@@ -171,31 +199,62 @@ def main():
     # tensors = ([dataset[i] for i in ci_ids])
     # print(tensors)
 
-    queries = get_queries(db=embedding_db)[:5]
+    queries = list(get_queries(db=embedding_db))[:5]
 
-
+    
+        
     classification_items_train:List[ClassificationItemId]
     classification_items_train =[ example for query in queries 
-                                           for example in get_query_items(db=embedding_db, query=[query])[::2] 
+                                           for example in list(get_query_items(db=embedding_db, query=[query]))[::2] 
                                  ]
     classification_items_test:List[ClassificationItemId]
     classification_items_test = [ example for query in queries 
-                                           for example in get_query_items(db=embedding_db, query=[query])[1::2] 
+                                           for example in list(get_query_items(db=embedding_db, query=[query]))[1::2] 
                                  ]
+    
+
         
     # print("test items", classification_items_test)
+
+
+    def balance_majority_class(df):
+
+        # Convert each array to a tuple (this makes it hashable)
+        df['true_labels'] = df['true_labels'].apply(tuple)
+
+        # Filter
+        df_zero = df[df['true_labels'] == ('0',)]
+        df_not_zero = df[df['true_labels'] != ('0',)]
+
+        print("df_zero shape:", df_zero.shape)
+        print(df_zero)
+
+        print("df_not_zero shape:", df_not_zero.shape)
+        print(df_not_zero)
+
+        # Downsample to balance
+        num_samples = min(len(df_zero), len(df_not_zero))
+        print("num_samples", num_samples)
+
+        df_not_zero_sampled = df_not_zero.sample(n=num_samples, random_state=42)
+
+        balanced_df = pd.concat([df_zero, df_not_zero_sampled])
+        print("\nBalanced df shape:", balanced_df.shape)
+        return balanced_df
 
     # query, passage, labels
     classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
     classification_data_test:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_test)
-    # print(classification_data_test)
+
+    classification_items_train = classification_data_train["classification_item_id"].to_list()
+    classification_items_test = classification_data_test["classification_item_id"].to_list()
 
     train_tensors:pd.DataFrame = get_tensor_ids(embedding_db
                                                 , classification_item_id=classification_items_train
-                                                , prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+                                                , prompt_class= prompt_class)
     test_tensors:pd.DataFrame = get_tensor_ids(embedding_db
                                                , classification_item_id=classification_items_test
-                                               , prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
+                                               , prompt_class= prompt_class)
     # print("test_tensors", test_tensors)
 
     class ClassificationItemDataset(Dataset):
@@ -207,7 +266,11 @@ def main():
         def __getitem__(self, index) -> pt.Tensor:
             tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
             # print(f"{index}: {row.to_dict()}")
-            tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
+            tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=384)
+
+            # the real deal:
+            # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
+
             # print(tensor.shape)
             # print("-------")
             return tensor
@@ -233,7 +296,7 @@ def main():
             self.label_id = label_id
 
         def __len__(self):
-            return self.embedding.size(0)
+            return len(self.embedding)
 
         def __getitem__(self, idx):
             return {
@@ -284,10 +347,45 @@ def main():
     # print("train_ds", train_ds[3])
     # print("test_ds", test_ds[3])
 
-    return (train_ds, test_ds, label_idx)
+    return (train_ds, test_ds, classes)
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
 
+def main(cmdargs=None) -> None:
+    import argparse
+
+    sys.stdout.reconfigure(line_buffering=True)
+
+
+    print("EXAM embed train")
+    desc = f'''EXAM Embed Train
+             '''
+    
+
+    parser = argparse.ArgumentParser(description="EXAM pipeline"
+                                   , epilog=desc
+                                   , formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
+
+    parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
+    parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
+    parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+                        , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+ 
+    args = parser.parse_args(args = cmdargs) 
+ 
+    root = Path(args.root)
+    embedding_db = EmbeddingDb(Path(args.embedding_db))
+    # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
+    (train_ds, test_ds, classes) = create_dataset(embedding_db, prompt_class=args.prompt_class)
+    # x = balanced_training_data(embedding_db)
+    # print(x)
+    attention_classify.run(root
+                           , model_type='multi_label_packed'
+                           , train_ds=train_ds
+                           , test_ds=test_ds
+                           , classes=classes
+                           , device_str=args.device)  
 
 if __name__ == '__main__':
     main()

@@ -160,6 +160,54 @@ class EmbeddingDb:
         assert out is not None
         return out
 
+    def fetch_tensors_single(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
+        """
+        Fetch tensors corresponding to the provided tensor IDs.
+
+        Parameters:
+            tensor_ids (List[VectorId]): List of tensor IDs to fetch.
+            token_length (Optional[int]): Length of tokens to retrieve (default is full length).
+            align (Align): Alignment mode, either Align.ALIGN_BEGIN or Align.ALIGN_END.
+
+        Returns:
+            pt.Tensor: A single tensors with shape [token_length, model_dim].
+        """
+        tensor_ids_df = pd.DataFrame(data={'tensor_id': tensor_ids})
+        tensor_ids_df['i'] = tensor_ids_df.index
+        self.db.execute('''
+            SELECT needles.i, tensor_storage_id, index_n
+            FROM tensor
+            INNER JOIN (SELECT * FROM tensor_ids_df) AS needles ON tensor.tensor_id = needles.tensor_id
+            ORDER BY needles.i ASC;
+        ''')
+        vs = self.db.df()
+        out = None
+        out_shape=None
+        for v in vs.itertuples():
+            tsid = v.tensor_storage_id
+            if tsid not in self.storage_cache:
+                self.storage_cache[tsid] = pt.load(self._storage_path(tsid), weights_only=True)
+
+            t:pt.Tensor = (self.storage_cache[tsid])[v.index_n]  # [tok_len, d_model]
+
+            # batch_sz = len(tensor_ids)
+            token_len = token_length or t.shape[0]
+            model_dim = t.shape[1]
+            if out is None:
+                out_shape = (token_len, model_dim)
+                out = pt.zeros(size=out_shape, dtype=pt.float)
+                take_tokens = min(token_len, t.shape[0])
+                if align == Align.ALIGN_BEGIN:
+                    out[0:take_tokens,:] = t[0:take_tokens,:]
+                elif align == Align.ALIGN_END:
+                    out[-take_tokens:, :] = t[-take_tokens:, :]
+            else:
+                pass
+        self.storage_cache = dict()
+
+        assert out is not None
+        return out
+
 
 #  -------------------------
 
