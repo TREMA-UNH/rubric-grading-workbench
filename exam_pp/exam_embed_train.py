@@ -369,6 +369,7 @@ def main(cmdargs=None) -> None:
 
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
+    parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
  
@@ -385,6 +386,7 @@ def main(cmdargs=None) -> None:
                            , train_ds=train_ds
                            , test_ds=test_ds
                            , classes=classes
+                           , n_epochs=args.epochs
                            , device_str=args.device)  
 
 if __name__ == '__main__':
