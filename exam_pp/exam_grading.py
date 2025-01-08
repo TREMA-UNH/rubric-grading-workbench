@@ -355,20 +355,27 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
+    parser.add_argument('--llm-api-key', type=str, metavar='KEY'
+                        , help='Set API key for LLM backend'
+                        , required=False
+                        )
+    parser.add_argument('--llm-base-url', type=str, metavar='URL'
+                        , required=False
+                        , help='URL of the LLM backend. Must be an endpoint for a Chat Completions protocol.'
+                        )
     # MAX_TOKEN_LEN=512
     # MAX_OUT_TOKENS=512
 
-    chat_completions_client = openai_interface.default_openai_client()
-
-    modelPipelineOpts = {'text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
-                ,'question-answering': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
-                ,'text-generation': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
-                ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipelineOld(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
-                , 'chat-completions': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: 
-                     ChatCompletionsPipeline(model_name, client=chat_completions_client, model_params={"max_completion_tokens":MAX_OUT_TOKENS}, max_token_len=MAX_TOKEN_LEN)  # pass in additional config paremeters as **kwargs
+    
+    modelPipelineOpts = {'text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
+                ,'question-answering': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'text-generation': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
+                ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  VllmPipelineOld(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'chat-completions': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs: 
+                     ChatCompletionsPipeline(model_name, model_params={"max_completion_tokens":MAX_OUT_TOKENS}, max_token_len=MAX_TOKEN_LEN,**kwargs)  # pass in additional config paremeters as **kwargs
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -437,7 +444,14 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    llmPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.max_tokens, args.max_out_tokens)
+
+    pipeline_args = {}
+    if args.llm_api_key is not None or args.llm_base_url is not None:
+        # chat_completions_client = openai_interface.default_openai_client()
+        chat_completions_client = openai_interface.createOpenAIClient(api_key=args.llm_api_key, base_url=args.llm_base_url)
+        pipeline_args["client"]=chat_completions_client
+        
+    llmPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.max_tokens, args.max_out_tokens, **pipeline_args)
     
     embedding_db = None
     if args.embedding_db is not None:
