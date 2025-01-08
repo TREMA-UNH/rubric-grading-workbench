@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .query_loader import direct_grading_prompt
 
-from .test_bank_prompts import CustomQuestionSelfRatedPrompt, DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionCompleteConcisePromptWithAnswerKey, QuestionCompleteConcisePromptWithAnswerKey2, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
+from .test_bank_prompts import CustomQuestionSelfRatedPrompt, DirectGradingPrompt, FagB, NuggetExtractionPrompt, NuggetSelfRatedPrompt, Prompt, QuestionAnswerablePromptWithChoices, QuestionBriefWithAnswerKey, QuestionCompleteConcisePromptWithAnswerKey, QuestionCompleteConcisePromptWithAnswerKey2, QuestionCompleteConciseUnanswerablePromptWithChoices, QuestionPrompt, QuestionSelfRatedPrompt, QuestionSelfRatedUnanswerablePromptWithChoices
 from .pydantic_helper import pydantic_dump
 
 
@@ -285,6 +285,15 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             , unanswerable_expressions = option_non_answers
                                                                             , self_rater_tolerant=self_rater_tolerant
                                                                             )
+                    elif(prompt_class =="QuestionSelfRatedPrompt"):
+                        prompt = QuestionSelfRatedPrompt(question_id = question.question_id
+                                                        , question = question.question_text
+                                                        , query_id = question_bank.query_id
+                                                        , facet_id = question.facet_id
+                                                        , query_text = question_bank.query_text
+                                                        , unanswerable_expressions = option_non_answers
+                                                        , self_rater_tolerant=self_rater_tolerant
+                                                        )
                     elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
                         prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
                                                                             , question = question.question_text
@@ -303,15 +312,15 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             )
 
                     elif(prompt_class == "QuestionBriefWithAnswerKey"):
-                        prompt = QuestionCompleteConcisePromptWithAnswerKey(question_id = question.question_id
+                        prompt = QuestionBriefWithAnswerKey(question_id = question.question_id
                                                                             , question = question.question_text
-                                                                            , choices = None
+                                                                            # , choices = None
                                                                             , correct=set(question.gold_answers)
-                                                                            , correctKey=None
+                                                                            # , correctKey=None
                                                                             , query_id = question_bank.query_id
                                                                             , facet_id = question.facet_id
                                                                             , query_text = question_bank.query_text
-                                                                            # , unanswerable_expressions = option_non_answers
+                                                                            , unanswerable_expressions = {"unanswerable"}
                                                                             )
                     elif(prompt_class == "QuestionCompleteConcisePromptWithAnswerKey"):
                         if question.gold_answers is None:

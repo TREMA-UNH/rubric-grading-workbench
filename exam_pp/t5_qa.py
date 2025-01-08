@@ -28,6 +28,7 @@ from .openai_interface import default_openai_client, query_gpt_batch_with_rate_l
 
 from .test_bank_prompts import Prompt, QuestionPromptWithChoices,QuestionPrompt
 from .batched_worker import BatchedWorker
+from . import exam_llm
 
 os.environ["DSP_NOTEBOOK_CACHEDIR"] = str((Path(".") / "cache").resolve())
 
@@ -441,13 +442,6 @@ class PromptRunningLlmPipeline():
 
 
 
-from typing import TypedDict
-
-class Message(TypedDict):
-    role: str
-    content: str
-    # name: str | None  # Optional, only for function messages.
-
 class ChatCompletionsPipeline(LlmPipeline):
     """Pipeline for external API endpoints that support OpenAI-style chat completions"""
 
@@ -490,23 +484,13 @@ class ChatCompletionsPipeline(LlmPipeline):
 
 
     def convert_to_messages(self,prompt:str, system_message:Optional[str]=None)->List[Message]:
-
-        messages:List[Message] = list()
-        if system_message is not None:
-            messages.append({"role":"system", "content":system_message})
-        messages.append({"role":"user","content":prompt})
-
-        return messages
-
-
-    
+        return exam_llm.convert_to_messages(prompt=prompt, system_message=system_message)
 
     async def call_pipeline(self
-                            , prompts: List[str]
-                            , system_message:Optional[str]=None
+                            , prompts: List[list[Message]]
                             , **kwargs) -> List[Union[str, LlmResponseError]]:
 
-        responses = [await self.call_pipeline_one_prompt_messages(self.convert_to_messages(prompt, system_message=system_message)) for prompt in prompts]
+        responses = [await self.call_pipeline_one_prompt_messages(messages=prompt) for prompt in prompts]
 
         for p,resp in zip(prompts, responses):
             if resp is None:
@@ -520,10 +504,11 @@ class ChatCompletionsPipeline(LlmPipeline):
 
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         anyprompt=prompts[0]
+
         # anyprompt.configure_json_gpt_fetcher(self.openai_fetcher)
         # self.openai_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
 
-        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+        converted_prompts = [prompt.generate_prompt_messages(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
         return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
 
 

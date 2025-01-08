@@ -92,7 +92,7 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
                                                                    , **kwargs)
         
 
-        print(answer_or_error_tuples)
+        # print(answer_or_error_tuples)
         answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
         just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
 
@@ -149,12 +149,12 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
 
-    # async with asyncio.TaskGroup() as tg:
-    #     for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-    #         tg.create_task(noodle_one_paragraph(para))
+    async with asyncio.TaskGroup() as tg:
+        for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+            tg.create_task(noodle_one_paragraph(para))
     
-    for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-            await noodle_one_paragraph(para)
+    # for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+    #         await noodle_one_paragraph(para)
 
 
 async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
@@ -363,6 +363,14 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
                         , required=False
                         , help='URL of the LLM backend. Must be an endpoint for a Chat Completions protocol.'
                         )
+    parser.add_argument('--llm-temperature', type=float, metavar='t'
+                        , required=False
+                        , help='Temperature passed to LLM backend.'
+                        )
+    parser.add_argument('--llm-stop-tokens', nargs='+', type=str, metavar='STR'
+                        , required=False
+                        , help='One (or more) stop tokens'
+                        )
     # MAX_TOKEN_LEN=512
     # MAX_OUT_TOKENS=512
 
@@ -375,7 +383,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
                 ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 , 'chat-completions': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs: 
-                     ChatCompletionsPipeline(model_name, model_params={"max_completion_tokens":MAX_OUT_TOKENS}, max_token_len=MAX_TOKEN_LEN,**kwargs)  # pass in additional config paremeters as **kwargs
+                     ChatCompletionsPipeline(model_name, max_token_len=MAX_TOKEN_LEN,**kwargs)  # pass in additional config paremeters as **kwargs
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -450,7 +458,15 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
         # chat_completions_client = openai_interface.default_openai_client()
         chat_completions_client = openai_interface.createOpenAIClient(api_key=args.llm_api_key, base_url=args.llm_base_url)
         pipeline_args["client"]=chat_completions_client
-        
+
+        model_params = dict()
+        model_params["max_completion_tokens"]=args.max_out_tokens
+        model_params["temperature"]=args.llm_temperature
+        print("stop tokens:", ", ".join(args.llm_stop_tokens))
+        model_params["stop"] = args.llm_stop_tokens # e.g. for llama models:  ["<|eot_id|>","<|eom_id|>"]
+
+        pipeline_args["model_params"] = model_params
+
     llmPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, args.max_tokens, args.max_out_tokens, **pipeline_args)
     
     embedding_db = None

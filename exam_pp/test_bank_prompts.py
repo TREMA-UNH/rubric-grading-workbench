@@ -6,9 +6,10 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from transformers import AutoTokenizer
 
+
 import hashlib
 
-from .exam_llm import DIRECT_GRADING_PROMPT_TYPE
+from .exam_llm import DIRECT_GRADING_PROMPT_TYPE, Message, convert_to_messages
 
 from .data_model import FullParagraphData
 
@@ -37,6 +38,7 @@ def get_prompt_classes()->List[str]:
             , 'QuestionCompleteConcisePromptWithAnswerKey'
             , 'QuestionCompleteConcisePromptWithAnswerKey2'
             , 'QuestionSelfRatedUnanswerablePromptWithChoices'
+            , 'QuestionSelfRatedPrompt'
             , 'QuestionSelfRatedExplainPrompt'
             , 'QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2'
             , 'QuestionBriefWithAnswerKey'
@@ -450,6 +452,10 @@ class Prompt(abc.ABC):
         return 0
 
     @abstractmethod
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        pass
+
+    @abstractmethod
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         pass
 
@@ -531,6 +537,11 @@ def normalize_answer(answer:str)->str:
 # ------ prompt truncation ----
 
 class PromptTruncater():
+    @staticmethod
+    def token_len(tokenizer, template:str)->int:
+        prompt_tokens = tokenizer.encode(template, add_special_tokens=True)
+        return len(prompt_tokens)
+
 
     @staticmethod
     def truncate_context(tokenizer, template,  context:str, max_length:int)->str:
@@ -645,6 +656,10 @@ class QuestionPromptWithChoices(QuestionPrompt):
         question = self.question
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=f"context: {context};", question=f" question: {question}", max_length=max_token_len)
         return prompt
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question = self.question
         prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=f"context: {context}", question=f" question: {question}", max_length=max_token_len)
@@ -696,7 +711,10 @@ class QuestionAnswerablePromptWithChoices(QuestionPrompt):
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'How does this text answer this question: {self.question}'
         context_prompt = context
@@ -765,7 +783,10 @@ class QuestionCompleteConciseUnanswerablePromptWithChoices(QuestionPrompt):
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
         context_prompt = context
@@ -834,7 +855,10 @@ class QuestionCompleteConcisePromptWithAnswerKey(QuestionPrompt):
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a complete and concise answer to the question based on the context. Question: {self.question}'
         context_prompt = context
@@ -895,7 +919,10 @@ class QuestionBriefWithAnswerKey(QuestionPrompt):
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'provide a brief correct answer to the question based on the context. Question: {self.question}'
         context_prompt = context
@@ -961,8 +988,10 @@ class QuestionCompleteConcisePromptWithT5VerifiedAnswerKey2(QuestionCompleteConc
 
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         raise RuntimeError("This prompt is only for re-grading of previous answers.")
-
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         raise RuntimeError("This prompt is only for re-grading of previous answers.")
 
@@ -1024,7 +1053,10 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
 
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
         raise RuntimeError("This is a post-hoc answer checker, it cannot run prompts against an LLM")
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         raise RuntimeError("This is a post-hoc answer checker, it cannot run prompts against an LLM")
 
@@ -1102,6 +1134,10 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
 
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
 
     def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:
         if self.prompt_prefix_len_cache is None:
@@ -1130,6 +1166,224 @@ Respond only in the following JSON format:
 '''
 #   "short_justification": str }
 
+        return (json_instruction, "grade")
+
+    
+    def check_answer(self, answer:str)->bool:
+        return self.self_rater.check_answer(answer)
+
+    def check_answer_rating(self,answer:str)->int:
+        return self.self_rater.check_answer_rating(answer)
+    
+
+
+
+@dataclass
+class QuestionBriefWithAnswerKey(QuestionPrompt):
+    question_id:str
+    question:str
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+    unanswerable_expressions:Set[str]
+    correct:set[str]
+
+    system_message ='''If the question can be answered based on the available context, then please summarize the answer from the context. Otherwise respond with 'unanswerable'.
+
+        You must only respond with the short answer or 'unanswerable', no further explanation.
+        '''
+
+    prompt_truncater = PromptTruncater()
+
+    def __post_init__(self):
+        # self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
+        self.prompt_prefix_len_cache:Optional[int] = None
+        self.answer_key2_verifier = AnswerKey2Verifier(self.correct)
+
+    
+    def check_answer(self,answer:str)->bool:
+        if answer.strip().lower() == "unanswerable":
+            return False  # unanswerable questions are always false
+        return self.answer_key2_verifier.check_answer(answer)
+
+
+    def answer_match_info(self):
+        return self.answer_key2_verifier.answer_match_info()
+        
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": True
+                , "check_answer_key": True
+                , "is_self_rated":self.has_rating()
+                , "answer_verifier": self.answer_match_info()
+                }
+    def prompt_style(self)->str:
+        return  self.system_message
+    
+
+    def has_rating(self):
+        return False
+
+
+    def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:
+        if self.prompt_prefix_len_cache is None:
+            prefix_len = PromptTruncater.token_len(template=self.system_message, tokenizer=model_tokenizer)
+            self.prompt_prefix_len_cache = min(prefix_len,max_token_len)
+        return self.prompt_prefix_len_cache    
+
+
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
+
+        question_prompt =  f'{self.system_message}\n Question: {self.question}\n'
+        context_prompt = f"Context: {context}"
+        # question =  f'Is this question answerable: {self.question}'
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        question_prompt =  f'Question: {self.question}\n'
+        context_prompt = f"Context: {context}"
+
+
+        # question =  f'Is this question answerable: {self.question}'
+        # question =  f'Is this question answerable: {self.question}'
+        remaining_tokens = max_token_len-self.prompt_prefix_len(model_tokenizer=model_tokenizer, max_token_len=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer
+                                                                        , context=context_prompt
+                                                                        , question=question_prompt
+                                                                        , max_length=remaining_tokens)
+
+        return convert_to_messages(system_message=self.system_message, prompt=prompt)
+
+        # return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  f'{self.system_message}\n Question: {self.question}'
+        context_prompt = context
+
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Respond only in the following JSON format:
+```json
+{ "short_answer": str }
+```
+'''
+        return (json_instruction, "short_answer")
+
+    
+
+@dataclass
+class QuestionSelfRatedPrompt(QuestionPrompt):
+    question_id:str
+    question:str
+    query_id:str
+    facet_id:Optional[str]
+    query_text:str
+    unanswerable_expressions:Set[str]
+    self_rater_tolerant:bool  #if strict, the answere must solely include a number, if tolerant there can be additional text following the number.
+
+    system_message ='''Can the question be answered based on the available context? choose one grade:
+        - 5: The answer is highly relevant, complete, and accurate.
+        - 4: The answer is mostly relevant and complete but may have minor gaps or inaccuracies.
+        - 3: The answer is partially relevant and complete, with noticeable gaps or inaccuracies.
+        - 2: The answer has limited relevance and completeness, with significant gaps or inaccuracies.
+        - 1: The answer is minimally relevant or complete, with substantial shortcomings.
+        - 0: The answer is not relevant or complete at all.
+
+        You must only respond with the numerical grade, no further explanation.
+        '''
+
+    prompt_truncater = PromptTruncater()
+
+    def __post_init__(self):
+        self.unanswerable_matcher2=UnanswerableMatcher2(unanswerable_expressions=set())
+        if self.self_rater_tolerant:
+            self.self_rater = SelfRaterTolerant(self.unanswerable_matcher2)
+        else:
+            self.self_rater = SelfRaterStrict(self.unanswerable_matcher2)
+        self.prompt_prefix_len_cache:Optional[int] = None
+        
+
+    def prompt_info(self, old_prompt_info:Optional[Dict[str,Any]]=None)-> Dict[str, Any]:
+        return {"prompt_class": self.__class__.__name__
+                ,"orig_prompt_class": "unknown"
+                ,"prompt_style": self.prompt_style()
+                , "context_first": False
+                , "check_unanswerable": True
+                , "check_answer_key": False
+                , "is_self_rated":self.has_rating()
+                , "is_self_rater_tolerant": self.self_rater_tolerant
+                }
+    def prompt_style(self)->str:
+        return  "Can the question be answered based on the available context? Choose one"
+    
+
+    def has_rating(self):
+        return True
+
+
+    def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:
+        if self.prompt_prefix_len_cache is None:
+            prefix_len = PromptTruncater.token_len(template=self.system_message, tokenizer=model_tokenizer)
+            self.prompt_prefix_len_cache = min(prefix_len,max_token_len)
+        return self.prompt_prefix_len_cache    
+
+
+    def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
+
+        question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}\n'
+        context_prompt = f"Context: {context}"
+        # question =  f'Is this question answerable: {self.question}'
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        question_prompt =  f'Question: {self.question}\n'
+        context_prompt = f"Context: {context}"
+
+
+        # question =  f'Is this question answerable: {self.question}'
+        # question =  f'Is this question answerable: {self.question}'
+        remaining_tokens = max_token_len-self.prompt_prefix_len(model_tokenizer=model_tokenizer, max_token_len=max_token_len)
+        prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer
+                                                                        , context=context_prompt
+                                                                        , question=question_prompt
+                                                                        , max_length=remaining_tokens)
+
+        return convert_to_messages(system_message=self.system_message, prompt=prompt)
+
+        # return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
+
+    def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
+        question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}'
+        context_prompt = context
+
+        # question =  f'Is this question answerable: {self.question}'
+        prompt = self.prompt_truncater.truncate_context_question_prompt_QC(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+        return prompt
+
+
+    def gpt_json_prompt(self) ->Tuple[str,str]:
+        json_instruction= r'''
+Respond only in the following JSON format:
+```json
+{ "grade": int }
+```
+'''
         return (json_instruction, "grade")
 
     
@@ -1195,7 +1449,10 @@ class CustomQuestionSelfRatedPrompt(QuestionPrompt):
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=filled_prompt_text, question="", max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         filled_prompt_text = self.prompt_text.format(question=self.question,context=context)
         context_prompt = context
@@ -1278,8 +1535,10 @@ class NuggetSelfRatedPrompt(NuggetPrompt):
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = context
@@ -1343,7 +1602,10 @@ class NuggetExtractionPrompt(NuggetPrompt):
         context_prompt = f"Context: {context}"
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
         return prompt
-
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+    
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  f'{NuggetSelfRatedPrompt.pretext}\n Key fact: {self.nugget_text}\n'
         context_prompt = context
@@ -1421,6 +1683,9 @@ class DirectGradingPrompt(Prompt):
         truncated_context = self.prompt_truncater.truncate_context(tokenizer=model_tokenizer, template=empty_prompt, context=context, max_length=max_token_len)
         prompt =  self.prompt_template(context=truncated_context, full_paragraph=full_paragraph)
         return prompt
+    
+    def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
+        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
     
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
         question_prompt =  self.prompt_template(context="", full_paragraph=full_paragraph)
