@@ -1023,10 +1023,10 @@ class QuestionCompleteConcisePromptT5Checked(QuestionPrompt):
 
 
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
-        raise RuntimeError("This is a post-hoc answer checker")
+        raise RuntimeError("This is a post-hoc answer checker, it cannot run prompts against an LLM")
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
-        raise RuntimeError("This is a post-hoc answer checker")
+        raise RuntimeError("This is a post-hoc answer checker, it cannot run prompts against an LLM")
 
 
     def check_answer_simple(self,answer:str)->bool:

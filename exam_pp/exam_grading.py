@@ -90,6 +90,9 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
                                                                    , system_message=system_message
                                                                    , record_embeddings=record_embeddings
                                                                    , **kwargs)
+        
+
+        print(answer_or_error_tuples)
         answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
         just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
 
@@ -146,9 +149,12 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
 
-    async with asyncio.TaskGroup() as tg:
-        for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-            tg.create_task(noodle_one_paragraph(para))
+    # async with asyncio.TaskGroup() as tg:
+    #     for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+    #         tg.create_task(noodle_one_paragraph(para))
+    
+    for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+            await noodle_one_paragraph(para)
 
 
 async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
@@ -352,13 +358,16 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     # MAX_TOKEN_LEN=512
     # MAX_OUT_TOKENS=512
 
+    chat_completions_client = openai_interface.default_openai_client()
+
     modelPipelineOpts = {'text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
                 ,'question-answering': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
                 ,'text-generation': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 , 'llama': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS: LlamaTextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
-                ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                ,'vLLM': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  VllmPipelineOld(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 ,'OpenAI': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  OpenAIPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
                 , 'embed-text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  EmbeddingText2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 
+                , 'chat-completions': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS:  ChatCompletionsPipeline(model_name, client=chat_completions_client, model_params={"max_completion_tokens":MAX_OUT_TOKENS}, max_token_len=MAX_TOKEN_LEN)  # pass in additional config paremeters as **kwargs
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')

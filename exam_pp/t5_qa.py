@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import Tuple, List, Dict, Callable, NewType, Optional, Iterable, Union
+from typing import Any, Tuple, List, Dict, Callable, NewType, Optional, Iterable, Union
 import typing
 import openai
 import torch
@@ -23,7 +23,7 @@ import transformers
 from .data_model import FullParagraphData, ParagraphData
 from .exam_llm import *
 from . import openai_interface
-from .openai_interface import query_gpt_batch_with_rate_limiting, OpenAIRateLimiter, FetchGptJson
+from .openai_interface import default_openai_client, query_gpt_batch_with_rate_limiting, OpenAIRateLimiter, FetchGptJson
 
 
 from .test_bank_prompts import Prompt, QuestionPromptWithChoices,QuestionPrompt
@@ -126,6 +126,10 @@ class HfPipeline(Enum):
             raise argparse.ArgumentTypeError("Invalid HfPipeline choice: %s" % arg)
         
 class PromptRunner(ABC):
+    """
+        Object thatexecutes a Prompt in a batched fashion on any LllmPipeline.
+    """
+        
     @abstractmethod
     async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
         pass
@@ -387,12 +391,28 @@ class VllmPromptRunner(PromptRunner):
 
 
 class LlmPipeline():
-    def __init__(self, model_name:str, max_token_len:int=512, max_output_tokens:int=512, question_batchSize:int =100):
-        """promptGenerator for a particular question. 
-           Example usages: 
-              * `promptGenerator=lambda qpc: qpc.generate_prompt()`
-              * `promptGenerator=lambda qpc: qpc.generate_prompt_with_context(context) `
+    def __init__(self, model_name:str):
+        """Encapsulates an LLM backend that takes prompts and returns responses
            """
+        self.modelName = model_name
+
+    def exp_modelName(self)->str:
+        return self.modelName
+
+
+    def finish(self):
+        pass
+
+
+    # def run_prompts
+
+    @abstractmethod
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
+        pass
+
+
+class PromptRunningLlmPipeline():
+    def __init__(self, model_name:str, max_token_len:int=512, max_output_tokens:int=512, question_batchSize:int =100):
 
         self.modelName = model_name
         self.max_token_len = max_token_len
@@ -419,7 +439,110 @@ class LlmPipeline():
         return list(zip(prompts, answers, strict=True))
         # todo Catch errors
 
-class VllmPipeline(LlmPipeline):
+
+
+from typing import TypedDict
+
+class Message(TypedDict):
+    role: str
+    content: str
+    # name: str | None  # Optional, only for function messages.
+
+class ChatCompletionsPipeline(LlmPipeline):
+    """Pipeline for external API endpoints that support OpenAI-style chat completions"""
+
+    def __init__(self, model_name:str,  client: openai.OpenAI, max_token_len:int, model_params:Optional[Dict[str,Any]]=None):
+        super().__init__(model_name=model_name)
+        # Start VLLM with:  HF_TOKEN="<token>" tmp/bin/vllm serve meta-llama/Llama-3.3-70B-Instruct  --max-model-len 500 --device=cuda --tensor-parallel-size 2
+
+        self.tokenizer = GPT2TokenizerFast.from_pretrained("openai-community/gpt2")  # todo use tiktoken
+        # vllm_fetcher = FetchGptGrade(gpt_model=self.modelName, max_tokens=self.max_output_tokens, client=create_vllm_client(base_url=os.getenv('VLLM_URL')), use_chat_protocol=True)
+        # self.prompt_runner = VllmPromptRunner(fetcher=vllm_fetcher, tokenizer = self.tokenizer, max_token_len=self.max_token_len, max_output_tokens=self.max_output_tokens)
+
+        self.max_token_len = max_token_len
+        self.model_params:Dict[str,Any] = model_params or dict()
+
+        self.client = client #  if client is not None else default_openai_client()
+
+
+    async def call_pipeline_one_prompt_messages(
+        self, 
+        messages: List[Message]
+    )->str:
+    # )->list[str]:
+        try:
+            completion = self.client.chat.completions.create(
+                model=self.modelName,
+                messages=messages,
+                **self.model_params
+            )
+            content = completion.choices[0].message.content
+            if content is not None:
+                return content.strip()
+            else:
+                raise RuntimeError("ChatCompletionsPipeline: received content that is empty")
+            # return [choice.message.content.strip() for choice in completion.choices]  # clean responses
+        except openai.OpenAIError as e:
+            # Handle API errors
+            print(f"An error occurred: {e}")
+            raise e
+
+
+
+    def convert_to_messages(self,prompt:str, system_message:Optional[str]=None)->List[Message]:
+
+        messages:List[Message] = list()
+        if system_message is not None:
+            messages.append({"role":"system", "content":system_message})
+        messages.append({"role":"user","content":prompt})
+
+        return messages
+
+
+    
+
+    async def call_pipeline(self
+                            , prompts: List[str]
+                            , system_message:Optional[str]=None
+                            , **kwargs) -> List[Union[str, LlmResponseError]]:
+
+        responses = [await self.call_pipeline_one_prompt_messages(self.convert_to_messages(prompt, system_message=system_message)) for prompt in prompts]
+
+        for p,resp in zip(prompts, responses):
+            if resp is None:
+                raise RuntimeError(f"Obtained None, but should have recevied an LlmResponseError. Prompt {p}")
+        #         sys.stderr.write(f"Could not obtain VLLM response for prompt {p}, reason {resp}. Rater limiter: {self.rate_limiter}")
+            if isinstance(resp, LlmResponseError):
+                sys.stderr.write(f"ChatCompletionsPipeline.call_pipeline: Stumbled upon LlmResponse error {resp}")
+
+        return responses
+
+
+    async def run_prompts(self, prompts: List[Prompt], context:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs) -> List[Union[str, LlmResponseError]]:
+        anyprompt=prompts[0]
+        # anyprompt.configure_json_gpt_fetcher(self.openai_fetcher)
+        # self.openai_fetcher.set_json_instruction(json_instruction=anyprompt.gpt_json_prompt()[0], field_name=anyprompt.gpt_json_prompt()[1])
+
+        converted_prompts = [prompt.generate_prompt(context=context, full_paragraph=full_paragraph, model_tokenizer=self.tokenizer, max_token_len=self.max_token_len) for prompt in prompts]
+        return await self.call_pipeline(prompts=converted_prompts, system_message=system_message, **kwargs)
+
+
+    async def grade_paragraph(self, prompts:List[Prompt],  paragraph_txt:str, full_paragraph:FullParagraphData, system_message:Optional[str]=None, **kwargs)->List[Tuple[Prompt, Union[str, LlmResponseError]]]:
+
+        answers:List[Union[str, LlmResponseError]] = await self.run_prompts(prompts=prompts
+                                                            , context=paragraph_txt
+                                                            , full_paragraph=full_paragraph
+                                                            , system_message=system_message
+                                                            # , record_embeddings = record_embeddings
+                                                            , **kwargs)
+
+        if len(answers) != len(prompts):
+            raise RuntimeError("Missing prompt response\mPrompts: {prompts}\n Answers: {answers}")
+        
+        return list(zip(prompts, answers, strict=True))
+        # todo Catch errors
+
+class VllmPipelineOld(PromptRunningLlmPipeline):
     """Pipeline for vLLM"""
 
     def __init__(self, model_name:str,  max_token_len:int, max_output_tokens:int):
@@ -430,7 +553,7 @@ class VllmPipeline(LlmPipeline):
         vllm_fetcher = FetchGptGrade(gpt_model=self.modelName, max_tokens=self.max_output_tokens, client=create_vllm_client(base_url=os.getenv('VLLM_URL')), use_chat_protocol=True)
         self.prompt_runner = VllmPromptRunner(fetcher=vllm_fetcher, tokenizer = self.tokenizer, max_token_len=self.max_token_len, max_output_tokens=self.max_output_tokens)
 
-class OpenAIPipeline(LlmPipeline):
+class OpenAIPipeline(PromptRunningLlmPipeline):
     """Pipeline for OpenAI"""
 
     def __init__(self, model_name:str, max_token_len:int, max_output_tokens:int):
@@ -441,7 +564,7 @@ class OpenAIPipeline(LlmPipeline):
 
 
 
-class Text2TextPipeline(LlmPipeline):
+class Text2TextPipeline(PromptRunningLlmPipeline):
     """Pipeline for text2text"""
 
     def __init__(self, model_name:str, max_token_len:int):
@@ -456,7 +579,7 @@ class Text2TextPipeline(LlmPipeline):
 
 
 
-class EmbeddingText2TextPipeline(LlmPipeline):
+class EmbeddingText2TextPipeline(PromptRunningLlmPipeline):
     """Pipeline that records embeddings of text2text models"""
 
     def __init__(self, model_name:str, max_token_len:int,  max_output_tokens:int):
@@ -714,7 +837,7 @@ class EmbeddingText2TextPipeline(LlmPipeline):
         # todo Catch errors
 
 
-class TextGenerationPipeline(LlmPipeline):
+class TextGenerationPipeline(PromptRunningLlmPipeline):
     """Pipeline for text-generation"""
     
     def __init__(self, model_name:str, max_token_len:int, max_output_tokens:int):
@@ -735,7 +858,7 @@ class TextGenerationPipeline(LlmPipeline):
 
 
 
-class LlamaTextGenerationPipeline(LlmPipeline):
+class LlamaTextGenerationPipeline(PromptRunningLlmPipeline):
     """Pipeline for llama text-generation"""
 
     def __init__(self, model_name:str, max_token_len:int, max_output_tokens:int):
@@ -747,7 +870,7 @@ class LlamaTextGenerationPipeline(LlmPipeline):
 
 
 
-class QaPipeline(LlmPipeline):
+class QaPipeline(PromptRunningLlmPipeline):
     """QA Pipeline for text2text-based question answering"""
 
     def __init__(self, model_name:str, max_token_len:int, max_output_tokens:int):
