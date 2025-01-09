@@ -44,6 +44,7 @@
         mkShell = target: (dspy-nix.lib.${system}.mkShell {
           inherit target;
           pythonOverrides = [ pythonOverrides ];
+          packages = ps: with ps; [ duckdb ];
           pythonPackages = ps: with ps; [
             pydantic
             fuzzywuzzy
