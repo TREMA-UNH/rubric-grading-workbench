@@ -557,7 +557,7 @@ def main() -> None:
     # train_ds, test_ds, class_list = read_embeddings(root, 95)
     train_ds, test_ds, class_list = read_embeddings_synthetic()
 
-    cmd_args = {"snapshots":2, "n_epochs":10, "train_ds":train_ds, "test_ds":test_ds, "class_list":class_list, "device_str":"cpu", "inner_dim": 64, "n_heads":1}
+    cmd_args = {"snapshots":2, "n_epochs":10, "train_ds":train_ds, "test_ds":test_ds, "class_list":class_list, "device_str":"cpu", "inner_dim": 64, "nhead":1}
 
     # run(root=root, model_type='multi_class', **cmd_args)
     run(root=root, model_type=ClassificationModel.multi_label_proj_packed, **cmd_args)
