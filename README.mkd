@@ -377,6 +377,13 @@ If you are on mac/darwin try this
 
 * `NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 NIXPKGS_ALLOW_BROKEN=1 NIXPKGS_ALLOW_UNFREE=1 nix --extra-experimental-features 'nix-command flakes' develop --impure .#cpu`
 
+To avoid adding these extra options every time, add them to your nix configuration as follows
+
+```
+mkdir -P ~./.config/nix
+echo 'extra-experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf 
+```
+
 ### Use Cachix
 
 We recommend the use of Cachix to avoid re-compiling basic dependencies. For that just respond "yes" when asked the following:

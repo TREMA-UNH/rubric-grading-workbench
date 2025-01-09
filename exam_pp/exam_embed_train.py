@@ -176,30 +176,9 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
-def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset, Dataset, Set[int]]:
-    # dataset = ClassificationItemDataset(db=embedding_db)
+def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset, Dataset, List[int]]:
 
-    # ci_ids = get_query_items(embedding_db, ['118440', '121171'])
-    # print("ci_ids", ci_ids)
-    # for cid in ci_ids:
-    #     print("classification_item", cid)
-
-    # features = get_classification_features(embedding_db, '118440')
-
-    # # random_train_items = 
-
-    # for f in features[:10].itertuples():
-    #     print("feature",f)
-    #     print("query",f.query)
-    #     tensor = embedding_db.fetch_tensors([f.tensor_id], token_length=10)
-    #     print("tensor", tensor.shape, tensor)
-    #     # f.
-
-
-    # tensors = ([dataset[i] for i in ci_ids])
-    # print(tensors)
-
-    queries = list(get_queries(db=embedding_db))[:5]
+    queries = list(get_queries(db=embedding_db))[:]
 
     
         
@@ -214,33 +193,6 @@ def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset,
     
 
         
-    # print("test items", classification_items_test)
-
-
-    def balance_majority_class(df):
-
-        # Convert each array to a tuple (this makes it hashable)
-        df['true_labels'] = df['true_labels'].apply(tuple)
-
-        # Filter
-        df_zero = df[df['true_labels'] == ('0',)]
-        df_not_zero = df[df['true_labels'] != ('0',)]
-
-        print("df_zero shape:", df_zero.shape)
-        print(df_zero)
-
-        print("df_not_zero shape:", df_not_zero.shape)
-        print(df_not_zero)
-
-        # Downsample to balance
-        num_samples = min(len(df_zero), len(df_not_zero))
-        print("num_samples", num_samples)
-
-        df_not_zero_sampled = df_not_zero.sample(n=num_samples, random_state=42)
-
-        balanced_df = pd.concat([df_zero, df_not_zero_sampled])
-        print("\nBalanced df shape:", balanced_df.shape)
-        return balanced_df
 
     # query, passage, labels
     classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
@@ -266,7 +218,8 @@ def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset,
         def __getitem__(self, index) -> pt.Tensor:
             tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
             # print(f"{index}: {row.to_dict()}")
-            tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=384)
+            # tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=384)
+            tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=100)
 
             # the real deal:
             # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
@@ -347,7 +300,7 @@ def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset,
     # print("train_ds", train_ds[3])
     # print("test_ds", test_ds[3])
 
-    return (train_ds, test_ds, classes)
+    return (train_ds, test_ds, [label_idx[c] for c in classes])
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
 
@@ -370,24 +323,32 @@ def main(cmdargs=None) -> None:
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
+    parser.add_argument('--snapshots-every', type=int, metavar="T", help="Take a model shapshort every T epochs")
+    parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
+    parser.add_argument('--nhead', type=int, metavar="N", help="Use transformer with N heads", default=1)
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
+    parser.add_argument('--class-model', type=attention_classify.ClassificationModel.from_string, required=True, choices=list(attention_classify.ClassificationModel), metavar="MODEL"
+                        , help="The classification model to use. Choices: "+", ".join(list(x.name for x in attention_classify.ClassificationModel)))
  
     args = parser.parse_args(args = cmdargs) 
  
     root = Path(args.root)
     embedding_db = EmbeddingDb(Path(args.embedding_db))
     # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-    (train_ds, test_ds, classes) = create_dataset(embedding_db, prompt_class=args.prompt_class)
+    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class)
     # x = balanced_training_data(embedding_db)
     # print(x)
     attention_classify.run(root
-                           , model_type='multi_label_packed'
+                           , model_type=args.class_model
                            , train_ds=train_ds
                            , test_ds=test_ds
-                           , classes=classes
+                           , class_list=class_list
+                           , snapshots=args.snapshots_every
                            , n_epochs=args.epochs
-                           , device_str=args.device)  
+                           , device_str=args.device
+                           , inner_dim=args.inner_dim
+                           , nhead=args.nhead)  
 
 if __name__ == '__main__':
     main()

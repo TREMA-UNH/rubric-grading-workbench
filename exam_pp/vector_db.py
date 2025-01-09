@@ -160,6 +160,14 @@ class EmbeddingDb:
         assert out is not None
         return out
 
+    def fetch_tensors_concat(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
+        # (num, tok_len, llm_dim)
+        tensor_batch = self.fetch_tensors(tensor_ids=tensor_ids, token_length=token_length, align=align)
+        num, tok_len, llm_dim = batch_shape = tensor_batch.shape
+        tensor_arranged = pt.reshape(input=tensor_batch, shape=(num * tok_len, llm_dim))
+        return tensor_arranged
+
+
     def fetch_tensors_single(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
         """
         Fetch tensors corresponding to the provided tensor IDs.

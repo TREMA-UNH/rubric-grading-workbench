@@ -110,22 +110,6 @@ from enum import Enum, auto
 from abc import ABC, abstractmethod
 
         
-class HfPipeline(Enum):
-    text2text = auto()
-    textgeneration = auto()
-    llama = auto()
-    qa = auto()
-
-    def __str__(self):
-        return self.name
-
-    @staticmethod
-    def from_string(arg:str):
-        try:
-            return HfPipeline[arg.upper()]
-        except KeyError:
-            raise argparse.ArgumentTypeError("Invalid HfPipeline choice: %s" % arg)
-        
 class PromptRunner(ABC):
     """
         Object thatexecutes a Prompt in a batched fashion on any LllmPipeline.
