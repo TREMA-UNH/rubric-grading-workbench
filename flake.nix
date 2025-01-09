@@ -7,7 +7,7 @@
   inputs.dspy-nix.url = "git+https://git.smart-cactus.org/ben/dspy-nix";
 
   outputs = inputs@{ self, nixpkgs, flake-utils, dspy-nix, ... }:
-    flake-utils.lib.eachDefaultSystem (system: 
+    flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
@@ -24,7 +24,7 @@
             name = "exampp";
             src = ./.;
             format = "pyproject";
-            propagatedBuildInputs = with self; [ 
+            propagatedBuildInputs = with self; [
               setuptools
               pydantic
               pylatex
@@ -44,7 +44,7 @@
         mkShell = target: (dspy-nix.lib.${system}.mkShell {
           inherit target;
           pythonOverrides = [ pythonOverrides ];
-          packages = ps: with ps; [
+          pythonPackages = ps: with ps; [
             pydantic
             fuzzywuzzy
             nltk
