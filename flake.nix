@@ -2,6 +2,7 @@
   description = "ExamPP";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
+  inputs.nixpkgs.follows  = "dspy-nix/nixpkgs";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.dspy-nix.url = "git+https://git.smart-cactus.org/ben/dspy-nix";
 
