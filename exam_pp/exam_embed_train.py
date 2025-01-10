@@ -177,7 +177,7 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
-def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str, max_queries:Optional[int], max_paragraphs:Optional[int] )->Tuple[Dataset, Dataset, List[int]]:
+def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str, max_queries:Optional[int], max_paragraphs:Optional[int], max_token_len:Optional[int],single_sequence:bool )->Tuple[Dataset, Dataset, List[int]]:
 
     queries = list(get_queries(db=embedding_db))[:max_queries]
 
@@ -219,8 +219,11 @@ def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str, max_queries:Opti
         def __getitem__(self, index) -> pt.Tensor:
             tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
             # print(f"{index}: {row.to_dict()}")
-            # tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=384)
-            tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=100)
+            tensor=None
+            if single_sequence:
+                tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=max_token_len)
+            else:
+                tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=max_token_len)
 
             # the real deal:
             # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
@@ -364,6 +367,8 @@ def main(cmdargs=None) -> None:
 
     parser.add_argument('--max-queries', type=int, metavar="N", help="Use up to N queries")
     parser.add_argument('--max-paragraphs', type=int, metavar="N", help="Use to a total of N paragraphs across train and test")
+    parser.add_argument('--max-token-len', type=int, metavar="N", help="Use up to N embedding tokens")
+    parser.add_argument('--single-sequence', action="store_true", help='Use only a single sequence for training')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
 
@@ -374,7 +379,7 @@ def main(cmdargs=None) -> None:
     root = Path(args.root)
     embedding_db = EmbeddingDb(Path(args.embedding_db))
     # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs)
+    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs, max_token_len=args.max_token_len, single_sequence=args.single_sequence)
 
     if args.caching:
         train_ds = CachingDataset(train_ds)
