@@ -2,6 +2,7 @@ import argparse
 from contextlib import AbstractContextManager
 from enum import Enum, auto
 from pathlib import Path
+import sys
 import typing
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
 from torch import nn
@@ -511,6 +512,8 @@ def run(root: Path
         ,snapshot_every:Optional[int]=None
         ,eval_every:Optional[int]=None
         ,epoch_timer:typing.ContextManager = Noop()
+        ,target_metric:str = 'roc_auc'
+        ,snapshot_best_after:Optional[int] = None
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -520,6 +523,7 @@ def run(root: Path
     print('llm_dim', llm_dim)
     print('context_sz', seq_len)
     print('classes', len(class_list))
+    prev_highest: float = sys.float_info.max
 
 
 
@@ -558,6 +562,7 @@ def run(root: Path
         if snapshot_every and epoch_t % snapshot_every == 1 :
             torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
 
+
         if eval_every is None or epoch_t % eval_every == 1 :
             # Evaluate loss
             test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
@@ -566,6 +571,16 @@ def run(root: Path
             train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
             train_metrics = evaluate(model, train_eval_loader, loss_fn, class_list, device)
             reporter.report(epoch_t, test_metrics, train_metrics)
+
+            if snapshot_best_after and epoch_t >= snapshot_best_after :
+                # Save model checkpoint on better validation metric
+                target=test_metrics[target_metric]
+                if target > prev_highest:
+                    print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}). Saving snapshot")
+                    prev_highest = target
+                    torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
+
+
     torch.save(model.state_dict(), out_dir / f"model_final.pt")
 
 

@@ -411,6 +411,9 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
     parser.add_argument('--snapshots-every', type=int, metavar="T", help="Take a model shapshort every T epochs")
+    parser.add_argument('--snapshots-best-after', type=int, metavar="T", help="Take a model shapshort when target metric is improved (but only after the T'th epoch, and only during evaluation epochs)")
+    parser.add_argument('--snapshots-target-metric', type=str, metavar="METRIC", help="Target evaluation metric for --snapshots-best-after, such as 'roc_auc'")
+    
     parser.add_argument('--eval-every', type=int, metavar="T", help="Take a model shapshort every T epochs", default=1)
     parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
     parser.add_argument('--nhead', type=int, metavar="N", help="Use transformer with N heads", default=1)
@@ -432,6 +435,8 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--single-sequence', action="store_true", help='Use only a single sequence for training')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
+
+
 
     
  
@@ -489,6 +494,8 @@ def main(cmdargs=None) -> None:
                         , inner_dim=args.inner_dim
                         , nhead=args.nhead
                         , epoch_timer = TrainingTimer("Epoch")
+                        , snapshot_best_after= args.snapshots_best_after
+                        , target_metric= args.snapshots_target_metric
                         )
         
         # prof.export_chrome_trace('profile.json')
