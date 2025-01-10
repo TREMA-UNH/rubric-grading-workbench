@@ -178,11 +178,23 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
-def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str, max_queries:Optional[int], max_paragraphs:Optional[int], max_token_len:Optional[int],single_sequence:bool )->Tuple[Dataset, Dataset, List[int]]:
+def create_dataset(embedding_db:EmbeddingDb
+                   ,  prompt_class:str
+                   , query_list: Optional[List[str]]
+                   , max_queries:Optional[int]
+                   , max_paragraphs:Optional[int]
+                   , max_token_len:Optional[int]
+                   ,single_sequence:bool )->Tuple[Dataset, Dataset, List[int]]:
 
-    queries = list(get_queries(db=embedding_db))[:max_queries]
+    queries = None
+    if query_list:
+        # print("queries_list", query_list)
+        queries_fromdb:Set[str] = get_queries(db=embedding_db)
+        queries = queries_fromdb[queries_fromdb.isin(query_list)]
+    else:
+        queries = list(get_queries(db=embedding_db))[:max_queries]
 
-    
+    print(f"queries: {queries}")
         
     classification_items_train:List[ClassificationItemId]
     classification_items_train =[ example for query in queries 
@@ -392,6 +404,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--dry-run', action="store_true", help='will automatically replace the output directory')
 
     parser.add_argument('--max-queries', type=int, metavar="N", help="Use up to N queries")
+    parser.add_argument('--queries', type=str, metavar="query_id", nargs='+', help="Use queries with these IDS")
     parser.add_argument('--max-paragraphs', type=int, metavar="N", help="Use to a total of N paragraphs across train and test")
     parser.add_argument('--max-token-len', type=int, metavar="N", help="Use up to N embedding tokens")
     parser.add_argument('--single-sequence', action="store_true", help='Use only a single sequence for training')
@@ -411,7 +424,13 @@ def main(cmdargs=None) -> None:
 
         embedding_db = EmbeddingDb(Path(args.embedding_db))
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-        (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs, max_token_len=args.max_token_len, single_sequence=args.single_sequence)
+        (train_ds, test_ds, class_list) = create_dataset(embedding_db
+                                                         , prompt_class=args.prompt_class
+                                                         , query_list = args.queries
+                                                         , max_queries=args.max_queries
+                                                         , max_paragraphs=args.max_paragraphs
+                                                         , max_token_len=args.max_token_len
+                                                         , single_sequence=args.single_sequence)
 
         if args.caching:
             train_ds = CachingDataset(train_ds)
@@ -432,7 +451,7 @@ def main(cmdargs=None) -> None:
 
     with TrainingTimer("Training"):
         # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
-        attention_classify.run(root
+        attention_classify.run(root = root
                         , overwrite=args.overwrite
                         , model_type=args.class_model
                         , train_ds=train_ds
