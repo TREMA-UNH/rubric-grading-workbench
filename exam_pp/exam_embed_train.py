@@ -6,6 +6,7 @@ import torch as pt
 from torch.nn import TransformerEncoder
 from torch.utils.data import StackDataset, ConcatDataset, TensorDataset, Dataset, DataLoader, Subset
 from typing import Any, Dict, Set, Tuple, List, Optional
+import torch.profiler as ptp
 import collections
 import io
 import itertools
@@ -176,19 +177,19 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
-def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset, Dataset, List[int]]:
+def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str, max_queries:Optional[int], max_paragraphs:Optional[int] )->Tuple[Dataset, Dataset, List[int]]:
 
-    queries = list(get_queries(db=embedding_db))[:]
+    queries = list(get_queries(db=embedding_db))[:max_queries]
 
     
         
     classification_items_train:List[ClassificationItemId]
     classification_items_train =[ example for query in queries 
-                                           for example in list(get_query_items(db=embedding_db, query=[query]))[::2] 
+                                           for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs:2] 
                                  ]
     classification_items_test:List[ClassificationItemId]
     classification_items_test = [ example for query in queries 
-                                           for example in list(get_query_items(db=embedding_db, query=[query]))[1::2] 
+                                           for example in list(get_query_items(db=embedding_db, query=[query]))[1:max_paragraphs:2] 
                                  ]
     
 
@@ -303,7 +304,35 @@ def create_dataset(embedding_db:EmbeddingDb,  prompt_class:str )->Tuple[Dataset,
     return (train_ds, test_ds, [label_idx[c] for c in classes])
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
+class CachingDataset(Dataset):
+    def __init__(self, cachee:Dataset):
+        self.data:Dict[int,Any] = dict()
+        self.cachee:Dataset = cachee
+        self.length:int = len(cachee)
 
+    def __getitem__(self, index):
+        item = self.data.get(index)
+        if item is None:
+            item = self.cachee[index]
+            self.data[index]=item
+        return item
+
+    def __len__(self):
+        return self.length
+
+class PreloadedDataset(Dataset):
+    def __init__(self, cachee:Dataset):
+        self.data = []
+        for i in range(0,len(cachee)):
+            data_item = cachee[i]
+            self.data.append(data_item)
+
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return len(self.data)
+    
 def main(cmdargs=None) -> None:
     import argparse
 
@@ -331,6 +360,13 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--class-model', type=attention_classify.ClassificationModel.from_string, required=True, choices=list(attention_classify.ClassificationModel), metavar="MODEL"
                         , help="The classification model to use. Choices: "+", ".join(list(x.name for x in attention_classify.ClassificationModel)))
     parser.add_argument('--overwrite', action="store_true", help='will automatically replace the output directory')
+    parser.add_argument('--dry-run', action="store_true", help='will automatically replace the output directory')
+
+    parser.add_argument('--max-queries', type=int, metavar="N", help="Use up to N queries")
+    parser.add_argument('--max-paragraphs', type=int, metavar="N", help="Use to a total of N paragraphs across train and test")
+    parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
+    parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
+
     
  
     args = parser.parse_args(args = cmdargs) 
@@ -338,23 +374,36 @@ def main(cmdargs=None) -> None:
     root = Path(args.root)
     embedding_db = EmbeddingDb(Path(args.embedding_db))
     # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class)
+    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs)
+
+    if args.caching:
+        train_ds = CachingDataset(train_ds)
+        test_ds = CachingDataset(test_ds)
+    elif args.preloaded:
+        train_ds = PreloadedDataset(train_ds)
+        test_ds = PreloadedDataset(test_ds)
+
     # x = balanced_training_data(embedding_db)
     # print(x)
     print(f"Device: {args.device}")
 
 
+    print(f"Train data: {len(train_ds)}")
+    print(f"Test data: {len(test_ds)}")
+    # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
     attention_classify.run(root
-                           , overwrite=args.overwrite
-                           , model_type=args.class_model
-                           , train_ds=train_ds
-                           , test_ds=test_ds
-                           , class_list=class_list
-                           , snapshots=args.snapshots_every
-                           , n_epochs=args.epochs
-                           , device_str=args.device
-                           , inner_dim=args.inner_dim
-                           , nhead=args.nhead)  
+                    , overwrite=args.overwrite
+                    , model_type=args.class_model
+                    , train_ds=train_ds
+                    , test_ds=test_ds
+                    , class_list=class_list
+                    , snapshots=args.snapshots_every
+                    , n_epochs=args.epochs
+                    , device_str=args.device
+                    , inner_dim=args.inner_dim
+                    , nhead=args.nhead)
+    
+    # prof.export_chrome_trace('profile.json')
 
 if __name__ == '__main__':
     main()
