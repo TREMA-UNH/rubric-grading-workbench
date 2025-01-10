@@ -179,12 +179,14 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
 
 
 def create_dataset(embedding_db:EmbeddingDb
-                   ,  prompt_class:str
+                   , prompt_class:str
                    , query_list: Optional[List[str]]
                    , max_queries:Optional[int]
                    , max_paragraphs:Optional[int]
                    , max_token_len:Optional[int]
-                   ,single_sequence:bool )->Tuple[Dataset, Dataset, List[int]]:
+                   , single_sequence:bool 
+                   , split_same_query: bool = False
+                   )->Tuple[Dataset, Dataset, List[int]]:
 
     queries = None
     if query_list:
@@ -194,17 +196,32 @@ def create_dataset(embedding_db:EmbeddingDb
     else:
         queries = list(get_queries(db=embedding_db))[:max_queries]
 
-    print(f"queries: {queries}")
+
+
         
     classification_items_train:List[ClassificationItemId]
-    classification_items_train =[ example for query in queries 
-                                           for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs:2] 
-                                 ]
     classification_items_test:List[ClassificationItemId]
-    classification_items_test = [ example for query in queries 
-                                           for example in list(get_query_items(db=embedding_db, query=[query]))[1:max_paragraphs:2] 
-                                 ]
-    
+
+    if split_same_query:
+        classification_items_train =[ example for query in queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs:2] 
+                                    ]
+        classification_items_test = [ example for query in queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[1:max_paragraphs:2] 
+                                    ]
+        print(f"queries: {list(queries)}")
+    else:
+        train_queries = queries[::2]
+        test_queries = queries[1::2]
+        classification_items_train =[ example for query in train_queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs] 
+                                    ]
+        classification_items_test = [ example for query in test_queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs] 
+                                    ]
+
+        print(f"train_queries: {list(train_queries)}")
+        print(f"test_queries: {list(test_queries)}")
 
         
 
@@ -409,6 +426,8 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--max-queries', type=int, metavar="N", help="Use up to N queries")
     parser.add_argument('--queries', type=str, metavar="query_id", nargs='+', help="Use queries with these IDS")
     parser.add_argument('--max-paragraphs', type=int, metavar="N", help="Use to a total of N paragraphs across train and test")
+    parser.add_argument('--split-same-query',action="store_true", help='Train/test split on same queries, but different paragraphs.')
+
     parser.add_argument('--max-token-len', type=int, metavar="N", help="Use up to N embedding tokens")
     parser.add_argument('--single-sequence', action="store_true", help='Use only a single sequence for training')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
@@ -433,7 +452,9 @@ def main(cmdargs=None) -> None:
                                                          , max_queries=args.max_queries
                                                          , max_paragraphs=args.max_paragraphs
                                                          , max_token_len=args.max_token_len
-                                                         , single_sequence=args.single_sequence)
+                                                         , single_sequence=args.single_sequence
+                                                         , split_same_query=args.split_same_query
+                                                         )
 
         if args.caching:
             train_ds = CachingDataset(train_ds)
