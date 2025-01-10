@@ -510,7 +510,7 @@ def run(root: Path
         ,device_str:str = 'cuda'
         ,snapshot_every:Optional[int]=None
         ,eval_every:Optional[int]=None
-        ,epoch_timer:Optional[typing.ContextManager] = Noop()
+        ,epoch_timer:typing.ContextManager = Noop()
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)

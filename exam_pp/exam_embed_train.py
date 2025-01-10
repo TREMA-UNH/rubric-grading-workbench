@@ -397,6 +397,8 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--eval-every', type=int, metavar="T", help="Take a model shapshort every T epochs", default=1)
     parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
     parser.add_argument('--nhead', type=int, metavar="N", help="Use transformer with N heads", default=1)
+    parser.add_argument('--batch-size', type=int, metavar="S", help="Batchsize for training", default=128)
+
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--class-model', type=attention_classify.ClassificationModel.from_string, required=True, choices=list(attention_classify.ClassificationModel), metavar="MODEL"
@@ -458,6 +460,7 @@ def main(cmdargs=None) -> None:
                         , train_ds=train_ds
                         , test_ds=test_ds
                         , class_list=class_list
+                        , batch_size=args.batch_size
                         , snapshot_every=args.snapshots_every
                         , eval_every=args.eval_every
                         , n_epochs=args.epochs
