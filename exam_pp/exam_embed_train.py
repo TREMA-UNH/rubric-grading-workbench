@@ -336,16 +336,32 @@ class PreloadedDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-    
-def elapsed_time_str(elapsed_time:int)-> str:
-    days = int(elapsed_time // (24 * 3600))
-    hours = int((elapsed_time % (24 * 3600)) // 3600)
-    minutes = int((elapsed_time % 3600) // 60)
-    seconds = int(elapsed_time % 60)
 
-    return f"{days} days, {hours} hours, {minutes} minutes, {seconds} seconds"
 
-    
+
+class TrainingTimer:
+    def __init__(self, message="Elapsed time"):
+        self.message = message
+
+    def __enter__(self):
+        self.start_time = time.perf_counter()
+        return self
+
+    def __exit__(self, *args):
+        self.end_time = time.perf_counter()
+        print(f"{self.message}: {TrainingTimer.elapsed_time_str(self.end_time-self.start_time)}")
+
+    @staticmethod
+    def elapsed_time_str(elapsed_time:int)-> str:
+        days = int(elapsed_time // (24 * 3600))
+        hours = int((elapsed_time % (24 * 3600)) // 3600)
+        minutes = int((elapsed_time % 3600) // 60)
+        seconds = int(elapsed_time % 60)
+
+        return f"{days} days, {hours} hours, {minutes} minutes, {seconds} seconds"
+
+        
+
 def main(cmdargs=None) -> None:
     import argparse
 
@@ -385,53 +401,52 @@ def main(cmdargs=None) -> None:
     
  
     args = parser.parse_args(args = cmdargs) 
- 
+
     root = Path(args.root)
+    train_ds = None
+    test_ds = None
+    class_list = None
+
+    with TrainingTimer("Data Loading"):
+
+        embedding_db = EmbeddingDb(Path(args.embedding_db))
+        # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
+        (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs, max_token_len=args.max_token_len, single_sequence=args.single_sequence)
+
+        if args.caching:
+            train_ds = CachingDataset(train_ds)
+            test_ds = CachingDataset(test_ds)
+        elif args.preloaded:
+            train_ds = PreloadedDataset(train_ds)
+            test_ds = PreloadedDataset(test_ds)
 
 
-    start_time = time.perf_counter()
-
-    embedding_db = EmbeddingDb(Path(args.embedding_db))
-    # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-    (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs, max_token_len=args.max_token_len, single_sequence=args.single_sequence)
-
-    if args.caching:
-        train_ds = CachingDataset(train_ds)
-        test_ds = CachingDataset(test_ds)
-    elif args.preloaded:
-        train_ds = PreloadedDataset(train_ds)
-        test_ds = PreloadedDataset(test_ds)
+        print(f"Device: {args.device}")
 
 
-    print(f"Device: {args.device}")
+        print(f"Train data: {len(train_ds)}")
+        print(f"Test data: {len(test_ds)}")
 
 
-    print(f"Train data: {len(train_ds)}")
-    print(f"Test data: {len(test_ds)}")
+    # print(f"Data loading took {elapsed_time_str(end_time - start_time)}.")
 
-    end_time = time.perf_counter()
-
-    print(f"Data loading took {elapsed_time_str(end_time - start_time)}.")
-
-    start_time = time.perf_counter()
-
-    # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
-    attention_classify.run(root
-                    , overwrite=args.overwrite
-                    , model_type=args.class_model
-                    , train_ds=train_ds
-                    , test_ds=test_ds
-                    , class_list=class_list
-                    , snapshots=args.snapshots_every
-                    , n_epochs=args.epochs
-                    , device_str=args.device
-                    , inner_dim=args.inner_dim
-                    , nhead=args.nhead)
-    
-    # prof.export_chrome_trace('profile.json')
-    end_time = time.perf_counter()
-
-    print(f"Training loading took {elapsed_time_str(end_time - start_time)} seconds.")
+    with TrainingTimer("Training"):
+        # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
+        attention_classify.run(root
+                        , overwrite=args.overwrite
+                        , model_type=args.class_model
+                        , train_ds=train_ds
+                        , test_ds=test_ds
+                        , class_list=class_list
+                        , snapshots=args.snapshots_every
+                        , n_epochs=args.epochs
+                        , device_str=args.device
+                        , inner_dim=args.inner_dim
+                        , nhead=args.nhead
+                        , epoch_timer = TrainingTimer("Epoch")
+                        )
+        
+        # prof.export_chrome_trace('profile.json')
 
 if __name__ == '__main__':
     main()

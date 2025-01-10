@@ -1,6 +1,8 @@
 import argparse
+from contextlib import AbstractContextManager
 from enum import Enum, auto
 from pathlib import Path
+import typing
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
 from torch import nn
 from torch.nn import TransformerEncoder
@@ -469,6 +471,16 @@ class Reporter:
         print(epoch_n, "train", train_metrics)
 
 
+class Noop(AbstractContextManager):
+    def __enter__(self):
+        pass
+        return self
+
+    def __exit__(self, *args):
+        pass
+ 
+
+
 class ClassificationModel(Enum):
     multi_class = auto()
     multi_label = auto()
@@ -497,6 +509,7 @@ def run(root: Path
         ,nhead: int=1
         ,device_str:str = 'cuda'
         ,snapshots:Optional[int]=None
+        ,epoch_timer:Optional[typing.ContextManager] = Noop()
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -530,14 +543,15 @@ def run(root: Path
     reporter = Reporter((out_dir / 'history-log.json').open('w'))
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     for epoch_t in range(n_epochs):
-        print(f'epoch {epoch_t}...')
-        model.train()
-        for batch in DataLoader(train_ds, batch_size=batch_size, shuffle=True):
-            optimizer.zero_grad()
-            output = model(batch['embedding'].to(device))
-            loss = loss_fn(output, batch['label_one_hot'].to(device))
-            loss.backward()
-            optimizer.step()
+        with epoch_timer:
+            print(f'epoch {epoch_t}...')
+            model.train()
+            for batch in DataLoader(train_ds, batch_size=batch_size, shuffle=True):
+                optimizer.zero_grad()
+                output = model(batch['embedding'].to(device))
+                loss = loss_fn(output, batch['label_one_hot'].to(device))
+                loss.backward()
+                optimizer.step()
 
         # Save model checkpoint
         if snapshots and epoch_t % snapshots == 1 :
