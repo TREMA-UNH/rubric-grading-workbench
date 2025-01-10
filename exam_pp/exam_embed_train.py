@@ -394,6 +394,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
     parser.add_argument('--snapshots-every', type=int, metavar="T", help="Take a model shapshort every T epochs")
+    parser.add_argument('--eval-every', type=int, metavar="T", help="Take a model shapshort every T epochs", default=1)
     parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
     parser.add_argument('--nhead', type=int, metavar="N", help="Use transformer with N heads", default=1)
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
@@ -457,7 +458,8 @@ def main(cmdargs=None) -> None:
                         , train_ds=train_ds
                         , test_ds=test_ds
                         , class_list=class_list
-                        , snapshots=args.snapshots_every
+                        , snapshot_every=args.snapshots_every
+                        , eval_every=args.eval_every
                         , n_epochs=args.epochs
                         , device_str=args.device
                         , inner_dim=args.inner_dim

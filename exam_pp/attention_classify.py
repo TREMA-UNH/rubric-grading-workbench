@@ -508,7 +508,8 @@ def run(root: Path
         ,inner_dim: int=64
         ,nhead: int=1
         ,device_str:str = 'cuda'
-        ,snapshots:Optional[int]=None
+        ,snapshot_every:Optional[int]=None
+        ,eval_every:Optional[int]=None
         ,epoch_timer:Optional[typing.ContextManager] = Noop()
         ):
     if out_dir is None:
@@ -554,16 +555,17 @@ def run(root: Path
                 optimizer.step()
 
         # Save model checkpoint
-        if snapshots and epoch_t % snapshots == 1 :
+        if snapshot_every and epoch_t % snapshot_every == 1 :
             torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
 
-        # Evaluate loss
-        test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-        test_metrics = evaluate(model, test_loader, loss_fn, class_list, device)
+        if eval_every is None or epoch_t % eval_every == 1 :
+            # Evaluate loss
+            test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+            test_metrics = evaluate(model, test_loader, loss_fn, class_list, device)
 
-        train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
-        train_metrics = evaluate(model, train_eval_loader, loss_fn, class_list, device)
-        reporter.report(epoch_t, test_metrics, train_metrics)
+            train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
+            train_metrics = evaluate(model, train_eval_loader, loss_fn, class_list, device)
+            reporter.report(epoch_t, test_metrics, train_metrics)
     torch.save(model.state_dict(), out_dir / f"model_final.pt")
 
 
