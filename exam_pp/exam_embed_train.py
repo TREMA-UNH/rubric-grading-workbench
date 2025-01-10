@@ -15,6 +15,7 @@ import numpy as np
 import sklearn.model_selection
 import torch
 import pandas as pd
+import time
 
 from . test_bank_prompts import get_prompt_classes
 from . import attention_classify
@@ -336,6 +337,15 @@ class PreloadedDataset(Dataset):
     def __len__(self):
         return len(self.data)
     
+def elapsed_time_str(elapsed_time:int)-> str:
+    days = int(elapsed_time // (24 * 3600))
+    hours = int((elapsed_time % (24 * 3600)) // 3600)
+    minutes = int((elapsed_time % 3600) // 60)
+    seconds = int(elapsed_time % 60)
+
+    return f"{days} days, {hours} hours, {minutes} minutes, {seconds} seconds"
+
+    
 def main(cmdargs=None) -> None:
     import argparse
 
@@ -377,6 +387,10 @@ def main(cmdargs=None) -> None:
     args = parser.parse_args(args = cmdargs) 
  
     root = Path(args.root)
+
+
+    start_time = time.perf_counter()
+
     embedding_db = EmbeddingDb(Path(args.embedding_db))
     # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
     (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class, max_queries=args.max_queries, max_paragraphs=args.max_paragraphs, max_token_len=args.max_token_len, single_sequence=args.single_sequence)
@@ -388,13 +402,19 @@ def main(cmdargs=None) -> None:
         train_ds = PreloadedDataset(train_ds)
         test_ds = PreloadedDataset(test_ds)
 
-    # x = balanced_training_data(embedding_db)
-    # print(x)
+
     print(f"Device: {args.device}")
 
 
     print(f"Train data: {len(train_ds)}")
     print(f"Test data: {len(test_ds)}")
+
+    end_time = time.perf_counter()
+
+    print(f"Data loading took {elapsed_time_str(end_time - start_time)}.")
+
+    start_time = time.perf_counter()
+
     # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
     attention_classify.run(root
                     , overwrite=args.overwrite
@@ -409,6 +429,9 @@ def main(cmdargs=None) -> None:
                     , nhead=args.nhead)
     
     # prof.export_chrome_trace('profile.json')
+    end_time = time.perf_counter()
+
+    print(f"Training loading took {elapsed_time_str(end_time - start_time)} seconds.")
 
 if __name__ == '__main__':
     main()
