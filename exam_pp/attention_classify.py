@@ -490,6 +490,7 @@ def run(root: Path
         ,test_ds:Dataset
         ,class_list:List[int]
         ,out_dir: Optional[Path]=None
+        ,overwrite:bool=False
         ,batch_size: int=128
         ,n_epochs: int=30
         ,inner_dim: int=64
@@ -499,7 +500,7 @@ def run(root: Path
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
-    out_dir.mkdir(parents=True)
+    out_dir.mkdir(parents=True, exist_ok=overwrite)
 
     seq_len, llm_dim = train_ds[0]['embedding'].shape
     print('llm_dim', llm_dim)

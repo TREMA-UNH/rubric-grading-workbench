@@ -330,6 +330,8 @@ def main(cmdargs=None) -> None:
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--class-model', type=attention_classify.ClassificationModel.from_string, required=True, choices=list(attention_classify.ClassificationModel), metavar="MODEL"
                         , help="The classification model to use. Choices: "+", ".join(list(x.name for x in attention_classify.ClassificationModel)))
+    parser.add_argument('--overwrite', action="store_true", help='will automatically replace the output directory')
+    
  
     args = parser.parse_args(args = cmdargs) 
  
@@ -339,7 +341,11 @@ def main(cmdargs=None) -> None:
     (train_ds, test_ds, class_list) = create_dataset(embedding_db, prompt_class=args.prompt_class)
     # x = balanced_training_data(embedding_db)
     # print(x)
+    print(f"Device: {args.device}")
+
+
     attention_classify.run(root
+                           , overwrite=args.overwrite
                            , model_type=args.class_model
                            , train_ds=train_ds
                            , test_ds=test_ds
