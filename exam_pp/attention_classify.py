@@ -523,7 +523,7 @@ def run(root: Path
     print('llm_dim', llm_dim)
     print('context_sz', seq_len)
     print('classes', len(class_list))
-    prev_highest: float = sys.float_info.max
+    prev_highest: float = sys.float_info.min
 
 
 
