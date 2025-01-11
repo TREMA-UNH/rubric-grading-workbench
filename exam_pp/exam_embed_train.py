@@ -204,7 +204,7 @@ def create_dataset(embedding_db:EmbeddingDb
                    , max_token_len:Optional[int]
                    , sequence_mode:SequenceMode
                    , split_same_query: bool = False
-                   )->Tuple[Dataset, Dataset, List[int]]:
+                   )->Tuple[Dataset, Dataset, List[int], List[int]]:
 
     queries = None
     if query_list:
@@ -296,13 +296,15 @@ def create_dataset(embedding_db:EmbeddingDb
             return ConcatDataset([self, other])
 
     class EmbeddingStackDataset(torch.utils.data.Dataset):
-        def __init__(self, embedding, label_one_hot, label_id):
+        def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id):
             # Check that all datasets have the same first dimension
             if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
                 raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
             self.embedding = embedding
             self.label_one_hot = label_one_hot
             self.label_id = label_id
+            self.grades_one_hot = grades_one_hot
+            self.grades_id = grades_id
 
         def __len__(self):
             return len(self.embedding)
@@ -312,6 +314,8 @@ def create_dataset(embedding_db:EmbeddingDb
                 "embedding": self.embedding[idx],
                 "label_one_hot": self.label_one_hot[idx],
                 "label_id": self.label_id[idx],
+                "grades_one_hot": self.grades_one_hot[idx],
+                "grades_id":self.grades_id[idx]
             }
         
         
@@ -323,40 +327,82 @@ def create_dataset(embedding_db:EmbeddingDb
 
     example_label_list_train = [d.true_labels[0] for d in  classification_data_train.itertuples() ]
     example_label_list_test = [d.true_labels[0] for d in  classification_data_test.itertuples() ]
-    # print(example_label_list_test)
-
     classes = sorted(list(set(example_label_list_train)))
     label_idx = {c:i for i,c in enumerate(classes)}
 
-    example_label_id_list_train = [label_idx[label] 
-                                   for label in example_label_list_train]
-    example_label_id_list_test = [label_idx[label] 
-                                   if label_idx.get(label) is not None else label_idx['0'] # no training data for this label
-                                   for label in example_label_list_test]
+    # fake some grade info
+    example_grades_list_train = [[c]*10 for c in example_label_list_train]
+    example_grades_list_test = [[c]*10 for c in example_label_list_test]
+    grade_idx = label_idx
+    grades = classes
+    # end of fake
 
-    example_label_id_train = torch.tensor(example_label_id_list_train, dtype=torch.long)  # [num_examples]
-    example_label_id_test = torch.tensor(example_label_id_list_test, dtype=torch.long)  # [num_examples]
-    # Generate one-hot encoding for labels
-    example_label_one_hot_train = nn.functional.one_hot(example_label_id_train, num_classes=len(classes)).to(torch.float32)
-    example_label_one_hot_test = nn.functional.one_hot(example_label_id_test, num_classes=len(classes)).to(torch.float32)
+    # print(example_label_list_test)
 
-    print(f'train embedding={len(dataset_embedding_train)}, label_one_hot={example_label_one_hot_train.shape}, label_id={example_label_id_train.shape}')
-    print(f'test embedding={len(dataset_embedding_test)}, label_one_hot={example_label_one_hot_test.shape}, label_id={example_label_id_test.shape}')
-    print(f'train labels: example_label_id_train',example_label_id_train)
-    print(f'test labels: example_label_id_train',example_label_id_test)
 
+    def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
+            example_label_id_list = [label_idx[label] 
+                                           for label in example_label_list]
+
+            example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples]
+            # Generate one-hot encoding for labels
+            example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(classes)).to(torch.float32)
+
+            print(f'label_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+            print(f'labels: example_label_id',example_label_id)
+            return example_label_one_hot, example_label_id
+
+
+
+    def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int]):
+            example_label_id_list = [ [ grade_idx[label] for label in label_list]
+                                           for label_list in example_grades_list]
+
+            example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples, num_seq]
+            # Generate one-hot encoding for labels
+            example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(grades)).to(torch.float32)
+
+            print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+            print(f'grades: example_grades_id',example_label_id)
+            return example_label_one_hot, example_label_id
+    
+    # example_label_id_list_train = [label_idx[label] 
+    #                                for label in example_label_list_train]
+    # example_label_id_list_test = [label_idx[label] 
+    #                                if label_idx.get(label) is not None else label_idx['0'] # no training data for this label
+    #                                for label in example_label_list_test]
+
+    # example_label_id_train = torch.tensor(example_label_id_list_train, dtype=torch.long)  # [num_examples]
+    # example_label_id_test = torch.tensor(example_label_id_list_test, dtype=torch.long)  # [num_examples]
+    # # Generate one-hot encoding for labels
+    # example_label_one_hot_train = nn.functional.one_hot(example_label_id_train, num_classes=len(classes)).to(torch.float32)
+    # example_label_one_hot_test = nn.functional.one_hot(example_label_id_test, num_classes=len(classes)).to(torch.float32)
+
+    # print(f'train embedding={len(dataset_embedding_train)}, label_one_hot={example_label_one_hot_train.shape}, label_id={example_label_id_train.shape}')
+    # print(f'test embedding={len(dataset_embedding_test)}, label_one_hot={example_label_one_hot_test.shape}, label_id={example_label_id_test.shape}')
+    # print(f'train labels: example_label_id_train',example_label_id_train)
+    # print(f'test labels: example_label_id_train',example_label_id_test)
+    example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
+    example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
+    example_grades_one_hot_train, example_grades_id_train = conv_grades(example_label_list_train, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_test, example_grades_id_test = conv_grades(example_label_list_test, grades=grades, grade_idx=grade_idx)
+
+    
     train_ds = EmbeddingStackDataset(embedding=dataset_embedding_train
                                      , label_one_hot=example_label_one_hot_train
-                                     , label_id=example_label_id_train)
+                                     , label_id=example_label_id_train
+                                     , grades_one_hot=example_grades_one_hot_train
+                                     , grades_id=example_grades_id_train)
     test_ds = EmbeddingStackDataset(embedding=dataset_embedding_test
                                     , label_one_hot=example_label_one_hot_test
-                                    , label_id=example_label_id_test)
-
+                                    , label_id=example_label_id_test
+                                    , grades_one_hot=example_grades_one_hot_train
+                                    , grades_id=example_grades_id_train)
 
     # print("train_ds", train_ds[3])
     # print("test_ds", test_ds[3])
 
-    return (train_ds, test_ds, [label_idx[c] for c in classes])
+    return (train_ds, test_ds, [label_idx[c] for c in classes], [grade_idx[g] for g in grades])
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
 class CachingDataset(Dataset):
@@ -472,7 +518,7 @@ def main(cmdargs=None) -> None:
 
         embedding_db = EmbeddingDb(Path(args.embedding_db))
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-        (train_ds, test_ds, class_list) = create_dataset(embedding_db
+        (train_ds, test_ds, class_list, grades_list) = create_dataset(embedding_db
                                                          , prompt_class=args.prompt_class
                                                          , query_list = args.queries
                                                          , max_queries=args.max_queries
@@ -525,6 +571,7 @@ def main(cmdargs=None) -> None:
                         , train_ds=train_ds
                         , test_ds=test_ds
                         , class_list=class_list
+                        , grades_list=grades_list
                         , batch_size=args.batch_size
                         , snapshot_every=args.snapshots_every
                         , eval_every=args.eval_every
