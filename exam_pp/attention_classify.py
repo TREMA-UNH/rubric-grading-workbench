@@ -572,12 +572,15 @@ def run(root: Path
             train_metrics = evaluate(model, train_eval_loader, loss_fn, class_list, device)
             reporter.report(epoch_t, test_metrics, train_metrics)
 
-            if snapshot_best_after and epoch_t >= snapshot_best_after :
-                # Save model checkpoint on better validation metric
-                target=test_metrics[target_metric]
-                if target > prev_highest:
-                    print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}). Saving snapshot")
-                    prev_highest = target
+            # Save model checkpoint on better validation metric
+            if test_metrics.get(target_metric) is None:
+                raise RuntimeError(f"Snapshot target metric {target_metric} not available. Choices: {test_metrics.keys()}")
+            target=test_metrics[target_metric]
+            if target > prev_highest:
+                print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
+                prev_highest = target
+                if snapshot_best_after and epoch_t >= snapshot_best_after :
+                    print("Epoch {epoch_t}: Saving best snapshot")
                     torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
