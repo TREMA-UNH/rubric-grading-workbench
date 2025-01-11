@@ -1,11 +1,13 @@
 from pathlib import Path
 import sys
+from enum import Enum, auto
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
 from torch import nn
 import torch as pt
 from torch.nn import TransformerEncoder
 from torch.utils.data import StackDataset, ConcatDataset, TensorDataset, Dataset, DataLoader, Subset
 from typing import Any, Dict, Set, Tuple, List, Optional
+
 import torch.profiler as ptp
 import collections
 import io
@@ -178,13 +180,29 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
+
+class SequenceMode(Enum):
+    single_sequence = auto()
+    concat_sequence = auto()
+    multi_sequence = auto()
+
+    @staticmethod
+    def from_string(arg:str):
+        try:
+            return SequenceMode[arg]
+        except KeyError:
+            import argparse   
+            raise argparse.ArgumentTypeError("Invalid ClassificationModel choice: %s" % arg)
+        
+
+
 def create_dataset(embedding_db:EmbeddingDb
                    , prompt_class:str
                    , query_list: Optional[List[str]]
                    , max_queries:Optional[int]
                    , max_paragraphs:Optional[int]
                    , max_token_len:Optional[int]
-                   , single_sequence:bool 
+                   , sequence_mode:SequenceMode
                    , split_same_query: bool = False
                    )->Tuple[Dataset, Dataset, List[int]]:
 
@@ -250,11 +268,15 @@ def create_dataset(embedding_db:EmbeddingDb
             tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
             # print(f"{index}: {row.to_dict()}")
             tensor=None
-            if single_sequence:
+            if sequence_mode == SequenceMode.single_sequence:
                 tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=max_token_len)
-            else:
+            elif sequence_mode == SequenceMode.multi_sequence:
+                          # self.fetch_tensors(tensor_ids=tensor_ids, token_length=token_length, align=align)
+                tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=max_token_len)
+            elif sequence_mode == SequenceMode.concat_sequence:
                 tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=max_token_len)
-
+            else:
+                raise RuntimeError(f"sequence mode {sequence_mode} is not defined.")
             # the real deal:
             # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
 
@@ -389,7 +411,6 @@ class TrainingTimer:
 
         return f"{days} days, {hours} hours, {minutes} minutes, {seconds} seconds"
 
-        
 
 def main(cmdargs=None) -> None:
     import argparse
@@ -412,7 +433,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
     parser.add_argument('--snapshots-every', type=int, metavar="T", help="Take a model shapshort every T epochs")
     parser.add_argument('--snapshots-best-after', type=int, metavar="T", help="Take a model shapshort when target metric is improved (but only after the T'th epoch, and only during evaluation epochs)")
-    parser.add_argument('--snapshots-target-metric', type=str, metavar="METRIC", help="Target evaluation metric for --snapshots-best-after, such as 'roc_auc'")
+    parser.add_argument('--snapshots-target-metric', type=str, default="roc_auc", metavar="METRIC", help="Target evaluation metric for --snapshots-best-after, such as 'roc_auc'")
     
     parser.add_argument('--eval-every', type=int, metavar="T", help="Take a model shapshort every T epochs", default=1)
     parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
@@ -432,7 +453,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--split-same-query',action="store_true", help='Train/test split on same queries, but different paragraphs.')
 
     parser.add_argument('--max-token-len', type=int, metavar="N", help="Use up to N embedding tokens")
-    parser.add_argument('--single-sequence', action="store_true", help='Use only a single sequence for training')
+    parser.add_argument('--sequence-mode',  type=SequenceMode.from_string, required=True, choices=list(SequenceMode), metavar="MODE", help=f'Select how to handle multiple sequences for classification. Choices: {list(SequenceMode)}')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
 
@@ -457,7 +478,7 @@ def main(cmdargs=None) -> None:
                                                          , max_queries=args.max_queries
                                                          , max_paragraphs=args.max_paragraphs
                                                          , max_token_len=args.max_token_len
-                                                         , single_sequence=args.single_sequence
+                                                         , sequence_mode=args.sequence_mode
                                                          , split_same_query=args.split_same_query
                                                          )
 
@@ -480,7 +501,25 @@ def main(cmdargs=None) -> None:
 
     with TrainingTimer("Training"):
         # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
-        attention_classify.run(root = root
+        # attention_classify.run(root = root
+        #                 , overwrite=args.overwrite
+        #                 , model_type=args.class_model
+        #                 , train_ds=train_ds
+        #                 , test_ds=test_ds
+        #                 , class_list=class_list
+        #                 , batch_size=args.batch_size
+        #                 , snapshot_every=args.snapshots_every
+        #                 , eval_every=args.eval_every
+        #                 , n_epochs=args.epochs
+        #                 , device_str=args.device
+        #                 , inner_dim=args.inner_dim
+        #                 , nhead=args.nhead
+        #                 , epoch_timer = TrainingTimer("Epoch")
+        #                 , snapshot_best_after= args.snapshots_best_after
+        #                 , target_metric= args.snapshots_target_metric
+        #                 )
+
+        attention_classify.run_num_seqs(root = root
                         , overwrite=args.overwrite
                         , model_type=args.class_model
                         , train_ds=train_ds
@@ -497,7 +536,8 @@ def main(cmdargs=None) -> None:
                         , snapshot_best_after= args.snapshots_best_after
                         , target_metric= args.snapshots_target_metric
                         )
-        
+
+
         # prof.export_chrome_trace('profile.json')
 
 if __name__ == '__main__':

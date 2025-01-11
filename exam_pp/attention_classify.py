@@ -312,6 +312,195 @@ def build_model_multi_label_embedding_classifier_proj_packed(
     return (model, loss_fn)
 
 
+# K-sequence label model, which builds on the proj_packed model, but uses `k` sequences (and classification heads) that are aggregated.
+# 
+# 1. as inputs the model accepts k sequences (all of same seq_len and  llm_dim) 
+# 2. for each sequence, predicts a packed classification head and (with linear classification) predicts a vector of classification logits
+# 3. across all sequences, aggregates these logits via argmax (or similar function) to predict the final logits
+#
+# The loss function acts on the final logits.
+# The variable seq_logits represents the classification logits predicted for each sequence in the batch. Let’s break it down step by step:
+#
+#                ----------------- 
+# Input Context:
+#
+# The input to the model is a tensor of shape (batch_size, k, seq_len, llm_dim), where:
+#   *  batch_size is the number of examples in the batch.
+#   *  k is the number of sequences per example.
+#   *  seq_len is the length of each sequence.
+#   *  llm_dim is the dimensionality of the input embeddings.
+#
+# The model processes each sequence independently, and seq_logits is the intermediate output representing the logits for each sequence.
+# Flow of seq_logits:
+#
+#                ----------------- 
+#     Reshaping the Input:
+#
+# inputs = inputs.view(batch_size * k, seq_len, llm_dim)
+#
+# The input is reshaped to process each sequence independently. After reshaping:
+#
+#     The new shape is (batch_size * k, seq_len, llm_dim).
+#     Each sequence is now treated as a separate input in the batch.
+#
+# Passing Through the Model:
+#
+#     Projection: The input is projected to a lower-dimensional space using a Linear layer:
+#
+# x = self.proj(inputs)  # Shape: (batch_size * k, seq_len, inner_dim)
+#
+# Transformer: The projected embeddings are passed through a transformer encoder:
+#
+# x = self.transformer(x)  # Shape: (batch_size * k, seq_len, inner_dim)
+#
+# CLS Token Extraction: The model uses the embedding of the [CLS] token (assumed to be at position 0) as a summary of the sequence:
+#
+#     cls_token = x[:, 0, :]  # Shape: (batch_size * k, inner_dim)
+#
+# Generating Sequence-level Logits:
+#
+#     The extracted [CLS] token is passed through the classification head:
+#
+#     seq_logits = self.class_heads(cls_token)  # Shape: (batch_size * k, n_classes)
+#
+#     Each sequence produces a vector of logits (one for each class). The total number of logits corresponds to (batch_size * k, n_classes).
+#
+# Reshaping Back for Aggregation: The logits are reshaped to group them by batch and sequence:
+#
+# seq_logits = seq_logits.view(batch_size, k, -1)  # Shape: (batch_size, k, n_classes)
+#
+#     Here, seq_logits contains the predicted logits for all k sequences for each example in the batch.
+#     The shape (batch_size, k, n_classes) means:
+#         For each example in the batch, there are k sequences.
+#         For each sequence, the model predicts a vector of size n_classes.
+#
+# Final Aggregation: The logits from all k sequences are aggregated to produce a single logits vector for each example in the batch:
+#
+#     final_logits = self.aggregate(seq_logits)  # Shape: (batch_size, n_classes)
+#
+#     The aggregation reduces the sequence dimension k by combining the sequence-level logits into a final logits vector using methods like max, mean, or argmax.
+#
+# Summary of seq_logits:
+#
+#     Purpose: Represents the classification logits for each individual sequence in the input.
+#     Shape: (batch_size, k, n_classes).
+#     Aggregation: These logits are combined across the k sequences to produce the final logits for the entire example in the batch.
+#
+# By first generating seq_logits, the model ensures that each sequence is processed independently before combining their results in a meaningful way for the final prediction.
+
+class AggregateAndClassify(nn.Module):
+    def __init__(self, 
+                 n_classes: int, 
+                 class_weights: torch.Tensor, 
+                 llm_dim: int, 
+                 inner_dim: int, 
+                 ff_dim: Optional[int] = None, 
+                 nhead: int = 1, 
+                 k: int = 1, 
+                 aggregation: str = 'max'):
+        super().__init__()
+        self.k = k
+        self.aggregation = aggregation
+
+        # Projection layer
+        self.proj = nn.Linear(in_features=llm_dim, out_features=inner_dim, bias=True)
+
+        # Transformer Encoder Layer
+        ff_dim = ff_dim or 4 * inner_dim
+        self.transformer = nn.TransformerEncoderLayer(
+            d_model=inner_dim,
+            nhead=nhead,
+            dim_feedforward=ff_dim,
+            dropout=0.1,
+            batch_first=True,
+        )
+
+        # Classification Head for each sequence
+        self.class_heads = PackedClassHead(n_classes=n_classes, llm_dim=inner_dim)
+
+        # Aggregation function (default to max)
+        if aggregation == 'max':
+            self.aggregate = lambda logits: logits.max(dim=1)[0]
+        elif aggregation == 'mean':
+            self.aggregate = lambda logits: logits.mean(dim=1)
+        elif aggregation == 'argmax':
+            self.aggregate = lambda logits: logits.argmax(dim=1)
+        else:
+            raise ValueError("Invalid aggregation method. Choose from 'max', 'mean', or 'argmax'.")
+
+        # Loss function
+
+    def forward(self, inputs: torch.Tensor):
+        """
+        Inputs:
+            - inputs: Tensor of shape (batch_size, k, seq_len, llm_dim)
+        Outputs:
+            - final_logits: Tensor of shape (batch_size, n_classes)
+        """
+        batch_size, k, seq_len, llm_dim = inputs.size()
+
+        # Reshape to process each sequence independently
+        inputs = inputs.view(batch_size * k, seq_len, llm_dim)
+
+        # Pass through projection and transformer
+        x = self.proj(inputs)  # (batch_size * k, seq_len, inner_dim)
+        x = self.transformer(x)  # (batch_size * k, seq_len, inner_dim)
+
+        # Extract classification token (cls token assumed to be at position 0)
+        cls_token = x[:, 0, :]  # (batch_size * k, inner_dim)
+
+        # Sequence-level logits
+        seq_logits = self.class_heads(cls_token)  # (batch_size * k, n_classes)
+
+        # Reshape back to group by batch
+        seq_logits = seq_logits.view(batch_size, k, -1)  # (batch_size, k, n_classes)
+
+        # Aggregate across sequences
+        final_logits = self.aggregate(seq_logits)  # (batch_size, n_classes)
+
+
+        return final_logits
+
+
+def build_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes: int
+        ,class_weights:torch.Tensor
+        ,llm_dim: int
+        ,inner_dim: int
+        ,num_seqs: int
+        ,ff_dim: Optional[int]=None
+        ,nhead: int=1
+        ):
+    # n_classes = 10
+    # class_weights = torch.ones(n_classes)
+    # llm_dim = 768
+    # inner_dim = 128
+    # seq_len = 32
+    # k = 5
+    # batch_size = 16
+
+    # Model initialization
+    model = AggregateAndClassify( n_classes=n_classes
+                                , class_weights=class_weights
+                                , llm_dim=llm_dim
+                                , inner_dim=inner_dim
+                                , k=num_seqs
+                                , nhead=nhead
+                                , aggregation="max"
+                                )
+
+    # # Dummy inputs
+    # inputs = torch.randn(batch_size, k, seq_len, llm_dim)
+    # targets = torch.randint(0, 2, (batch_size, n_classes)).float()
+
+    # # Forward pass
+    # final_logits = model(inputs)
+
+    # Compute loss
+    loss_fn = nn.BCEWithLogitsLoss(pos_weight=class_weights)
+
+    return (model, loss_fn)
+
+
 
 # ======================
 
@@ -487,6 +676,7 @@ class ClassificationModel(Enum):
     multi_label = auto()
     multi_label_packed = auto()
     multi_label_proj_packed = auto()
+    multi_label_multi_seq_proj_packed = auto()
     mlp = auto()
 
     @staticmethod
@@ -536,6 +726,9 @@ def run(root: Path
         model, loss_fn = build_model_multi_label_embedding_classifier_packed(n_classes=len(class_list), llm_dim=llm_dim, nhead = nhead, class_weights=torch.ones(len(class_list)).to(device))
     elif model_type == ClassificationModel.multi_label_proj_packed:
         model, loss_fn = build_model_multi_label_embedding_classifier_proj_packed(n_classes=len(class_list), llm_dim=llm_dim, nhead = nhead, inner_dim=inner_dim, class_weights=torch.ones(len(class_list)).to(device))
+    elif model_type == ClassificationModel.multi_label_multi_seq_proj_packed:
+        raise ValueError(f"{model_type} needs to be called with run_num_seqs")
+        # model, loss_fn = build_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes=len(class_list), llm_dim=llm_dim, nhead = nhead, inner_dim=inner_dim, num_seqs=num_seqs,  class_weights=torch.ones(len(class_list)).to(device))
     elif model_type == ClassificationModel.mlp:
         model, loss_fn = build_model_multi_class_classifier_mlp(layer_dims=[llm_dim//2**i for i in range(4)], n_classes=len(class_list), llm_dim=llm_dim)
     else:
@@ -585,6 +778,90 @@ def run(root: Path
 
 
     torch.save(model.state_dict(), out_dir / f"model_final.pt")
+
+
+
+def run_num_seqs(root: Path
+        , model_type: ClassificationModel
+        ,train_ds:Dataset
+        ,test_ds:Dataset
+        ,class_list:List[int]
+        ,out_dir: Optional[Path]=None
+        ,overwrite:bool=False
+        ,batch_size: int=128
+        ,n_epochs: int=30
+        ,inner_dim: int=64
+        ,nhead: int=1
+        ,device_str:str = 'cuda'
+        ,snapshot_every:Optional[int]=None
+        ,eval_every:Optional[int]=None
+        ,epoch_timer:typing.ContextManager = Noop()
+        ,target_metric:str = 'roc_auc'
+        ,snapshot_best_after:Optional[int] = None
+        ):
+    if out_dir is None:
+        out_dir = root / Path('runs') / str(model_type)
+    out_dir.mkdir(parents=True, exist_ok=overwrite)
+
+    num_seqs, seq_len, llm_dim = train_ds[0]['embedding'].shape
+    print('llm_dim', llm_dim)
+    print('seq_len', seq_len)
+    print('num_seqs', num_seqs)
+    print('classes', len(class_list))
+    prev_highest: float = sys.float_info.min
+
+
+
+    device = torch.device(device=device_str)
+    if model_type == ClassificationModel.multi_label_multi_seq_proj_packed:
+        model, loss_fn = build_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes=len(class_list), llm_dim=llm_dim, nhead = nhead, inner_dim=inner_dim, num_seqs=num_seqs,  class_weights=torch.ones(len(class_list)).to(device))
+    else:
+        raise ValueError(f'unknown model {model_type}')
+
+    model = model.to(device)
+    # torchinfo.summary(model, input_size=(batch_size, seq_len, llm_dim), device=device)
+
+    print('Training...')
+    reporter = Reporter((out_dir / 'history-log.json').open('w'))
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    for epoch_t in range(n_epochs):
+        with epoch_timer:
+            print(f'epoch {epoch_t}...')
+            model.train()
+            for batch in DataLoader(train_ds, batch_size=batch_size, shuffle=True):
+                optimizer.zero_grad()
+                output = model(batch['embedding'].to(device))
+                loss = loss_fn(output, batch['label_one_hot'].to(device))
+                loss.backward()
+                optimizer.step()
+
+        # Save model checkpoint
+        if snapshot_every and epoch_t % snapshot_every == 0 :
+            torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
+
+        if  eval_every is None or epoch_t % eval_every == 0 :
+            # Evaluate loss
+            test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+            test_metrics = evaluate(model, test_loader, loss_fn, class_list, device)
+
+            train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
+            train_metrics = evaluate(model, train_eval_loader, loss_fn, class_list, device)
+            reporter.report(epoch_t, test_metrics, train_metrics)
+
+            # Save model checkpoint on better validation metric
+            if test_metrics.get(target_metric) is None:
+                raise RuntimeError(f"Snapshot target metric {target_metric} not available. Choices: {test_metrics.keys()}")
+            target=test_metrics[target_metric]
+            if target > prev_highest:
+                print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
+                prev_highest = target
+                if snapshot_best_after and epoch_t >= snapshot_best_after :
+                    print("Epoch {epoch_t}: Saving best snapshot")
+                    torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
+
+
+    torch.save(model.state_dict(), out_dir / f"model_final.pt")
+
 
 
 def main() -> None:
