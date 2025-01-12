@@ -386,6 +386,8 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
                 return d
             return g
         
+        print("example_grades_list", example_grades_list)
+        
         example_label_id_list = [ [ default_grade(grade,1) for grade in grade_list]
                                         for grade_list in example_grades_list]
 
@@ -393,8 +395,8 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
         # Generate one-hot encoding for labels
         example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(grades)).to(torch.float32)
 
-        print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
-        print(f'grades: example_grades_id',example_label_id)
+        # print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+        # print(f'grades: example_grades_id',example_label_id)
         return example_label_one_hot, example_label_id
 
 
@@ -516,8 +518,8 @@ def create_dataset(embedding_db:EmbeddingDb
     # print(f'test labels: example_label_id_train',example_label_id_test)
     example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
     example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
-    example_grades_one_hot_train, example_grades_id_train = conv_grades(example_label_list_train, grades=grades, grade_idx=grade_idx)
-    example_grades_one_hot_test, example_grades_id_test = conv_grades(example_label_list_test, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_train, example_grades_id_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_test, example_grades_id_test = conv_grades(example_grades_list_test, grades=grades, grade_idx=grade_idx)
 
     
     train_ds = EmbeddingStackDataset(embedding=dataset_embedding_train

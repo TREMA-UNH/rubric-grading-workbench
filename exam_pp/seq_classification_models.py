@@ -471,37 +471,49 @@ class AggregateAndClassify(nn.Module):
 
         return final_logits, self.seq_logits_grades
 
+    def convert_multi_label_to_multi_class_loss_inputs(self,seq_logits_grades:torch.Tensor,grade_targets:torch.Tensor)-> Tuple[torch.Tensor, torch.Tensor]:
+        '''According to the PyTorch documentation for torch.nn.CrossEntropyLoss, the inputs (logits) and targets need to be shaped as follows 
+          for a multi-class classification problem:
+            Requirements:
+
+            Logits (input):
+                The shape should be (minibatch, C, ...), where:
+                    minibatch is the batch size.
+                    C is the number of classes (e.g., 6 in your case).
+                    The rest (...) depends on the task (e.g., additional dimensions for sequences or images).
+
+            Targets (target):
+                The shape should be (minibatch, ...), where:
+                    minibatch matches the first dimension of input.
+                    ... matches the rest of the dimensions of input, excluding C.
+                target must contain class indices (integer values in the range [0, C-1]).
+                One-hot encoded targets (like [10, 10, 6] in your case) are not supported directly.
+        '''
+        return (seq_logits_grades.permute(0, 2, 1), 
+                torch.argmax(grade_targets, dim=-1)
+        )
+
     def compute_loss(self, final_logits: torch.Tensor
                      , class_targets: torch.Tensor
                      , seq_logits_grades: Optional[torch.Tensor]=None
-                     , grade_targets: Optional[torch.Tensor]=None) -> (nn.Module, nn.Module, Optional[nn.Module]):
+                     , grade_targets: Optional[torch.Tensor]=None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Compute the total loss:
             - Classification loss on final logits (n_classes)
             - Grade loss on sequence-level logits (n_grades)
         """
-        # Compute class-level loss
+        # # Compute class-level loss
         class_loss = self.loss_fn_class(final_logits, class_targets)
-        return class_loss, self.loss_fn_class, None
-    
-        # TODO fix me
-
-        # print("seq_logits_grades.shape", seq_logits_grades.shape)
-        # print("grade_targets.shape", grade_targets.shape)
-        # # Compute grade-level loss
-        # # grade_loss = self.loss_fn_grade(seq_logits_grades.view(-1, seq_logits_grades.size(-1)), 
-        # #                                 grade_targets.view(-1))
         
-        # # Reshape logits for loss
-        # seq_logits_grades_reshaped = seq_logits_grades.view(-1, seq_logits_grades.size(-1))  # Shape: [batch_size * k, n_grades]
-        # # Reshape targets for loss
-        # grade_targets_reshaped = grade_targets.view(-1)  # Shape: [batch_size * k]
-        # # Compute grade-level loss
-        # grade_loss = self.loss_fn_grade(seq_logits_grades_reshaped, grade_targets_reshaped)
+        grade_loss = 0.0
+        if (seq_logits_grades is not None) and ( grade_targets is not None):
+            # must rearrage for multi-class loss
+            seq_logits_grades_mc, grade_targets_mc = self.convert_multi_label_to_multi_class_loss_inputs(seq_logits_grades, grade_targets)
+            grade_loss = self.loss_fn_grade(seq_logits_grades_mc, grade_targets_mc)
 
-        # # Total loss is a weighted sum (can modify weights as needed)
-        # total_loss = class_loss + grade_loss
-        # return total_loss, class_loss, grade_loss
+        # Total loss is a weighted sum (can modify weights as needed)
+        total_loss = class_loss + grade_loss
+        return total_loss, class_loss, grade_loss
 
 def build_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes: int
         ,class_weights:torch.Tensor
