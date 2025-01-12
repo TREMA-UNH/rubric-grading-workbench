@@ -16,6 +16,8 @@ import json
 import numpy as np
 import sklearn.model_selection
 import torch
+
+from .multi_seq_class_grade_model import MultiLabelMultiSeqEmbeddingClassifier, build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed
 from .seq_classification_models import *
 # import torchinfo
 
@@ -139,7 +141,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader, loss_fn:nn.Module,  class
     return metrics
 
 
-def evaluate_new(model: AggregateAndClassify, dataloader: DataLoader, class_list: List[int], device: torch.device):
+def evaluate_better(model: MultiLabelMultiSeqEmbeddingClassifier, dataloader: DataLoader, class_list: List[int], device: torch.device):
     '''Computes the avg per-example loss and eval metrics on the whole training set, not just one batch. '''
     model.eval()
     total_loss = 0.0
@@ -151,17 +153,21 @@ def evaluate_new(model: AggregateAndClassify, dataloader: DataLoader, class_list
         for batch in dataloader:
             inputs = batch['embedding'].to(device)
             labels = batch['label_one_hot'].to(device)
-            grades = batch['grades_one_hot'].to(device)
+            grades = MultiLabelMultiSeqEmbeddingClassifier.convert_one_hot_to_indices(batch['grades_one_hot']).to(device)
 
-            outputs, seq_logits_grades =  model(inputs)
-            (loss, label_loss, grade_loss) = model.compute_loss(final_logits = outputs, class_targets = labels, seq_logits_grades=seq_logits_grades, grade_targets=grades)
-            # TODO fixme 
+            final_logits, seq_logits_grades =  model(inputs)
+            # total_loss, class_loss, grade_loss = model.compute_loss(
+            #        final_logits= final_logits, class_targets=labels, seq_logits_grades=seq_logits_grades,  grade_targets= grade_targets
+            #         )
+            (loss, label_loss, grade_loss) = model.compute_loss(final_logits = final_logits
+                                                                , class_targets = labels
+                                                                , seq_logits_grades=seq_logits_grades
+                                                                , grade_targets=grades)
 
-            # loss = loss_fn(outputs, labels)
             total_loss += loss.item()
             total_label_loss += label_loss.item()
             total_grades_loss += grade_loss.item()
-            all_preds.append(outputs.cpu())
+            all_preds.append(final_logits.cpu())
             all_labels.append(batch['label_one_hot'])
 
     y_true = torch.cat(all_labels)
@@ -340,6 +346,36 @@ def run(root: Path
 # ==========================
 
 
+def evaluate_new(model: AggregateAndClassify, dataloader: DataLoader, class_list: List[int], device: torch.device):
+    '''Computes the avg per-example loss and eval metrics on the whole training set, not just one batch. '''
+    model.eval()
+    total_loss = 0.0
+    total_label_loss = 0.0
+    total_grades_loss = 0.0
+    all_preds, all_labels = [], []
+
+    with torch.no_grad():
+        for batch in dataloader:
+            inputs = batch['embedding'].to(device)
+            labels = batch['label_one_hot'].to(device)
+            grades = batch['grades_one_hot'].to(device)
+
+            outputs, seq_logits_grades =  model(inputs)
+            (loss, label_loss, grade_loss) = model.compute_loss(final_logits = outputs, class_targets = labels, seq_logits_grades=seq_logits_grades, grade_targets=grades)
+
+            total_loss += loss.item()
+            total_label_loss += label_loss.item()
+            total_grades_loss += grade_loss.item()
+            all_preds.append(outputs.cpu())
+            all_labels.append(batch['label_one_hot'])
+
+    y_true = torch.cat(all_labels)
+    metrics = classification_metrics(y_pred_logits=torch.cat(all_preds), y_true_one_hot=y_true, class_list=class_list)
+    metrics['loss'] = total_loss / len(dataloader)
+    print(f"Evaluate: total_loss: {total_loss}, label_loss: {total_label_loss},  grades_loss: {total_grades_loss}")
+    return metrics
+
+
 def run_num_seqs(root: Path
         , model_type: ClassificationModel
         ,train_ds:Dataset
@@ -375,8 +411,8 @@ def run_num_seqs(root: Path
 
     device = torch.device(device=device_str)
     if model_type == ClassificationModel.multi_label_multi_seq_proj_packed:
-        model, class_loss_fn, grade_loss_fn = \
-            build_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes=len(class_list)
+        model = \
+            build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(n_classes=len(class_list)
                                                                                 , n_grades=len(grades_list)
                                                                                 , llm_dim=llm_dim
                                                                                 , nhead = nhead
@@ -385,6 +421,8 @@ def run_num_seqs(root: Path
                                                                                 , class_weights=torch.ones(len(class_list)).to(device)
                                                                                 , grade_weights=torch.ones(len(grades_list)).to(device)
                                                                                 , aggregation = aggregation
+                                                                                , label_problem_type="multi_label"
+                                                                                , grade_problem_type="multi_class"
                                                                                 )
     else:
 
@@ -405,10 +443,10 @@ def run_num_seqs(root: Path
                 (pred_classes, pred_grades) = model(batch['embedding'].to(device))
                 # loss = class_loss_fn(pred_classes, batch['label_one_hot'].to(device))
                 # grades_loss = grade_loss_fn()
-                total_loss, class_loss_fn, grade_loss_fn = model.compute_loss(final_logits= pred_classes
+                total_loss, class_loss, grade_loss = model.compute_loss(final_logits= pred_classes
                                    , seq_logits_grades=pred_grades
                                    , class_targets= batch['label_one_hot'].to(device)
-                                   , grade_targets= batch['grades_one_hot'].to(device))
+                                   , grade_targets= MultiLabelMultiSeqEmbeddingClassifier.convert_one_hot_to_indices(batch['grades_one_hot']).to(device))
                 total_loss.backward()
                 optimizer.step()
 
@@ -419,11 +457,11 @@ def run_num_seqs(root: Path
         if  eval_every is None or epoch_t % eval_every == 0 :
             # Evaluate loss
             test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-            test_metrics = evaluate_new(model=model, dataloader=test_loader, class_list = class_list, device=device)
+            test_metrics = evaluate_better(model=model, dataloader=test_loader, class_list = class_list, device=device)
             print("test_metrics", test_metrics)
 
             train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
-            train_metrics = evaluate_new(model=model, dataloader=train_eval_loader, class_list = class_list, device=device)
+            train_metrics = evaluate_better(model=model, dataloader=train_eval_loader, class_list = class_list, device=device)
             reporter.report(epoch_t, test_metrics, train_metrics)
 
             # Save model checkpoint on better validation metric
@@ -438,7 +476,7 @@ def run_num_seqs(root: Path
                     torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
-    torch.save(model.state_dict(), out_dir / f"model_final.pt")
+    # torch.save(model.state_dict(), out_dir / f"model_final.pt")
 
 
 
