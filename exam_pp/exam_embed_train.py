@@ -19,6 +19,8 @@ import torch
 import pandas as pd
 import time
 
+from .rubric_db import *
+
 from . test_bank_prompts import get_prompt_classes
 from . import attention_classify
 
@@ -146,6 +148,29 @@ def get_tensor_ids(db:EmbeddingDb, classification_item_id: List[ClassificationIt
 
 
 
+def annotate_with_grades(embedding_db:EmbeddingDb, data_tensors:pd.DataFrame) -> pd.DataFrame:
+    embedding_db.db.execute(
+        '''--sql
+        SELECT needles.tensor_id, exam_grade.self_rating, exam_grade.test_bank_id
+        FROM (SELECT of data_tensors.tensor_id FROM data_tensors) AS needles
+        INNER JOIN classification_feature AS cf
+        ON cf.tensor_id = needles.tensor_id
+        INNER JOIN classification_item AS ci
+        ON ci.classification_item_id = cf.classification_item_id
+        INNER JOIN rubric.relevance_item AS ri
+        ON ri.query_id = ci.metadata->>'$.query'
+            AND ri.paragraph_id = ci.metadata->>'$.paragraph'
+        INNER JOIN exam_grade
+        ON exam_grade.relevance_item_id = ri.relevance_item_id
+            AND exam_grade.test_bank_id = cf.metadata->>'$.test_bank'
+        '''
+    )
+    grade_df = embedding_db.db.fetch_df()
+    return data_tensors.join(grade_df, on="tensor_id")
+
+
+
+
 def lookup_classification_tensors(db:EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class:str):
     # Get tensor metadata
     metadata_df = db.get_tensor_metadata(classification_item_id, prompt_class)
@@ -180,6 +205,80 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     return sampled
 
 
+# def annotate_with_grades(embedding_db:EmbeddingDb, data_tensors:pd.DataFrame) -> pd.DataFrame:
+#     embedding_db.db.execute(
+#         '''--sql
+#         SELECT needles.tensor_id, exam_grade.self_rating, exam_grade.test_bank_id
+#         FROM (SELECT of data_tensors.tensor_id FROM data_tensors) AS needles
+#         INNER JOIN classification_feature AS cf
+#         ON cf.tensor_id = needles.tensor_id
+#         INNER JOIN classification_item AS ci
+#         ON ci.classification_item_id = cf.classification_item_id
+#         INNER JOIN relevance_item AS ri
+#         ON ri.query_id = ci.metadata->>'$.query'
+#             AND ri.paragraph_id = ci.metadata->>'$.paragraph'
+#         INNER JOIN exam_grade
+#         ON exam_grade.relevance_item_id = ri.relevance_item_id
+#             AND exam_grade.test_bank_id = cf.metadata->>'$.test_bank'
+#         '''
+#     )
+#     grade_df = embedding_db.db.fetch_df()
+#     return data_tensors.join(grade_df, on="tensor_id")
+
+def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class: str):
+    """
+    For each classification_item_id, fetch:
+      - array of tensor_ids
+      - array of test_bank_ids
+      - array of exam_grade fields (e.g., self_rating, is_correct)
+
+        # df_with_grades columns might look like:
+        # i | tensor_ids         | test_bank_ids       | self_ratings        | is_corrects
+        # --|--------------------|---------------------|---------------------|-------------
+        # 0 | [t1, t2, ...]      | ['tb1', 'tb1', ...] | [2, 3, ...]         | [False, True, ...]
+        # 1 | [t17, t18, ...]    | ['tb2', ...]        | [1, 4, ...]         | [True, False, ...]
+        # ...
+
+    """    
+
+    classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
+    classification_item_ids_df['i'] = classification_item_ids_df.index
+
+    # Register the DataFrame as a temporary table for use in SQL
+    db.db.register('classification_item_ids_df', classification_item_ids_df)
+
+    # Execute the query
+    db.db.execute(
+        '''--sql
+        SELECT 
+            needles.i,
+            array_agg(cf.tensor_id) AS tensor_ids,
+            array_agg(cf.metadata->>'$.test_bank') AS test_bank_ids,
+            array_agg(eg.self_rating) AS self_ratings,
+            array_agg(eg.is_correct) AS correctness,
+            ci.classification_item_id
+        FROM classification_feature AS cf
+        INNER JOIN classification_item_ids_df AS needles 
+            ON cf.classification_item_id = needles.classification_item_id
+        INNER JOIN classification_item AS ci
+            ON ci.classification_item_id = cf.classification_item_id
+        INNER JOIN rubric.relevance_item AS ri
+            ON ri.query_id = (ci.metadata->>'$.query')
+            AND ri.paragraph_id = (ci.metadata->>'$.passage')
+        INNER JOIN rubric.exam_grade AS eg
+            ON eg.relevance_item_id = ri.relevance_item_id
+            AND eg.test_bank_id = (cf.metadata->>'$.test_bank')
+        WHERE 
+            (cf.metadata->>'$.prompt_class') = ?
+        GROUP BY 
+            needles.i, ci.classification_item_id
+        ORDER BY 
+            needles.i ASC;
+        ''', (prompt_class,))
+    
+    return db.db.df()
+
+
 
 class SequenceMode(Enum):
     single_sequence = auto()
@@ -194,6 +293,109 @@ class SequenceMode(Enum):
             import argparse   
             raise argparse.ArgumentTypeError("Invalid ClassificationModel choice: %s" % arg)
         
+
+class ClassificationItemDataset(Dataset):
+    def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb, sequence_mode:SequenceMode, max_token_len:int):
+        self.tensor_df = tensor_df
+        self.db = db
+        self.sequence_mode = sequence_mode
+        self.max_token_len = max_token_len
+
+
+    def __getitem__(self, index) -> pt.Tensor:
+        tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
+        # print(f"{index}: {row.to_dict()}")
+        tensor=None
+        if self.sequence_mode == SequenceMode.single_sequence:
+            tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=self.max_token_len)
+        elif self.sequence_mode == SequenceMode.multi_sequence:
+                        # self.fetch_tensors(tensor_ids=tensor_ids, token_length=token_length, align=align)
+            tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=self.max_token_len)
+        elif self.sequence_mode == SequenceMode.concat_sequence:
+            tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=self.max_token_len)
+        else:
+            raise RuntimeError(f"sequence mode {self.sequence_mode} is not defined.")
+        # the real deal:
+        # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
+
+        # print(tensor.shape)
+        # print("-------")
+        return tensor
+
+    def __len__(self) -> int:
+        return len(self.tensor_df)
+    
+
+    # def __getitems__(self, indices: List) -> List[T_co]:
+    # Not implemented to prevent false-positives in fetcher check in
+    # torch.utils.data._utils.fetch._MapDatasetFetcher
+
+    def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
+        return ConcatDataset([self, other])
+
+class EmbeddingStackDataset(torch.utils.data.Dataset):
+    def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id):
+        # Check that all datasets have the same first dimension
+        if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
+            raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
+        self.embedding = embedding
+        self.label_one_hot = label_one_hot
+        self.label_id = label_id
+        self.grades_one_hot = grades_one_hot
+        self.grades_id = grades_id
+
+    def __len__(self):
+        return len(self.embedding)
+
+    def __getitem__(self, idx):
+        return {
+            "embedding": self.embedding[idx],
+            "label_one_hot": self.label_one_hot[idx],
+            "label_id": self.label_id[idx],
+            "grades_one_hot": self.grades_one_hot[idx],
+            "grades_id":self.grades_id[idx]
+        }
+    
+
+def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
+        def default_label(label, d):
+            l = label_idx.get(label)
+            if l is None:
+                print(f"Warning: Dataset contains label {label}, which is not in the set of training labels: {label_idx.keys()}")
+                return d
+            return l
+        
+        example_label_id_list = [default_label(label,0)
+                                        for label in example_label_list]
+
+        example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples]
+        # Generate one-hot encoding for labels
+        example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(classes)).to(torch.float32)
+
+        print(f'label_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+        print(f'labels: example_label_id',example_label_id)
+        return example_label_one_hot, example_label_id
+
+
+
+def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int]):
+        def default_grade(grade, d):
+            g = grade_idx.get(grade)
+            if g is None:
+                print(f"Warning: Dataset contains grade {grade}, which is not in the set of training grades: {grade_idx.keys()}")
+                return d
+            return g
+        
+        example_label_id_list = [ [ default_grade(grade,1) for grade in grade_list]
+                                        for grade_list in example_grades_list]
+
+        example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples, num_seq]
+        # Generate one-hot encoding for labels
+        example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(grades)).to(torch.float32)
+
+        print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+        print(f'grades: example_grades_id',example_label_id)
+        return example_label_one_hot, example_label_id
 
 
 def create_dataset(embedding_db:EmbeddingDb
@@ -213,8 +415,6 @@ def create_dataset(embedding_db:EmbeddingDb
         queries = queries_fromdb[queries_fromdb.isin(query_list)]
     else:
         queries = list(get_queries(db=embedding_db))[:max_queries]
-
-
 
         
     classification_items_train:List[ClassificationItemId]
@@ -243,6 +443,7 @@ def create_dataset(embedding_db:EmbeddingDb
 
         
 
+
     # query, passage, labels
     classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
     classification_data_test:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_test)
@@ -250,78 +451,19 @@ def create_dataset(embedding_db:EmbeddingDb
     classification_items_train = classification_data_train["classification_item_id"].to_list()
     classification_items_test = classification_data_test["classification_item_id"].to_list()
 
-    train_tensors:pd.DataFrame = get_tensor_ids(embedding_db
+
+    train_tensors_with_grades:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                 , classification_item_id=classification_items_train
                                                 , prompt_class= prompt_class)
-    test_tensors:pd.DataFrame = get_tensor_ids(embedding_db
+    test_tensors_with_grades:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                , classification_item_id=classification_items_test
                                                , prompt_class= prompt_class)
     # print("test_tensors", test_tensors)
 
-    class ClassificationItemDataset(Dataset):
-        def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb):
-            self.tensor_df = tensor_df
-            self.db = db
+    # train_tensors_with_grade:pd.DataFrame = annotate_with_grades(embedding_db=embedding_db, data_tensors=train_tensors)
+    # test_tensors_with_grade:pd.DataFrame = annotate_with_grades(embedding_db=embedding_db, data_tensors=test_tensors)
 
-
-        def __getitem__(self, index) -> pt.Tensor:
-            tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
-            # print(f"{index}: {row.to_dict()}")
-            tensor=None
-            if sequence_mode == SequenceMode.single_sequence:
-                tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=max_token_len)
-            elif sequence_mode == SequenceMode.multi_sequence:
-                          # self.fetch_tensors(tensor_ids=tensor_ids, token_length=token_length, align=align)
-                tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=max_token_len)
-            elif sequence_mode == SequenceMode.concat_sequence:
-                tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=max_token_len)
-            else:
-                raise RuntimeError(f"sequence mode {sequence_mode} is not defined.")
-            # the real deal:
-            # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
-
-            # print(tensor.shape)
-            # print("-------")
-            return tensor
-
-        def __len__(self) -> int:
-            return len(self.tensor_df)
-        
-
-        # def __getitems__(self, indices: List) -> List[T_co]:
-        # Not implemented to prevent false-positives in fetcher check in
-        # torch.utils.data._utils.fetch._MapDatasetFetcher
-
-        def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
-            return ConcatDataset([self, other])
-
-    class EmbeddingStackDataset(torch.utils.data.Dataset):
-        def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id):
-            # Check that all datasets have the same first dimension
-            if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
-                raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
-            self.embedding = embedding
-            self.label_one_hot = label_one_hot
-            self.label_id = label_id
-            self.grades_one_hot = grades_one_hot
-            self.grades_id = grades_id
-
-        def __len__(self):
-            return len(self.embedding)
-
-        def __getitem__(self, idx):
-            return {
-                "embedding": self.embedding[idx],
-                "label_one_hot": self.label_one_hot[idx],
-                "label_id": self.label_id[idx],
-                "grades_one_hot": self.grades_one_hot[idx],
-                "grades_id":self.grades_id[idx]
-            }
-        
-        
-
-    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors)
-    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors)
+    # print("train_tensors_with_grade", train_tensors)
     # print("len(dataset_embedding_test)", len(dataset_embedding_test))
 
 
@@ -331,41 +473,31 @@ def create_dataset(embedding_db:EmbeddingDb
     label_idx = {c:i for i,c in enumerate(classes)}
 
     # fake some grade info
-    example_grades_list_train = [[c]*10 for c in example_label_list_train]
-    example_grades_list_test = [[c]*10 for c in example_label_list_test]
-    grade_idx = label_idx
-    grades = classes
-    # end of fake
+    print("classification_data_train", classification_data_train[0:2])
+    print("train_tensors_with_grades", train_tensors_with_grades[0:2])
+    # print("dataset_embedding_train", dataset_embedding_train[0:2])
+    
+
+
+    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades, sequence_mode=sequence_mode, max_token_len=max_token_len)
+    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades, sequence_mode=sequence_mode, max_token_len=max_token_len)
+
+    example_grades_list_train = [tup.self_ratings for tup in train_tensors_with_grades.itertuples()]
+    # [[c]*10 for c in example_label_list_train]
+    # example_grades_list_test = [[c]*10 for c in example_label_list_test]
+    example_grades_list_test = [tup.self_ratings for tup in test_tensors_with_grades.itertuples()]
+
+    grade_idx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:5}
+    grades = list(grade_idx.values())
+    sorted(grades)
+    print("example_grades_list_train", example_grades_list_train)
+    print("grades", grades)
+
+  
 
     # print(example_label_list_test)
 
 
-    def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
-            example_label_id_list = [label_idx[label] 
-                                           for label in example_label_list]
-
-            example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples]
-            # Generate one-hot encoding for labels
-            example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(classes)).to(torch.float32)
-
-            print(f'label_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
-            print(f'labels: example_label_id',example_label_id)
-            return example_label_one_hot, example_label_id
-
-
-
-    def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int]):
-            example_label_id_list = [ [ grade_idx[label] for label in label_list]
-                                           for label_list in example_grades_list]
-
-            example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples, num_seq]
-            # Generate one-hot encoding for labels
-            example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(grades)).to(torch.float32)
-
-            print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
-            print(f'grades: example_grades_id',example_label_id)
-            return example_label_one_hot, example_label_id
-    
     # example_label_id_list_train = [label_idx[label] 
     #                                for label in example_label_list_train]
     # example_label_id_list_test = [label_idx[label] 
@@ -473,6 +605,7 @@ def main(cmdargs=None) -> None:
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
+    parser.add_argument('--rubric-db', type=str, metavar='PATH', help='Path for the database directory for rubric paragraph data')
 
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
@@ -517,6 +650,11 @@ def main(cmdargs=None) -> None:
     with TrainingTimer("Data Loading"):
 
         embedding_db = EmbeddingDb(Path(args.embedding_db))
+
+        embedding_db.db.execute(f'''--sql
+                                ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
+                                ''')
+
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
         (train_ds, test_ds, class_list, grades_list) = create_dataset(embedding_db
                                                          , prompt_class=args.prompt_class

@@ -16,7 +16,7 @@ class Align(Enum):
     ALIGN_END = auto()
     ALIGN_BEGIN = auto()
 
-SCHEMA = '''
+SCHEMA = '''--sql
 CREATE SEQUENCE tensor_storage_id_seq START 1;
 CREATE SEQUENCE tensor_id_seq START 1;
 CREATE TABLE tensor (
@@ -303,11 +303,11 @@ class EmbeddingDb:
 
     def add_embeddings(self,
                        # entries marked with "# <-" mark the set that denotes a unique entry.
-            query_id: str, # <-
-            passage_id: str, # <-
-            prompt_class: str, # <- 
+            query_id: str, 
+            passage_id: str, 
+            prompt_class: str, 
             prompt_texts: List[str],
-            test_bank_ids: List[str], # <-
+            test_bank_ids: List[str], 
             answers: List[str],
             embeddings: pt.Tensor,
             true_labels: Optional[List[str]]
@@ -355,7 +355,7 @@ class EmbeddingDb:
                 (ci_id, true_labels))
 
 
-def main() -> None:
+def test() -> None:
     p = Path('test.vecdb')
     dims = (512,1024)
     N = 64
@@ -374,4 +374,4 @@ def main() -> None:
     print(xs)
 
 if __name__ == '__main__':
-    main()
+    test()

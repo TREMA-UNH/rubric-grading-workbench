@@ -153,7 +153,7 @@ class GradeFilter():
         return GradeFilter(model_name=None, prompt_class=None, is_self_rated=None, min_self_rating=None, question_set=None, prompt_type=None, data_set=None)
 
     @staticmethod
-    def question_type(grade:Union[ExamGrades,Grades]):
+    def get_question_type(grade:Union[ExamGrades,Grades]):
         if isinstance(grade, ExamGrades):
             if (grade.answers[0][0].startswith("NDQ_")):
                 return "tqa"
@@ -169,23 +169,30 @@ class GradeFilter():
     def get_prompt_type(grade:Union[ExamGrades,Grades])->str:
         return grade.prompt_type if grade.prompt_type is not None else ""
 
-        
+
+    @staticmethod
+    def get_prompt_class(grade:Union[ExamGrades,Grades])->str:
+        return grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
+
+    @staticmethod
+    def get_is_self_rated(grade:Union[ExamGrades,Grades])->bool:
+        return grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
 
     @staticmethod
     def key_dict(grade:Union[ExamGrades,Grades])->Dict[str,Any]:
         return  { "llm": grade.llm
-                , "prompt_class": grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
-                , "is_self_rated": grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
-                , "question_set": GradeFilter.question_type(grade)
+                , "prompt_class": GradeFilter.get_prompt_class(grade)
+                , "is_self_rated": GradeFilter.get_is_self_rated(grade)
+                , "question_set": GradeFilter.get_question_type(grade)
                 , "prompt_type": GradeFilter.get_prompt_type(grade)
                 }
-    
+
     @staticmethod
     def key(grade:Union[ExamGrades,Grades])->str:
         is_self_rated = grade.prompt_info.get("is_self_rated", None) if grade.prompt_info is not None else False
         prompt_class =grade.prompt_info.get("prompt_class", None) if grade.prompt_info is not None else "QuestionPromptWithChoices"
         prompt_type = GradeFilter.get_prompt_type(grade)
-        return f"llm={grade.llm} prompt_class={prompt_class} is_self_rated={is_self_rated}  question_set={GradeFilter.question_type(grade)} prompt_type={prompt_type}"
+        return f"llm={grade.llm} prompt_class={prompt_class} is_self_rated={is_self_rated}  question_set={GradeFilter.get_question_type(grade)} prompt_type={prompt_type}"
                 
 
     def fetch_any(self, exam_grades: Optional[List[ExamGrades]], grades: Optional[List[Grades]])-> List[ExamGrades]:
