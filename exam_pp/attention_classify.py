@@ -109,30 +109,33 @@ def read_embeddings(path: Path, n_parts: int) -> Tuple[Dataset, Dataset, List[in
     return (train_ds, test_ds, label_idx_to_class_list(label_idx))
 
 
-def evaluate(model: nn.Module, dataloader: DataLoader, loss_fn: nn.Module, class_list: List[int], device: torch.device):
+def evaluate(model: nn.Module, dataloader: DataLoader, class_list: List[int], device: torch.device):
     '''Computes the avg per-example loss and eval metrics on the whole training set, not just one batch. '''
     model.eval()
     total_loss = 0
+    total_grades_loss = 0
     all_preds, all_labels = [], []
 
     with torch.no_grad():
         for batch in dataloader:
             inputs = batch['embedding'].to(device)
             labels = batch['label_one_hot'].to(device)
+            grades = batch['grades_one_hot'].to(device)
 
             outputs, seq_logits_grades =  model(inputs)
-            (_, loss_fn, _) = model.compute_loss(final_logits = outputs, class_targets = labels)
+            (_, loss_fn, grade_fn) = model.compute_loss(final_logits = outputs, class_targets = labels)
             # TODO fixme 
 
             loss = loss_fn(outputs, labels)
             total_loss += loss.item()
-
+            total_grades_loss += grade_fn(seq_logits_grades, grades)
             all_preds.append(outputs.cpu())
             all_labels.append(batch['label_one_hot'])
 
     y_true = torch.cat(all_labels)
     metrics = classification_metrics(y_pred_logits=torch.cat(all_preds), y_true_one_hot=y_true, class_list=class_list)
     metrics['loss'] = total_loss / len(dataloader)
+    print(f"Evaluate: total_loss: {total_loss}, grades_loss: {total_grades_loss}")
     return metrics
 
 
@@ -384,11 +387,11 @@ def run_num_seqs(root: Path
         if  eval_every is None or epoch_t % eval_every == 0 :
             # Evaluate loss
             test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-            test_metrics = evaluate(model=model, dataloader=test_loader, loss_fn = class_loss_fn, class_list = class_list, device=device)
+            test_metrics = evaluate(model=model, dataloader=test_loader, class_list = class_list, device=device)
             print("test_metrics", test_metrics)
 
             train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
-            train_metrics = evaluate(model=model, dataloader=train_eval_loader, loss_fn = class_loss_fn, class_list = class_list, device=device)
+            train_metrics = evaluate(model=model, dataloader=train_eval_loader, class_list = class_list, device=device)
             reporter.report(epoch_t, test_metrics, train_metrics)
 
             # Save model checkpoint on better validation metric

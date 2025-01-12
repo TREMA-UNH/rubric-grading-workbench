@@ -528,8 +528,8 @@ def create_dataset(embedding_db:EmbeddingDb
     test_ds = EmbeddingStackDataset(embedding=dataset_embedding_test
                                     , label_one_hot=example_label_one_hot_test
                                     , label_id=example_label_id_test
-                                    , grades_one_hot=example_grades_one_hot_train
-                                    , grades_id=example_grades_id_train)
+                                    , grades_one_hot=example_grades_one_hot_test
+                                    , grades_id=example_grades_id_test)
 
     # print("train_ds", train_ds[3])
     # print("test_ds", test_ds[3])
