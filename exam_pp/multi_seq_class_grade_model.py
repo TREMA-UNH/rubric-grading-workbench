@@ -406,6 +406,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
                     # Check if all entries are invalid
                     if masked_logits.numel() == 0:
+                        # print("loss: no valid grades")
                         grade_loss = torch.tensor(0.0, device=seq_logits_grades.device)  # No valid entries, grade loss is 0
                     else:
                         # Reshape masked tensors to (N, n_grades)
@@ -414,9 +415,10 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
                         # Compute grade loss
                         grade_loss = self.loss_fn_grade(masked_logits, masked_targets)
+                        # print(f"multi-label loss: grade_loss = {grade_loss}")
                 else:  # multi_class
                     # Reshape logits and targets
-                    # print("mask non-zero:",num_valid_grades)
+                    # print("loss: mask non-zero:",num_valid_grades)
                     seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
                     grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')  
                     grade_valid_1d = rearrange(grade_valid, 'b k -> (b k)')  # Flatten valid mask
@@ -426,11 +428,12 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                     masked_targets = grade_targets_1d[grade_valid_1d]
                     # print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
                     grade_loss = self.loss_fn_grade(masked_logits, masked_targets.long())
-
-
+                    # print(f"multi-class loss: grade_loss = {grade_loss}")
+       
 
 
         total_loss = class_loss + grade_loss
+        # print(f"loss: {total_loss}, grade_loss={grade_loss}")
         return total_loss, class_loss, grade_loss
 
 
