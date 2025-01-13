@@ -358,8 +358,9 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
 def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
         def default_label(label, d):
             l = label_idx.get(label)
-            if (l is None) and (label != -1):
-                print(f"Warning: Dataset contains label {label}, which is not in the set of training labels: {label_idx.keys()}")
+            if (l is None):
+                if (label != -1):
+                    print(f"Warning: Dataset contains label {label}, which is not in the set of training labels: {label_idx.keys()}")
                 return d
             return l
         
@@ -379,14 +380,15 @@ def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[A
 def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int]):
         def default_grade(grade, d):
             g = grade_idx.get(grade)
-            if g is None:
-                print(f"Warning: Dataset contains grade {grade}, which is not in the set of training grades: {grade_idx.keys()}")
+            if (g is None):
+                if (grade != -1):
+                    print(f"Warning: Dataset contains grade {grade}, which is not in the set of training grades: {grade_idx.keys()}")
                 return d
             return g
         
         # print("example_grades_list", example_grades_list)
         
-        example_grade_id_list = [ [ default_grade(grade,1) for grade in grade_list]
+        example_grade_id_list = [ [ default_grade(grade,0) for grade in grade_list]
                                         for grade_list in example_grades_list]
         example_grade_id = torch.tensor(example_grade_id_list, dtype=torch.long)  # [num_examples, num_seq]
 
