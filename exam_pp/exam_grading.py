@@ -483,7 +483,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     
     embedding_db = None
     if args.embedding_db is not None:
-        embedding_db = EmbeddingDb(Path(args.embedding_db))
+        embedding_db = EmbeddingDb(Path(args.embedding_db),write=True)
 
 
     noodle(

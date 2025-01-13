@@ -48,11 +48,11 @@ CREATE TABLE label_assignment (
 '''
 
 class EmbeddingDb:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, write:bool=False):
         self.tensor_dir = path / "tensors"
         needs_init = not path.exists()
         self.tensor_dir.mkdir(parents=True, exist_ok=True)
-        self.db = duckdb.connect(path / 'embeddings.duckdb')
+        self.db = duckdb.connect(path / 'embeddings.duckdb', read_only=not write)
         if needs_init:
             self.db.execute(SCHEMA)
         self.storage_cache:Dict[Any,Any] = dict()
