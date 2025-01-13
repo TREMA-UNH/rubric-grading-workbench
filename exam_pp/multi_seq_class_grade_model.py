@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from typing import Tuple, Optional
 from enum import Enum, auto
 
@@ -251,11 +252,11 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                  aggregation: str = "max",
                  label_problem_type: ProblemType = ProblemType.multi_class,
                  grade_problem_type: ProblemType = ProblemType.multi_class,
-                 use_transformer: bool = True
+                 use_transformer: bool = True,
+                 use_inner_proj: bool = True
                  ):
         super().__init__()
 
-        ff_dim = ff_dim or 4 * inner_dim
         self.num_seqs = num_seqs
         self.n_classes = n_classes
         self.n_grades = n_grades
@@ -263,28 +264,35 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         self.label_problem_type = label_problem_type
         self.grade_problem_type = grade_problem_type
         self.use_transformer = use_transformer
+        self.use_inner_proj = use_inner_proj
 
         # -------------------------------
         # 1) A small sequential pipeline
         # -------------------------------
         # This pipeline outputs shape (b*k, inner_dim) after flatten, projection, transform, and elemAt.
-        self.pipeline = nn.Sequential(
-            Reshape('b k l d -> (b k) l d'),
-            nn.Linear(llm_dim, inner_dim, bias=True),
-            ( nn.TransformerEncoderLayer(
-                d_model=inner_dim,
-                nhead=nhead,
-                dim_feedforward=ff_dim,
-                dropout=0.1,
-                batch_first=True,
-              ) if use_transformer 
-                else MeanPoolAsCLS()
-            ), 
-            ElemAt(0),  # pick [CLS] token => shape (b*k, inner_dim)
-        )
+        self.pipeline = nn.Sequential()
+        self.pipeline.add_module("reshape_seqs", Reshape('b k l d -> (b k) l d'))
+        if self.use_inner_proj:
+            self.pipeline.add_module("proj", nn.Linear(llm_dim, inner_dim, bias=True))
+        else:
+            self.inner_dim = llm_dim
+        if use_transformer:
+            ff_dim = ff_dim or 4 * self.inner_dim
+            self.pipeline.add_module ("transformer", nn.TransformerEncoderLayer(
+                    d_model=self.inner_dim,
+                    nhead=nhead,
+                    dim_feedforward=ff_dim,
+                    dropout=0.1,
+                    batch_first=True,
+                ))
+        else:
+            self.pipeline.add_module ("token_pool", MeanPoolAsCLS())
+
+        self.pipeline.add_module("cls", ElemAt(0))  # pick [CLS] token => shape (b*k, inner_dim)
+
 
         # 2) Single-layer predictor that returns (final_logits, seq_logits_grades).
-        multi_seq_classifier = MultiSequenceClassifier(n_classes, inner_dim, n_grades)
+        multi_seq_classifier = MultiSequenceClassifier(n_classes, self.inner_dim, n_grades)
         aggregator = Aggregate(method=aggregation)
         self.predictor = ClassAndGradePredictor(multi_seq_classifier, aggregator, num_seqs)
 
@@ -364,19 +372,6 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
             class_loss = self.loss_fn_class(final_logits, class_targets.long())
 
         # B) Grade-level loss
-        # grade_loss = torch.tensor(0.0, device=final_logits.device)
-        # if seq_logits_grades is not None and grade_targets is not None:
-        #     if self.grade_problem_type == ProblemType.multi_label:
-        #         # seq_logits_grades: (b, k, n_grades), grade_targets: (b, k, n_grades)
-        #         grade_loss = self.loss_fn_grade(seq_logits_grades, grade_targets)
-        #     else:  # multi_class
-        #         # Flatten to (b*k, n_grades)
-        #         seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
-        #         # Flatten targets to (b*k)
-        #         grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')
-        #         grade_loss = self.loss_fn_grade(seq_logits_grades_2d, grade_targets_1d.long())
-
-
         grade_loss = torch.tensor(0.0, device=final_logits.device)
         if seq_logits_grades is not None and grade_targets is not None:
             # Check if a grade_valid mask is provided
@@ -456,7 +451,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     aggregation: str = "max",
     label_problem_type: ProblemType = ProblemType.multi_class,
     grade_problem_type: ProblemType = ProblemType.multi_class, 
-    use_transformer: bool = True
+    use_transformer: bool = True,
+    use_inner_proj: bool = True
     ) -> MultiLabelMultiSeqEmbeddingClassifier:
     """
     Convenience factory function for building the model with desired hyperparams.
@@ -474,7 +470,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
         aggregation=aggregation,
         label_problem_type=label_problem_type,
         grade_problem_type=grade_problem_type,
-        use_transformer=use_transformer
+        use_transformer=use_transformer,
+        use_inner_proj=use_inner_proj
     )
 
 

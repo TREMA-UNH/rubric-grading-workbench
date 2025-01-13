@@ -649,6 +649,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--grade-problem-type', type=ProblemType.from_string, required=True, choices=list(ProblemType), metavar="MODEL"
                         , help="The classification problem to use for grade prediction. Choices: "+", ".join(list(x.name for x in ProblemType)))
     parser.add_argument('--no-transformers', dest="use_transformers", action="store_false", help='If set, replaces the transformer layer with an mean pooling', default=True)
+    parser.add_argument('--no-inner-proj', dest="use_inner_proj", action="store_false", help='If set, will not perform an projection to inner_dimension, use llm_dim as is', default=True)
 
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
@@ -754,6 +755,7 @@ def main(cmdargs=None) -> None:
                         , label_problem_type=args.label_problem_type
                         , grade_problem_type=args.grade_problem_type
                         , use_transformer=args.use_transformers
+                        , use_inner_proj=args.use_inner_proj
                         )
 
 

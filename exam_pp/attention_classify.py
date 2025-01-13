@@ -411,7 +411,8 @@ def run_num_seqs(root: Path
         ,target_metric:str = 'roc_auc'
         ,snapshot_best_after:Optional[int] = None
         ,use_transformer:bool = True
-                        ):
+        ,use_inner_proj: bool = True
+        ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
     out_dir.mkdir(parents=True, exist_ok=overwrite)
@@ -440,6 +441,7 @@ def run_num_seqs(root: Path
                                                                                 , label_problem_type=label_problem_type
                                                                                 , grade_problem_type=grade_problem_type
                                                                                 , use_transformer=use_transformer
+                                                                                , use_inner_proj=use_inner_proj
                                                                                 )
     else:
 
