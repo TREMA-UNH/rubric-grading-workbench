@@ -1132,11 +1132,13 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         # question =  f'Is this question answerable: {self.question}'
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
+
+        print("prompt",prompt)
         return prompt
 
     
     def generate_prompt_messages(self, context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> list[Message]:
-        return convert_to_messages(prompt=self.generate_prompt(str,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
+        return convert_to_messages(prompt=self.generate_prompt(context=context,full_paragraph=full_paragraph, model_tokenizer=model_tokenizer,max_token_len=max_token_len))
     
 
     def prompt_prefix_len(self, model_tokenizer:AutoTokenizer, max_token_len) -> int:

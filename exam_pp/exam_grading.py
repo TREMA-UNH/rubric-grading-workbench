@@ -154,7 +154,7 @@ def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList,
     #         for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
     #             tg.create_task(noodle_one_paragraph(para))
 
-    asyncio.run ( apply_concurrently( noodle_one_paragraph, (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs), n_workers = 10))
+    asyncio.run ( apply_concurrently( noodle_one_paragraph, (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs), n_workers = 20))
     
 
     # for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
