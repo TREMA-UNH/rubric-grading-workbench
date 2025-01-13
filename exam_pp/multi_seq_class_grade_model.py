@@ -115,6 +115,31 @@ class Aggregate(nn.Module):
         return self.aggregate(x)
 
 
+class MeanPoolAsCLS(nn.Module):
+    """
+    Replaces the token at position 0 with the mean
+    across all tokens along dim=1.
+    
+    After this layer, calling ElemAt(0) yields the mean-pooled embedding
+    for each sequence.
+
+    This is a simple replacement for the transformer layer.
+    """
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x shape: (batch_size*k, seq_len, hidden_dim)
+        returns: same shape (batch_size*k, seq_len, hidden_dim),
+                 but x[:, 0, :] is replaced with the mean across seq_len.
+        """
+        # mean_pool: (batch_size*k, hidden_dim)
+        mean_pool = x.mean(dim=1)  # average over seq_len
+        
+        # We'll clone x if we don't want to modify it in-place
+        x = x.clone()
+        x[:, 0, :] = mean_pool  # store the mean at position 0
+        return x
+
+
 ###############################################################################
 # 3) Single-Layer Primitive for Class & Grade Prediction
 ###############################################################################
@@ -208,7 +233,9 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                  nhead: int = 1,
                  aggregation: str = "max",
                  label_problem_type: str = "multi_class",   # default: multi-class
-                 grade_problem_type: str = "multi_class"):  # default: multi-class
+                 grade_problem_type: str = "multi_class",  # default: multi-class
+                 use_transformer: bool = True
+                 ):
         super().__init__()
 
         ff_dim = ff_dim or 4 * inner_dim
@@ -218,6 +245,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
         self.label_problem_type = label_problem_type.lower()
         self.grade_problem_type = grade_problem_type.lower()
+        self.use_transformer = use_transformer
 
         # -------------------------------
         # 1) A small sequential pipeline
@@ -226,13 +254,15 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         self.pipeline = nn.Sequential(
             Reshape('b k l d -> (b k) l d'),
             nn.Linear(llm_dim, inner_dim, bias=True),
-            nn.TransformerEncoderLayer(
+            ( nn.TransformerEncoderLayer(
                 d_model=inner_dim,
                 nhead=nhead,
                 dim_feedforward=ff_dim,
                 dropout=0.1,
                 batch_first=True,
-            ),
+              ) if use_transformer 
+                else MeanPoolAsCLS()
+            ), 
             ElemAt(0),  # pick [CLS] token => shape (b*k, inner_dim)
         )
 
@@ -348,8 +378,9 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     nhead: int = 1,
     aggregation: str = "max",
     label_problem_type: str = "multi_class",   # default
-    grade_problem_type: str = "multi_class"    # default
-) -> MultiLabelMultiSeqEmbeddingClassifier:
+    grade_problem_type: str = "multi_class",    # default
+    use_transformer: bool = True
+    ) -> MultiLabelMultiSeqEmbeddingClassifier:
     """
     Convenience factory function for building the model with desired hyperparams.
     """
@@ -365,7 +396,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
         nhead=nhead,
         aggregation=aggregation,
         label_problem_type=label_problem_type,
-        grade_problem_type=grade_problem_type
+        grade_problem_type=grade_problem_type,
+        use_transformer=use_transformer
     )
 
 

@@ -714,6 +714,7 @@ def main(cmdargs=None) -> None:
                         , target_metric= args.snapshots_target_metric
                         , label_problem_type="multi_class"
                         , grade_problem_type="multi_class"
+                        , use_transformer=False
                         )
 
 

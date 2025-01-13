@@ -410,6 +410,7 @@ def run_num_seqs(root: Path
         ,epoch_timer:typing.ContextManager = Noop()
         ,target_metric:str = 'roc_auc'
         ,snapshot_best_after:Optional[int] = None
+        ,use_transformer:bool = True
                         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -438,6 +439,7 @@ def run_num_seqs(root: Path
                                                                                 , aggregation = aggregation
                                                                                 , label_problem_type=label_problem_type
                                                                                 , grade_problem_type=grade_problem_type
+                                                                                , use_transformer=use_transformer
                                                                                 )
     else:
 
