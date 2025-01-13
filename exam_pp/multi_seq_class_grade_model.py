@@ -274,11 +274,19 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         self.pipeline.add_module("reshape_seqs", Reshape('b k l d -> (b k) l d'))
         if self.use_inner_proj:
             self.pipeline.add_module("proj", nn.Linear(llm_dim, inner_dim, bias=True))
+            self.inner_dim = inner_dim
         else:
             self.inner_dim = llm_dim
         if use_transformer:
             ff_dim = ff_dim or 4 * self.inner_dim
-            self.pipeline.add_module ("transformer", nn.TransformerEncoderLayer(
+            self.pipeline.add_module ("transformer1", nn.TransformerEncoderLayer(
+                    d_model=self.inner_dim,
+                    nhead=nhead,
+                    dim_feedforward=ff_dim,
+                    dropout=0.1,
+                    batch_first=True,
+                ))
+            self.pipeline.add_module ("transformer2", nn.TransformerEncoderLayer(
                     d_model=self.inner_dim,
                     nhead=nhead,
                     dim_feedforward=ff_dim,
