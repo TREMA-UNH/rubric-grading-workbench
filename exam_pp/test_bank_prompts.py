@@ -1344,7 +1344,7 @@ class QuestionSelfRatedPrompt(QuestionPrompt):
 
     def generate_prompt(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> str:
 
-        question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}\n'
+        question_prompt =  f'{QuestionSelfRatedPrompt.pretext}\n Question: {self.question}\n'
         context_prompt = f"Context: {context}"
         # question =  f'Is this question answerable: {self.question}'
         # question =  f'Is this question answerable: {self.question}'
@@ -1371,7 +1371,7 @@ class QuestionSelfRatedPrompt(QuestionPrompt):
     
 
     def generate_prompt_with_context_QC_no_choices(self,context:str, full_paragraph:FullParagraphData, model_tokenizer, max_token_len) -> Dict[str,str]:
-        question_prompt =  f'{QuestionSelfRatedUnanswerablePromptWithChoices.pretext}\n Question: {self.question}'
+        question_prompt =  f'{QuestionSelfRatedPrompt.pretext}\n Question: {self.question}'
         context_prompt = context
 
         # question =  f'Is this question answerable: {self.question}'
