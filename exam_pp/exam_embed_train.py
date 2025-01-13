@@ -258,6 +258,7 @@ def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[Cla
             array_agg(cf.metadata->>'$.test_bank') AS test_bank_ids,
             array_agg(eg.self_rating) AS self_ratings,
             array_agg(eg.is_correct) AS correctness,
+            la.true_labels AS judgment,
             ci.classification_item_id
         FROM classification_feature AS cf
         INNER JOIN classification_item_ids_df AS needles 
@@ -270,10 +271,12 @@ def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[Cla
         INNER JOIN rubric.exam_grade AS eg
             ON eg.relevance_item_id = ri.relevance_item_id
             AND eg.test_bank_id = (cf.metadata->>'$.test_bank')
+        INNER JOIN label_assignment AS la
+            ON la.classification_item_id = ci.classification_item_id
         WHERE 
             (cf.metadata->>'$.prompt_class') = ?
         GROUP BY 
-            needles.i, ci.classification_item_id
+            needles.i, ci.classification_item_id, judgment
         ORDER BY 
             needles.i ASC;
         ''', (prompt_class,))
@@ -364,8 +367,8 @@ def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[A
         # Generate one-hot encoding for labels
         example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(classes)).to(torch.float32)
 
-        print(f'label_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
-        print(f'labels: example_label_id',example_label_id)
+        # print(f'label_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
+        # print(f'labels: example_label_id',example_label_id)
         return example_label_one_hot, example_label_id
 
 
@@ -378,7 +381,7 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
                 return d
             return g
         
-        print("example_grades_list", example_grades_list)
+        # print("example_grades_list", example_grades_list)
         
         example_label_id_list = [ [ default_grade(grade,1) for grade in grade_list]
                                         for grade_list in example_grades_list]
@@ -446,10 +449,10 @@ def create_dataset(embedding_db:EmbeddingDb
     classification_items_test = classification_data_test["classification_item_id"].to_list()
 
 
-    train_tensors_with_grades:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
+    train_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                 , classification_item_id=classification_items_train
                                                 , prompt_class= prompt_class)
-    test_tensors_with_grades:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
+    test_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                , classification_item_id=classification_items_test
                                                , prompt_class= prompt_class)
     # print("test_tensors", test_tensors)
@@ -467,25 +470,41 @@ def create_dataset(embedding_db:EmbeddingDb
     label_idx = {c:i for i,c in enumerate(classes)}
 
     # fake some grade info
-    print("classification_data_train", classification_data_train[0:2])
-    print("train_tensors_with_grades", train_tensors_with_grades[0:2])
+    # print("classification_data_train", classification_data_train[0:2])
+    # print("train_tensors_with_grades", train_tensors_with_grades[0:2])
     # print("dataset_embedding_train", dataset_embedding_train[0:2])
     
+    # print("train_tensors_with_grades_labels", train_tensors_with_grades_labels)
 
 
-    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades, sequence_mode=sequence_mode, max_token_len=max_token_len)
-    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades, sequence_mode=sequence_mode, max_token_len=max_token_len)
+    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
+    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
 
-    example_grades_list_train = [tup.self_ratings for tup in train_tensors_with_grades.itertuples()]
-    # [[c]*10 for c in example_label_list_train]
-    # example_grades_list_test = [[c]*10 for c in example_label_list_test]
-    example_grades_list_test = [tup.self_ratings for tup in test_tensors_with_grades.itertuples()]
+    def filtered_grade(self_rating:int, judgment:List[str])->int:
+        label = int(judgment[0])
+        if label <= 0:
+            return 0
+        elif self_rating>=4:
+            return self_rating
+        else:
+            return -1
+        
+    def plain_grade(self_rating:int, judgment: List[str])->int:
+        return self_rating
 
-    grade_idx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:5}
+    example_grades_list_train = [[plain_grade(r, tup.judgment) 
+                                    for r in tup.self_ratings] 
+                                        for tup in train_tensors_with_grades_labels.itertuples()]
+    example_grades_list_test = [[plain_grade(r, tup.judgment)  
+                                    for r in tup.self_ratings] 
+                                    for tup in test_tensors_with_grades_labels.itertuples()]
+    # example_grades_list_test = [tup.self_ratings for tup in test_tensors_with_grades_labels.itertuples()]
+
+    grade_idx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:5} # Adding -1 as "Missing"
     grades = list(grade_idx.values())
     sorted(grades)
-    print("example_grades_list_train", example_grades_list_train)
-    print("grades", grades)
+    # print("example_grades_list_train", example_grades_list_train)
+    # print("grades", grades)
 
   
 
