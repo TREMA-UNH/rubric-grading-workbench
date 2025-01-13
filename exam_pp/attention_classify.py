@@ -17,7 +17,7 @@ import numpy as np
 import sklearn.model_selection
 import torch
 
-from .multi_seq_class_grade_model import MultiLabelMultiSeqEmbeddingClassifier, build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed
+from .multi_seq_class_grade_model import MultiLabelMultiSeqEmbeddingClassifier, ProblemType, build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed
 from .seq_classification_models import *
 # import torchinfo
 
@@ -355,13 +355,13 @@ def evaluate_better(model: MultiLabelMultiSeqEmbeddingClassifier, dataloader: Da
             inputs = batch['embedding'].to(device)
 
             labels: torch.Tensor  # select the right shape of y_truth
-            if model.label_problem_type == "multi_class":
+            if model.label_problem_type == ProblemType.multi_class:
                 labels = batch['label_id'].to(device)
             else:
                 labels = batch['label_one_hot'].to(device)
 
             grades: torch.Tensor # select the right shape of y_truth
-            if model.grade_problem_type == "multi_class":
+            if model.grade_problem_type == ProblemType.multi_class:
                 grades = batch['grades_id'].to(device)
             else:
                 grades = batch['grades_one_hot'].to(device)
@@ -395,8 +395,8 @@ def run_num_seqs(root: Path
         ,test_ds:Dataset
         ,class_list:List[int]
         ,grades_list:List[int]
-        , grade_problem_type:str
-        , label_problem_type:str
+        , grade_problem_type:ProblemType
+        , label_problem_type:ProblemType
         ,out_dir: Optional[Path]=None
         ,overwrite:bool=False
         ,batch_size: int=128
@@ -460,13 +460,13 @@ def run_num_seqs(root: Path
                 (pred_classes, pred_grades) = model(batch['embedding'].to(device))
 
                 true_labels: torch.Tensor # select the right shape of y_truth
-                if model.label_problem_type == "multi_class":
+                if model.label_problem_type == ProblemType.multi_class:
                     true_labels = batch['label_id'].to(device)
                 else:
                     true_labels = batch['label_one_hot'].to(device)
 
                 true_grades: torch.Tensor # select the right shape of y_truth
-                if model.grade_problem_type == "multi_class":
+                if model.grade_problem_type == ProblemType.multi_class:
                     true_grades = batch['grades_id'].to(device)
                 else:
                     true_grades = batch['grades_one_hot'].to(device)

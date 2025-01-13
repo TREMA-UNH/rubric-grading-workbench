@@ -19,6 +19,8 @@ import torch
 import pandas as pd
 import time
 
+from . multi_seq_class_grade_model import ProblemType
+
 from .rubric_db import *
 
 from . test_bank_prompts import get_prompt_classes
@@ -602,14 +604,21 @@ def main(cmdargs=None) -> None:
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
+    parser.add_argument('--batch-size', type=int, metavar="S", help="Batchsize for training", default=128)
+
     parser.add_argument('--snapshots-every', type=int, metavar="T", help="Take a model shapshort every T epochs")
     parser.add_argument('--snapshots-best-after', type=int, metavar="T", help="Take a model shapshort when target metric is improved (but only after the T'th epoch, and only during evaluation epochs)")
     parser.add_argument('--snapshots-target-metric', type=str, default="roc_auc", metavar="METRIC", help="Target evaluation metric for --snapshots-best-after, such as 'roc_auc'")
-    
     parser.add_argument('--eval-every', type=int, metavar="T", help="Take a model shapshort every T epochs", default=1)
+
     parser.add_argument('--inner-dim', type=int, metavar="DIM", help="Use DIM as hidden dimension", default=64)
     parser.add_argument('--nhead', type=int, metavar="N", help="Use transformer with N heads", default=1)
-    parser.add_argument('--batch-size', type=int, metavar="S", help="Batchsize for training", default=128)
+
+    parser.add_argument('--label-problem-type', type=ProblemType.from_string, required=True, choices=list(ProblemType), metavar="MODEL"
+                        , help="The classification problem to use for label prediction. Choices: "+", ".join(list(x.name for x in ProblemType)))
+    parser.add_argument('--grade-problem-type', type=ProblemType.from_string, required=True, choices=list(ProblemType), metavar="MODEL"
+                        , help="The classification problem to use for grade prediction. Choices: "+", ".join(list(x.name for x in ProblemType)))
+    parser.add_argument('--no-transformers', dest="use_transformers", action="store_false", help='If set, replaces the transformer layer with an mean pooling', default=True)
 
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
@@ -712,9 +721,9 @@ def main(cmdargs=None) -> None:
                         , epoch_timer = TrainingTimer("Epoch")
                         , snapshot_best_after= args.snapshots_best_after
                         , target_metric= args.snapshots_target_metric
-                        , label_problem_type="multi_class"
-                        , grade_problem_type="multi_class"
-                        , use_transformer=False
+                        , label_problem_type=args.label_problem_type
+                        , grade_problem_type=args.grade_problem_type
+                        , use_transformer=args.use_transformers
                         )
 
 

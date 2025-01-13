@@ -1,9 +1,26 @@
+from typing import Tuple, Optional
+from enum import Enum, auto
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from typing import Tuple, Optional
 
+
+
+
+class ProblemType(Enum):
+    multi_class = auto()
+    multi_label = auto()
+
+    @staticmethod
+    def from_string(arg:str):
+        import argparse
+        try:
+            return ProblemType[arg]
+        except KeyError:
+            raise argparse.ArgumentTypeError("Invalid ClassificationModel choice: %s" % arg)
+        
 
 ###############################################################################
 # 1) Basic Primitives
@@ -232,8 +249,8 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                  ff_dim: Optional[int] = None,
                  nhead: int = 1,
                  aggregation: str = "max",
-                 label_problem_type: str = "multi_class",   # default: multi-class
-                 grade_problem_type: str = "multi_class",  # default: multi-class
+                 label_problem_type: ProblemType = ProblemType.multi_class,
+                 grade_problem_type: ProblemType = ProblemType.multi_class,
                  use_transformer: bool = True
                  ):
         super().__init__()
@@ -243,8 +260,8 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         self.n_classes = n_classes
         self.n_grades = n_grades
 
-        self.label_problem_type = label_problem_type.lower()
-        self.grade_problem_type = grade_problem_type.lower()
+        self.label_problem_type = label_problem_type
+        self.grade_problem_type = grade_problem_type
         self.use_transformer = use_transformer
 
         # -------------------------------
@@ -274,20 +291,20 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
         # 3) Define the loss functions
         self.loss_fn_class: nn.Module
-        if self.label_problem_type == "multi_label":
+        if self.label_problem_type == ProblemType.multi_label:
             self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights)
-        elif self.label_problem_type == "multi_class":
+        elif self.label_problem_type == ProblemType.multi_class:
             self.loss_fn_class = nn.CrossEntropyLoss(weight=class_weights)
         else:
-            raise ValueError("label_problem_type must be 'multi_label' or 'multi_class'")
+            raise ValueError("label_problem_type must be 'ProblemType.multi_label' or 'ProblemType.multi_class'")
 
         self.loss_fn_grade: nn.Module
-        if self.grade_problem_type == "multi_label":
+        if self.grade_problem_type == ProblemType.multi_label:
             self.loss_fn_grade = nn.BCEWithLogitsLoss(pos_weight=grade_weights)
-        elif self.grade_problem_type == "multi_class":
+        elif self.grade_problem_type == ProblemType.multi_class:
             self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights)
         else:
-            raise ValueError("grade_problem_type must be 'multi_label' or 'multi_class'")
+            raise ValueError("grade_problem_type must be 'ProblemType.multi_label' or 'ProblemType.multi_class'")
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -332,7 +349,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         the correct shape/format for the chosen classification mode.
         """
         # A) Class-level loss
-        if self.label_problem_type == "multi_label":
+        if self.label_problem_type == ProblemType.multi_label:
             assert class_targets.dim() == 2, f"Multi-label class: Expected class_targets to have 2 dimensions (b, n_classes), got {class_targets.shape}"
             assert class_targets.dtype == torch.float, f"Multi-label class: Expected class_targets dtype to be float for multi-label, got {class_targets.dtype}"
 
@@ -348,7 +365,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         # B) Grade-level loss
         grade_loss = torch.tensor(0.0, device=final_logits.device)
         if seq_logits_grades is not None and grade_targets is not None:
-            if self.grade_problem_type == "multi_label":
+            if self.grade_problem_type == ProblemType.multi_label:
                 # seq_logits_grades: (b, k, n_grades), grade_targets: (b, k, n_grades)
                 grade_loss = self.loss_fn_grade(seq_logits_grades, grade_targets)
             else:  # multi_class
@@ -377,8 +394,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     ff_dim: Optional[int] = None,
     nhead: int = 1,
     aggregation: str = "max",
-    label_problem_type: str = "multi_class",   # default
-    grade_problem_type: str = "multi_class",    # default
+    label_problem_type: ProblemType = ProblemType.multi_class,
+    grade_problem_type: ProblemType = ProblemType.multi_class, 
     use_transformer: bool = True
     ) -> MultiLabelMultiSeqEmbeddingClassifier:
     """
@@ -431,8 +448,8 @@ if __name__ == "__main__":
         ff_dim=None,
         nhead=1,
         aggregation="mean",
-        label_problem_type="multi_class",  # or "multi_label"
-        grade_problem_type="multi_class"   # or "multi_label"
+        label_problem_type=ProblemType.multi_class,  # or "multi_label"
+        grade_problem_type=ProblemType.multi_class   # or "multi_label"
     )
 
     # Example input shape: (batch_size=2, k=3, seq_len=5, llm_dim=16)
