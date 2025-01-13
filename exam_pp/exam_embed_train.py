@@ -413,6 +413,7 @@ def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_
             exp_name TEXT,
             split_name TEXT,
             metadata JSON,
+            UNIQUE (exp_name, split_name),
         );
         CREATE TABLE IF NOT EXISTS dataset_item  (
             dataset_id INTEGER REFERENCES dataset(dataset_id),
