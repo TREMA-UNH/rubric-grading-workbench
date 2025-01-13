@@ -1133,7 +1133,7 @@ class QuestionSelfRatedUnanswerablePromptWithChoices(QuestionPrompt):
         # question =  f'Is this question answerable: {self.question}'
         prompt = self.prompt_truncater.truncate_context_question_prompt(tokenizer=model_tokenizer, context=context_prompt, question=question_prompt, max_length=max_token_len)
 
-        print("prompt",prompt)
+        # print("prompt",prompt)
         return prompt
 
     
