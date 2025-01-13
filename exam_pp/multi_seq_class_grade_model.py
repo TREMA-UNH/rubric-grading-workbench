@@ -382,12 +382,12 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
             # Check if a grade_valid mask is provided
             if grade_valid is None:
                 grade_valid = torch.ones_like(grade_targets, dtype=torch.bool)  # Default: all valid
-                # num_valid_grades = -1
-            # else:
-                # num_valid_grades = grade_valid.sum().item()
+                num_valid_grades = -1
+            else:
+                num_valid_grades = grade_valid.sum().item()
 
             # Apply mask for multi-label or multi-class loss
-            if self.grade_problem_type == "multi_label":
+            if self.grade_problem_type == ProblemType.multi_label:
                 # Ensure seq_logits_grades and grade_targets match shape
                 assert seq_logits_grades.shape == grade_targets.shape, (
                     f"Shape mismatch: seq_logits_grades={seq_logits_grades.shape}, "
@@ -399,14 +399,15 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                 grade_loss = self.loss_fn_grade(masked_logits, masked_targets)
             else:  # multi_class
                 # Reshape logits and targets
+                print("mask non-zero:",num_valid_grades)
                 seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
-                grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')
+                grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')  
                 grade_valid_1d = rearrange(grade_valid, 'b k -> (b k)')  # Flatten valid mask
 
                 # Mask logits and targets
                 masked_logits = seq_logits_grades_2d[grade_valid_1d]
                 masked_targets = grade_targets_1d[grade_valid_1d]
-                # print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
+                print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
                 grade_loss = self.loss_fn_grade(masked_logits, masked_targets.long())
 
 
