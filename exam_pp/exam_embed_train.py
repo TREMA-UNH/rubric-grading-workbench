@@ -304,7 +304,6 @@ class ClassificationItemDataset(Dataset):
 
     def __getitem__(self, index) -> pt.Tensor:
         tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
-        # print(f"{index}: {row.to_dict()}")
         tensor=None
         if self.sequence_mode == SequenceMode.single_sequence:
             tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=self.max_token_len)
@@ -315,21 +314,12 @@ class ClassificationItemDataset(Dataset):
             tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=self.max_token_len)
         else:
             raise RuntimeError(f"sequence mode {self.sequence_mode} is not defined.")
-        # the real deal:
-        # tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=10)
 
-        # print(tensor.shape)
-        # print("-------")
         return tensor
 
     def __len__(self) -> int:
         return len(self.tensor_df)
     
-
-    # def __getitems__(self, indices: List) -> List[T_co]:
-    # Not implemented to prevent false-positives in fetcher check in
-    # torch.utils.data._utils.fetch._MapDatasetFetcher
-
     def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
         return ConcatDataset([self, other])
 
@@ -722,6 +712,8 @@ def main(cmdargs=None) -> None:
                         , epoch_timer = TrainingTimer("Epoch")
                         , snapshot_best_after= args.snapshots_best_after
                         , target_metric= args.snapshots_target_metric
+                        , label_problem_type="multi_class"
+                        , grade_problem_type="multi_class"
                         )
 
 

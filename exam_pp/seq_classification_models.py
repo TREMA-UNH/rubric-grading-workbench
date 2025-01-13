@@ -634,170 +634,18 @@ class MultiSequenceLabelGradeClassifier(nn.Module):
         return seq_logits_classes, seq_logits_grades
 
 
-class PrevMultiLabelMultiSeqEmbeddingClassifier(nn.Sequential):
-    """
-    A model class that:
-    1. Flattens (batch_size, k) into a single dimension so each sequence is processed independently.
-    2. Applies a projection -> Transformer -> [CLS] extraction -> MultiSequenceClassifier.
-    3. Regroups by batch (restoring k).
-    4. Aggregates the per-sequence class logits into final_logits.
-    5. Retains seq_logits_grades for optional per-sequence grade classification.
-    6. Provides compute_loss and utility for multi-label to multi-class transformation.
-    """
+# class PrevMultiLabelMultiSeqEmbeddingClassifier(nn.Sequential):
+#     """
+#     A model class that:
+#     1. Flattens (batch_size, k) into a single dimension so each sequence is processed independently.
+#     2. Applies a projection -> Transformer -> [CLS] extraction -> MultiSequenceClassifier.
+#     3. Regroups by batch (restoring k).
+#     4. Aggregates the per-sequence class logits into final_logits.
+#     5. Retains seq_logits_grades for optional per-sequence grade classification.
+#     6. Provides compute_loss and utility for multi-label to multi-class transformation.
+#     """
 
-    def __init__(self,
-                 n_classes: int,
-                 class_weights: torch.Tensor,
-                 n_grades: int,
-                 grade_weights: torch.Tensor,
-                 llm_dim: int,
-                 inner_dim: int,
-                 num_seqs: int,
-                 ff_dim: Optional[int] = None,
-                 nhead: int = 1,
-                 aggregation: str = "max"):
-        # 1) Initialize base Sequential
-        super().__init__()
-
-        ff_dim = ff_dim or 4 * inner_dim
-
-        # Store these for the compute_loss function
-        self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights)
-        self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights)
-
-        # We’ll build the sequence of layers in a list, then extend with add_module
-        # so that the forward pass can still function as a normal nn.Sequential chain.
-        self.add_module("flatten_sequences", Reshape('b k l d -> (b k) l d'))
-        self.add_module("proj", nn.Linear(llm_dim, inner_dim, bias=True))
-        self.add_module("transformer",
-            nn.TransformerEncoderLayer(
-                d_model=inner_dim,
-                nhead=nhead,
-                dim_feedforward=ff_dim,
-                dropout=0.1,
-                batch_first=True,
-            )
-        )
-        self.add_module("cls_token", ElemAt(idx=0))
-        self.add_module("multi_seq_classifier", MultiSequenceClassifier(
-            n_classes=n_classes,
-            inner_dim=inner_dim,
-            n_grades=n_grades
-        ))
-        # The last steps need special handling (we want two outputs from multi_seq_classifier)
-        # so we won't add them directly as further modules in nn.Sequential.
-        # We'll handle them in our custom forward method.
-
-        # aggregator to combine sequence-level class logits
-        self.aggregator = Aggregate(method=aggregation)
-
-        # We'll keep track of num_seqs for regrouping
-        self.num_seqs = num_seqs
-        self.n_classes = n_classes
-
-    def forward(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass that yields:
-        final_logits: (batch_size, n_classes)
-        seq_logits_grades: (batch_size, num_seqs, n_grades)
-        """
-        # Step 1 to 5: pass through all sub-modules in order (nn.Sequential style).
-        # However, the "multi_seq_classifier" returns two outputs (seq_logits_classes, seq_logits_grades),
-        # so we must split after that module and apply aggregator ourselves.
-
-        # Pass inputs through layers up to "multi_seq_classifier"
-        # nn.Sequential will pass the output from one layer to the next,
-        # but multi_seq_classifier returns a tuple. We can intercept that.
-        x = inputs
-        for name, module in self.named_children():
-            if name == "multi_seq_classifier":
-                # The module that returns two outputs
-                seq_logits_classes, seq_logits_grades = module(x)  # x is the [CLS] embeddings
-                # break out of the loop because now we have the two separate outputs
-                break
-            else:
-                x = module(x)  # normal pass
-
-        # Now `seq_logits_classes`: (batch_size * k, n_classes)
-        # and `seq_logits_grades`: (batch_size * k, n_grades)
-
-        # We still need to pass the data after "multi_seq_classifier"
-        # through the rest of the layers (if there were any).
-        # But in this design, aggregator is the only next step for the class logits
-        # plus we need to reshape them first.
-
-        # Step 6: Reshape class logits back to (batch_size, num_seqs, n_classes)
-        seq_logits_classes = rearrange(
-            seq_logits_classes, 
-            '(b k) c -> b k c', 
-            b=inputs.size(0), 
-            k=self.num_seqs
-        )
-
-        # Step 7: Aggregate across k to get the final class logits per batch
-        final_logits = self.aggregator(seq_logits_classes)  # (batch_size, n_classes)
-
-        # Meanwhile, for grades, we can also reshape them to (batch_size, num_seqs, n_grades)
-        seq_logits_grades = rearrange(
-            seq_logits_grades,
-            '(b k) g -> b k g',
-            b=inputs.size(0),
-            k=self.num_seqs
-        )
-
-        return final_logits, seq_logits_grades
-
-    def convert_multi_label_to_multi_class_loss_inputs(
-        self,
-        seq_logits_grades: torch.Tensor,
-        grade_targets: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        According to PyTorch docs for CrossEntropyLoss, shape requirements:
-          - logits (input): (minibatch, C, ...)
-          - targets (target): (minibatch, ...)
-        
-        We do two things:
-          1) permute seq_logits_grades to (batch_size, n_grades, k) [or similar]
-          2) convert one-hot targets via argmax
-        """
-        # seq_logits_grades: (batch_size, k, n_grades)
-        # reorder to (batch_size, n_grades, k)
-        seq_logits_grades_mc = seq_logits_grades.permute(0, 2, 1)  
-        # If `grade_targets` is one-hot (batch_size, k, n_grades), convert to integer indices
-        grade_targets_mc = torch.argmax(grade_targets, dim=-1)  # (batch_size, k)
-        return seq_logits_grades_mc, grade_targets_mc
-
-    def compute_loss(
-        self,
-        final_logits: torch.Tensor,
-        class_targets: torch.Tensor,
-        seq_logits_grades: Optional[torch.Tensor] = None,
-        grade_targets: Optional[torch.Tensor] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor, float]:
-        """
-        Compute the total loss:
-          - Classification loss on final logits (n_classes)
-          - Grade loss on sequence-level logits (n_grades), if provided
-        """
-        # (A) Class-level loss
-        class_loss = self.loss_fn_class(final_logits, class_targets)
-
-        # (B) Grade-level loss (optional)
-        grade_loss = 0.0
-        if (seq_logits_grades is not None) and (grade_targets is not None):
-            seq_logits_grades_mc, grade_targets_mc = self.convert_multi_label_to_multi_class_loss_inputs(
-                seq_logits_grades, grade_targets
-            )
-            grade_loss = self.loss_fn_grade(seq_logits_grades_mc, grade_targets_mc)
-
-        # Total loss is a sum (you may introduce weighting factors if desired)
-        total_loss = class_loss + grade_loss
-        return total_loss, class_loss, grade_loss
-
-
-# class MultiLabelMultiSeqModel(nn.Sequential):
-#     def __init__(self, 
+#     def __init__(self,
 #                  n_classes: int,
 #                  class_weights: torch.Tensor,
 #                  n_grades: int,
@@ -808,80 +656,142 @@ class PrevMultiLabelMultiSeqEmbeddingClassifier(nn.Sequential):
 #                  ff_dim: Optional[int] = None,
 #                  nhead: int = 1,
 #                  aggregation: str = "max"):
+#         # 1) Initialize base Sequential
+#         super().__init__()
+
 #         ff_dim = ff_dim or 4 * inner_dim
 
-#         # Components of the model
-#         layers = [
-#             # Step 1: Flatten sequences for independent processing
-#             ReshapeEinops('b k l d -> (b k) l d'),  # Shape: (batch_size * num_seqs, seq_len, llm_dim)
+#         # Store these for the compute_loss function
+#         self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights)
+#         self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights)
 
-#             # Step 2: Linear projection to reduce dimensionality
-#             nn.Linear(in_features=llm_dim, out_features=inner_dim, bias=True),  # Shape: (batch_size * num_seqs, seq_len, inner_dim)
-
-#             # Step 3: Transformer encoder for contextual sequence processing
+#         # We’ll build the sequence of layers in a list, then extend with add_module
+#         # so that the forward pass can still function as a normal nn.Sequential chain.
+#         self.add_module("flatten_sequences", Reshape('b k l d -> (b k) l d'))
+#         self.add_module("proj", nn.Linear(llm_dim, inner_dim, bias=True))
+#         self.add_module("transformer",
 #             nn.TransformerEncoderLayer(
 #                 d_model=inner_dim,
 #                 nhead=nhead,
 #                 dim_feedforward=ff_dim,
 #                 dropout=0.1,
 #                 batch_first=True,
-#             ),  # Shape: (batch_size * num_seqs, seq_len, inner_dim)
+#             )
+#         )
+#         self.add_module("cls_token", ElemAt(idx=0))
+#         self.add_module("multi_seq_classifier", MultiSequenceClassifier(
+#             n_classes=n_classes,
+#             inner_dim=inner_dim,
+#             n_grades=n_grades
+#         ))
+#         # The last steps need special handling (we want two outputs from multi_seq_classifier)
+#         # so we won't add them directly as further modules in nn.Sequential.
+#         # We'll handle them in our custom forward method.
 
-#             # Step 4: Extract CLS token for each sequence
-#             ElemAt(idx=0),  # Shape: (batch_size * num_seqs, inner_dim)
+#         # aggregator to combine sequence-level class logits
+#         self.aggregator = Aggregate(method=aggregation)
 
-#             # Step 5: Sequence-level classification for labels and grades
-#             MultiSequenceLabelGradeClassifier(n_classes=n_classes, inner_dim=inner_dim, n_grades=n_grades),  # Outputs:
-#             # - seq_logits_classes: (batch_size * num_seqs, n_classes)
-#             # - seq_logits_grades: (batch_size * num_seqs, n_grades)
+#         # We'll keep track of num_seqs for regrouping
+#         self.num_seqs = num_seqs
+#         self.n_classes = n_classes
 
-#             # Step 6: Reshape logits back to group by batch
-#             ReshapeEinops('(b k) c -> b k c', k=num_seqs),  # Shape: (batch_size, num_seqs, n_classes)
+#     def forward(self, inputs: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """
+#         Forward pass that yields:
+#         final_logits: (batch_size, n_classes)
+#         seq_logits_grades: (batch_size, num_seqs, n_grades)
+#         """
+#         # Step 1 to 5: pass through all sub-modules in order (nn.Sequential style).
+#         # However, the "multi_seq_classifier" returns two outputs (seq_logits_classes, seq_logits_grades),
+#         # so we must split after that module and apply aggregator ourselves.
 
-#             # Step 7: Aggregate sequence-level logits for final predictions
-#             Aggregate(aggregation=aggregation),  # Shape: (batch_size, n_classes)
-#         ]
+#         # Pass inputs through layers up to "multi_seq_classifier"
+#         # nn.Sequential will pass the output from one layer to the next,
+#         # but multi_seq_classifier returns a tuple. We can intercept that.
+#         x = inputs
+#         for name, module in self.named_children():
+#             if name == "multi_seq_classifier":
+#                 # The module that returns two outputs
+#                 seq_logits_classes, seq_logits_grades = module(x)  # x is the [CLS] embeddings
+#                 # break out of the loop because now we have the two separate outputs
+#                 break
+#             else:
+#                 x = module(x)  # normal pass
 
-#         # Initialize the parent nn.Sequential class with these layers
-#         super().__init__(*layers)
+#         # Now `seq_logits_classes`: (batch_size * k, n_classes)
+#         # and `seq_logits_grades`: (batch_size * k, n_grades)
 
-#         # Loss functions
-#         self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights)
-#         self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights)
+#         # We still need to pass the data after "multi_seq_classifier"
+#         # through the rest of the layers (if there were any).
+#         # But in this design, aggregator is the only next step for the class logits
+#         # plus we need to reshape them first.
 
-    # def convert_multi_label_to_multi_class_loss_inputs(self,
-    #                                                    seq_logits_grades: torch.Tensor,
-    #                                                    grade_targets: torch.Tensor
-    #                                                    ) -> Tuple[torch.Tensor, torch.Tensor]:
-    #     """
-    #     Prepares logits and targets for CrossEntropyLoss:
-    #         - Logits: Shape (batch_size, n_grades, num_seqs).
-    #         - Targets: Shape (batch_size, num_seqs).
-    #     """
-    #     return (rearrange(seq_logits_grades, 'b k g -> b g k'),  # Permute dimensions for CrossEntropyLoss
-    #             torch.argmax(grade_targets, dim=-1))  # Convert one-hot to class indices
+#         # Step 6: Reshape class logits back to (batch_size, num_seqs, n_classes)
+#         seq_logits_classes = rearrange(
+#             seq_logits_classes, 
+#             '(b k) c -> b k c', 
+#             b=inputs.size(0), 
+#             k=self.num_seqs
+#         )
 
-    # def compute_loss(self,
-    #                  final_logits: torch.Tensor,
-    #                  class_targets: torch.Tensor,
-    #                  seq_logits_grades: Optional[torch.Tensor] = None,
-    #                  grade_targets: Optional[torch.Tensor] = None
-    #                  ) -> Tuple[torch.Tensor, torch.Tensor, float]:
-    #     """
-    #     Computes the total loss combining:
-    #         - Class-level multi-label loss.
-    #         - Grade-level multi-class loss.
-    #     """
-    #     # Compute class-level loss
-    #     class_loss = self.loss_fn_class(final_logits, class_targets)
+#         # Step 7: Aggregate across k to get the final class logits per batch
+#         final_logits = self.aggregator(seq_logits_classes)  # (batch_size, n_classes)
 
-    #     grade_loss = 0.0
-    #     if seq_logits_grades is not None and grade_targets is not None:
-    #         # Rearrange logits and targets for grade-level loss
-    #         seq_logits_grades_mc, grade_targets_mc = self.convert_multi_label_to_multi_class_loss_inputs(
-    #             seq_logits_grades, grade_targets)
-    #         grade_loss = self.loss_fn_grade(seq_logits_grades_mc, grade_targets_mc)
+#         # Meanwhile, for grades, we can also reshape them to (batch_size, num_seqs, n_grades)
+#         seq_logits_grades = rearrange(
+#             seq_logits_grades,
+#             '(b k) g -> b k g',
+#             b=inputs.size(0),
+#             k=self.num_seqs
+#         )
 
-    #     # Total loss as sum of class and grade losses
-    #     total_loss = class_loss + grade_loss
-    #     return total_loss, class_loss, grade_loss
+#         return final_logits, seq_logits_grades
+
+#     def convert_multi_label_to_multi_class_loss_inputs(
+#         self,
+#         seq_logits_grades: torch.Tensor,
+#         grade_targets: torch.Tensor
+#     ) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """
+#         According to PyTorch docs for CrossEntropyLoss, shape requirements:
+#           - logits (input): (minibatch, C, ...)
+#           - targets (target): (minibatch, ...)
+        
+#         We do two things:
+#           1) permute seq_logits_grades to (batch_size, n_grades, k) [or similar]
+#           2) convert one-hot targets via argmax
+#         """
+#         # seq_logits_grades: (batch_size, k, n_grades)
+#         # reorder to (batch_size, n_grades, k)
+#         seq_logits_grades_mc = seq_logits_grades.permute(0, 2, 1)  
+#         # If `grade_targets` is one-hot (batch_size, k, n_grades), convert to integer indices
+#         grade_targets_mc = torch.argmax(grade_targets, dim=-1)  # (batch_size, k)
+#         return seq_logits_grades_mc, grade_targets_mc
+
+#     def compute_loss(
+#         self,
+#         final_logits: torch.Tensor,
+#         class_targets: torch.Tensor,
+#         seq_logits_grades: Optional[torch.Tensor] = None,
+#         grade_targets: Optional[torch.Tensor] = None
+#     ) -> Tuple[torch.Tensor, torch.Tensor, float]:
+#         """
+#         Compute the total loss:
+#           - Classification loss on final logits (n_classes)
+#           - Grade loss on sequence-level logits (n_grades), if provided
+#         """
+#         # (A) Class-level loss
+#         class_loss = self.loss_fn_class(final_logits, class_targets)
+
+#         # (B) Grade-level loss (optional)
+#         grade_loss = 0.0
+#         if (seq_logits_grades is not None) and (grade_targets is not None):
+#             seq_logits_grades_mc, grade_targets_mc = self.convert_multi_label_to_multi_class_loss_inputs(
+#                 seq_logits_grades, grade_targets
+#             )
+#             grade_loss = self.loss_fn_grade(seq_logits_grades_mc, grade_targets_mc)
+
+#         # Total loss is a sum (you may introduce weighting factors if desired)
+#         total_loss = class_loss + grade_loss
+#         return total_loss, class_loss, grade_loss
+
