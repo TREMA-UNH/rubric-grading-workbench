@@ -358,7 +358,7 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
 def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
         def default_label(label, d):
             l = label_idx.get(label)
-            if l is None:
+            if (l is None) and (label != -1):
                 print(f"Warning: Dataset contains label {label}, which is not in the set of training labels: {label_idx.keys()}")
                 return d
             return l

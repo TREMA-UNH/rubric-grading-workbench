@@ -385,30 +385,52 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                 num_valid_grades = -1
             else:
                 num_valid_grades = grade_valid.sum().item()
+                
+            if num_valid_grades > 0:
+                if self.grade_problem_type == ProblemType.multi_label:
+                    # Ensure seq_logits_grades and grade_targets match shape
+                    assert seq_logits_grades.shape == grade_targets.shape, (
+                        f"Shape mismatch: seq_logits_grades={seq_logits_grades.shape}, "
+                        f"grade_targets={grade_targets.shape}"
+                    )
 
-            # Apply mask for multi-label or multi-class loss
-            if self.grade_problem_type == ProblemType.multi_label:
-                # Ensure seq_logits_grades and grade_targets match shape
-                assert seq_logits_grades.shape == grade_targets.shape, (
-                    f"Shape mismatch: seq_logits_grades={seq_logits_grades.shape}, "
-                    f"grade_targets={grade_targets.shape}"
-                )
-                # Mask logits and targets
-                masked_logits = seq_logits_grades[grade_valid]
-                masked_targets = grade_targets[grade_valid]
-                grade_loss = self.loss_fn_grade(masked_logits, masked_targets)
-            else:  # multi_class
-                # Reshape logits and targets
-                print("mask non-zero:",num_valid_grades)
-                seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
-                grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')  
-                grade_valid_1d = rearrange(grade_valid, 'b k -> (b k)')  # Flatten valid mask
+                    # Dynamically ensure grade_valid has the correct shape
+                    if grade_valid.dim() < seq_logits_grades.dim():
+                        expanded_mask = grade_valid.unsqueeze(-1).expand_as(seq_logits_grades)  # Add singleton dimension
+                    elif grade_valid.dim() == seq_logits_grades.dim():
+                        expanded_mask = grade_valid.expand_as(seq_logits_grades)  # Already aligned, just expand
+                    else:
+                        raise ValueError(
+                            f"Unexpected dimensions for grade_valid: {grade_valid.dim()} "
+                            f"with seq_logits_grades: {seq_logits_grades.dim()}"
+                        )
 
-                # Mask logits and targets
-                masked_logits = seq_logits_grades_2d[grade_valid_1d]
-                masked_targets = grade_targets_1d[grade_valid_1d]
-                print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
-                grade_loss = self.loss_fn_grade(masked_logits, masked_targets.long())
+                    # Mask logits and targets
+                    masked_logits = seq_logits_grades[expanded_mask]
+                    masked_targets = grade_targets[expanded_mask]
+
+                    # Check if all entries are invalid
+                    if masked_logits.numel() == 0:
+                        grade_loss = torch.tensor(0.0, device=seq_logits_grades.device)  # No valid entries, grade loss is 0
+                    else:
+                        # Reshape masked tensors to (N, n_grades)
+                        masked_logits = masked_logits.view(-1, seq_logits_grades.size(-1))
+                        masked_targets = masked_targets.view(-1, seq_logits_grades.size(-1))
+
+                        # Compute grade loss
+                        grade_loss = self.loss_fn_grade(masked_logits, masked_targets)
+                else:  # multi_class
+                    # Reshape logits and targets
+                    # print("mask non-zero:",num_valid_grades)
+                    seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
+                    grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')  
+                    grade_valid_1d = rearrange(grade_valid, 'b k -> (b k)')  # Flatten valid mask
+
+                    # Mask logits and targets
+                    masked_logits = seq_logits_grades_2d[grade_valid_1d]
+                    masked_targets = grade_targets_1d[grade_valid_1d]
+                    # print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
+                    grade_loss = self.loss_fn_grade(masked_logits, masked_targets.long())
 
 
 
