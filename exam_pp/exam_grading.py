@@ -44,7 +44,7 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
         raise RuntimeError(f"Unknown self rating prompt: {prompt}. \n Prompt-type:{prompt.prompt_type()}")
 
 
-async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt]
+def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList, grading_prompts:List[Prompt]
                                 , llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None 
                                 , keep_going_on_llm_parse_error:bool=False
                                 , system_message:Optional[str]=None
@@ -149,15 +149,19 @@ async def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagrap
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
 
-    async with asyncio.TaskGroup() as tg:
-        for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-            tg.create_task(noodle_one_paragraph(para))
+    async def run_all_paras():
+        async with asyncio.TaskGroup() as tg:
+            for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+                tg.create_task(noodle_one_paragraph(para))
     
+    asyncio.run (run_all_paras())
+    
+
     # for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
     #         await noodle_one_paragraph(para)
 
 
-async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
+def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
                                           , qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
                                           , keep_going_on_llm_parse_error:bool=False
                                           , system_message:Optional[str]=None
@@ -222,12 +226,19 @@ async def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_pr
             para.grades = list()
         para.grades.append(grade_obj)
 
-    async with asyncio.TaskGroup() as tg:
-        for para in itertools.islice(paragraphs, max_paragraphs):
-            tg.create_task(noodle_one_paragraph(para))
+    # async with asyncio.TaskGroup() as tg:
+    #     for para in itertools.islice(paragraphs, max_paragraphs):
+    #         tg.create_task(noodle_one_paragraph(para))
+
+    async def run_all_paras():
+        async with asyncio.TaskGroup() as tg:
+            for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+                tg.create_task(noodle_one_paragraph(para))
+    
+    asyncio.run (run_all_paras())
 
 
-async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             , keep_going_on_llm_parse_error:bool=False
             , system_message:Optional[str]=None
@@ -281,28 +292,27 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
                 queryWithFullParagraphList = previousQueryWithFullParagraphList
                 pass
             else:
-
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    await  noodle_grading_rubric( queryWithFullParagraphList= queryWithFullParagraphList
-                                                 , grading_prompts= grading_prompts
-                                                 , llmPipeline= llmPipeline
-                                                 , max_paragraphs= max_paragraphs
-                                                 , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
-                                                 , system_message=system_message
-                                                 , embedding_db=embedding_db
-                                                 , **kwargs)
+                    noodle_grading_rubric( queryWithFullParagraphList= queryWithFullParagraphList
+                                                , grading_prompts= grading_prompts
+                                                , llmPipeline= llmPipeline
+                                                , max_paragraphs= max_paragraphs
+                                                , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
+                                                , system_message=system_message
+                                                , embedding_db=embedding_db
+                                                , **kwargs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        await noodle_one_query_direct_grading(queryWithFullParagraphList= queryWithFullParagraphList
-                                                              , grading_prompt= grading_prompt
-                                                              , llmPipeline= llmPipeline
-                                                              , max_paragraphs= max_paragraphs
-                                                              , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
-                                                              , system_message=system_message
-                                                              , embedding_db = embedding_db
-                                                              , **kwargs)
+                        noodle_one_query_direct_grading(queryWithFullParagraphList= queryWithFullParagraphList
+                                                            , grading_prompt= grading_prompt
+                                                            , llmPipeline= llmPipeline
+                                                            , max_paragraphs= max_paragraphs
+                                                            , keep_going_on_llm_parse_error=keep_going_on_llm_parse_error
+                                                            , system_message=system_message
+                                                            , embedding_db = embedding_db
+                                                            , **kwargs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
 
@@ -314,7 +324,7 @@ async def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], p
         file.close()
 
 
-async def main(cmdargs=None):
+def main(cmdargs=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
     import argparse
@@ -474,7 +484,7 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
         embedding_db = EmbeddingDb(Path(args.embedding_db))
 
 
-    await noodle(
+    noodle(
              llmPipeline=llmPipeline
            , question_set=question_set
            , paragraph_file= args.paragraph_file
@@ -488,5 +498,5 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
            )
 
 if __name__ == "__main__":
-    asyncio.run(main())
-    # main()
+    # asyncio.run(main())
+    main()
