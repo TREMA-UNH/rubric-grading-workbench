@@ -403,6 +403,41 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
         # print(f'grades: example_grades_id',example_label_id)
         return example_grade_one_hot, example_grade_id, example_grade_valid
 
+def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_items:List[ClassificationItemId], metadata:Dict[str,Any]):
+
+    DATASET_SCHEMA = \
+        '''---sql
+        CREATE TABLE IF NOT EXISTS dataset (
+            dataset_id INTEGER PRIMARY KEY DEFAULT nextval('dataset_id_seq'),
+            exp_name TEXT,
+            split_name TEXT,
+            metadata JSON,
+        );
+        CREATE SEQUENCE IF NOT EXISTS dataset_id_seq START 1;
+        CREATE TABLE IF NOT EXISTS dataset_item  (
+            dataset_id INTEGER REFERENCES dataset(dataset_id),
+            classification_item_id INTEGER REFERENCES classification_item(classification_item_id),
+            UNIQUE (dataset_id, classification_item_id),
+        );
+        '''
+    
+    db.db.execute(DATASET_SCHEMA)
+
+    db.db.execute('''---sql
+                  INSERT INTO dataset (exp_name, split_name, metadata)
+                  VALUES (?,?,?)
+                  RETURNING dataset_id
+                  ''', (exp_name, split_name, metadata,))
+    ds_id, = db.db.fetchone()
+
+    db.db.executemany('''---sql
+                  INSERT INTO dataset_item (dataset_id, classification_item_id)
+                  VALUES (?,?)
+                  ''', 
+                   [(ds_id, classification_item_id,) for classification_item_id in classification_items]
+                  )
+
+
 
 def create_dataset(embedding_db:EmbeddingDb
                    , prompt_class:str
@@ -412,6 +447,7 @@ def create_dataset(embedding_db:EmbeddingDb
                    , max_token_len:Optional[int]
                    , sequence_mode:SequenceMode
                    , split_same_query: bool = False
+                   , exp_name:str = ""
                    )->Tuple[Dataset, Dataset, List[int], List[int]]:
 
     queries = None
@@ -457,6 +493,8 @@ def create_dataset(embedding_db:EmbeddingDb
     classification_items_train = classification_data_train["classification_item_id"].to_list()
     classification_items_test = classification_data_test["classification_item_id"].to_list()
 
+    store_dataset(embedding_db, exp_name = exp_name, split_name="train", classification_items= classification_items_train, metadata={})
+    store_dataset(embedding_db, exp_name = exp_name, split_name="test", classification_items= classification_items_test, metadata={})
 
     train_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                 , classification_item_id=classification_items_train
@@ -631,6 +669,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
     parser.add_argument('--rubric-db', type=str, metavar='PATH', help='Path for the database directory for rubric paragraph data')
 
+    parser.add_argument('--exp-name', type=str, metavar='str', help='Name of the experiment (used to store dataset)')
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
@@ -681,7 +720,7 @@ def main(cmdargs=None) -> None:
 
     with TrainingTimer("Data Loading"):
 
-        embedding_db = EmbeddingDb(Path(args.embedding_db))
+        embedding_db = EmbeddingDb(Path(args.embedding_db), write=True)
 
         embedding_db.db.execute(f'''--sql
                                 ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
@@ -696,6 +735,7 @@ def main(cmdargs=None) -> None:
                                                          , max_token_len=args.max_token_len
                                                          , sequence_mode=args.sequence_mode
                                                          , split_same_query=args.split_same_query
+                                                         , exp_name=args.exp_name
                                                          )
 
         if args.caching:
