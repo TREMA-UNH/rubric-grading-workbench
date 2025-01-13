@@ -63,8 +63,6 @@ async def map_concurrently(
     async def worker() -> None:
         while True:
             try:
-                if errors:
-                    break
                 x, fut = await work_queue.get()
                 y = await func(x)
                 fut.set_result(y)
@@ -101,9 +99,6 @@ async def map_concurrently(
             y = await fut
             yield y
 
-        for task in workers:
-            task.cancel()
-
 
 async def apply_concurrently(func: Callable[A, Awaitable[None]], xs: Iterator[A], n_workers: int):
     queue: Queue[A] = Queue(maxsize=4*n_workers)
@@ -111,8 +106,6 @@ async def apply_concurrently(func: Callable[A, Awaitable[None]], xs: Iterator[A]
     async def worker():
         while True:
             try:
-                if errors:
-                    break
                 x = await queue.get()
                 await func(x)
                 queue.task_done()
@@ -125,9 +118,8 @@ async def apply_concurrently(func: Callable[A, Awaitable[None]], xs: Iterator[A]
                 raise e
 
     async with asyncio.TaskGroup() as tg:
-        workers = [
+        for n in range(n_workers):
             tg.create_task(worker(), name=f'worker {n}')
-            for n in range(n_workers) ]
 
         try:
             for x in xs:
@@ -136,9 +128,6 @@ async def apply_concurrently(func: Callable[A, Awaitable[None]], xs: Iterator[A]
             pass
         else:
             queue.shutdown()
-
-        for task in workers:
-            task.cancel()
 
 
 async def simple():

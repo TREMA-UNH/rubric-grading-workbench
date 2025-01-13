@@ -429,7 +429,7 @@ class PromptRunningLlmPipeline():
 class ChatCompletionsPipeline(LlmPipeline):
     """Pipeline for external API endpoints that support OpenAI-style chat completions"""
 
-    def __init__(self, model_name:str,  client: openai.OpenAI, max_token_len:int, model_params:Optional[Dict[str,Any]]=None):
+    def __init__(self, model_name:str,  client: openai.AsyncOpenAI, max_token_len:int, model_params:Optional[Dict[str,Any]]=None):
         super().__init__(model_name=model_name)
         # Start VLLM with:  HF_TOKEN="<token>" tmp/bin/vllm serve meta-llama/Llama-3.3-70B-Instruct  --max-model-len 500 --device=cuda --tensor-parallel-size 2
 
@@ -449,7 +449,7 @@ class ChatCompletionsPipeline(LlmPipeline):
     )->str:
     # )->list[str]:
         try:
-            completion = self.client.chat.completions.create(
+            completion = await self.client.chat.completions.create(
                 model=self.modelName,
                 messages=messages,
                 **self.model_params

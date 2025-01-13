@@ -17,6 +17,7 @@ from .test_bank_prompts import *
 from .t5_qa import *
 from .data_model import ExamGrades, FullParagraphData, Grades, QueryWithFullParagraphList, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
+from .async_utils import *
 
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=100)
 
@@ -60,7 +61,7 @@ def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList,
     paragraphs = queryWithFullParagraphList.paragraphs
 
 
-    async def noodle_one_paragraph(para:FullParagraphData):
+    async def noodle_one_paragraph(para:FullParagraphData) -> None:
         paragraph_id = para.paragraph_id
         paragraph_txt = para.text
 
@@ -149,12 +150,11 @@ def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList,
         else:
             print(f'no exam score generated for paragraph {paragraph_id} as no prompt is generated')
 
-    async def run_all_paras():
-        async with asyncio.TaskGroup() as tg:
-            for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-                tg.create_task(noodle_one_paragraph(para))
-    
-    asyncio.run (run_all_paras())
+    # async def run_all_paras():
+    #         for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+    #             tg.create_task(noodle_one_paragraph(para))
+
+    asyncio.run ( apply_concurrently( noodle_one_paragraph, (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs), n_workers = 10))
     
 
     # for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
@@ -466,7 +466,9 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     pipeline_args = {}
     if args.llm_api_key is not None or args.llm_base_url is not None:
         # chat_completions_client = openai_interface.default_openai_client()
-        chat_completions_client = openai_interface.createOpenAIClient(api_key=args.llm_api_key, base_url=args.llm_base_url)
+        # chat_completions_client = openai_interface.createOpenAIClient(api_key=args.llm_api_key, base_url=args.llm_base_url)
+        chat_completions_client = openai.AsyncOpenAI(api_key=args.llm_api_key, base_url=args.llm_base_url)
+        # openai_interface.createOpenAIClient(api_key=args.llm_api_key, base_url=args.llm_base_url)
         pipeline_args["client"]=chat_completions_client
 
         model_params = dict()

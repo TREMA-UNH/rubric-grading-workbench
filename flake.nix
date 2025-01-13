@@ -20,6 +20,16 @@
           zlib-state = self.callPackage ./nix/zlib-state.nix {};
           warc3-wet = self.callPackage ./nix/warc3-wet.nix {};
           warc3-wet-clueweb09 = self.callPackage ./nix/warc3-wet-clueweb09.nix {};
+          backports-asyncio-queues = self.buildPythonPackage rec {
+            pname = "backports_asyncio_queues";
+            version = "0.1.2";
+            pyproject = true;
+            build-system = [ self.hatchling ];
+            src = self.fetchPypi {
+              inherit pname version;
+              hash = "sha256-CnQtfAKZ3im27lwqEe8IUak8r0roK8sas5icMPIOdiM=";
+            };
+          };
           exampp = self.buildPythonPackage {
             name = "exampp";
             src = ./.;
@@ -36,6 +46,7 @@
               ir_datasets
               fuzzywuzzy
               duckdb
+              backports-asyncio-queues
             ];
             doCheck = false;
           };
@@ -46,6 +57,7 @@
           pythonOverrides = [ pythonOverrides ];
           packages = ps: with ps; [ duckdb ];
           pythonPackages = ps: with ps; [
+            backports-asyncio-queues
             pydantic
             fuzzywuzzy
             nltk
