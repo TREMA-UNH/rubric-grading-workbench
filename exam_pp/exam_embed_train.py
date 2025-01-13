@@ -407,13 +407,13 @@ def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_
 
     DATASET_SCHEMA = \
         '''---sql
+        CREATE SEQUENCE IF NOT EXISTS dataset_id_seq START 1;
         CREATE TABLE IF NOT EXISTS dataset (
             dataset_id INTEGER PRIMARY KEY DEFAULT nextval('dataset_id_seq'),
             exp_name TEXT,
             split_name TEXT,
             metadata JSON,
         );
-        CREATE SEQUENCE IF NOT EXISTS dataset_id_seq START 1;
         CREATE TABLE IF NOT EXISTS dataset_item  (
             dataset_id INTEGER REFERENCES dataset(dataset_id),
             classification_item_id INTEGER REFERENCES classification_item(classification_item_id),
