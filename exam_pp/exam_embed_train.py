@@ -329,7 +329,7 @@ class ClassificationItemDataset(Dataset):
         return ConcatDataset([self, other])
 
 class EmbeddingStackDataset(torch.utils.data.Dataset):
-    def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id):
+    def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id, grades_valid):
         # Check that all datasets have the same first dimension
         if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
             raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
@@ -338,6 +338,7 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
         self.label_id = label_id
         self.grades_one_hot = grades_one_hot
         self.grades_id = grades_id
+        self.grades_valid = grades_valid
 
     def __len__(self):
         return len(self.embedding)
@@ -348,7 +349,9 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
             "label_one_hot": self.label_one_hot[idx],
             "label_id": self.label_id[idx],
             "grades_one_hot": self.grades_one_hot[idx],
-            "grades_id":self.grades_id[idx]
+            "grades_id":self.grades_id[idx],
+            "grades_valid":self.grades_valid[idx]
+
         }
     
 
@@ -383,16 +386,20 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
         
         # print("example_grades_list", example_grades_list)
         
-        example_label_id_list = [ [ default_grade(grade,1) for grade in grade_list]
+        example_grade_id_list = [ [ default_grade(grade,1) for grade in grade_list]
                                         for grade_list in example_grades_list]
+        example_grade_id = torch.tensor(example_grade_id_list, dtype=torch.long)  # [num_examples, num_seq]
 
-        example_label_id = torch.tensor(example_label_id_list, dtype=torch.long)  # [num_examples, num_seq]
+        example_grade_valid_list = [ [(grade in grade_idx) for grade in grade_list]
+                                        for grade_list in example_grades_list]
+        example_grade_valid = torch.tensor(example_grade_valid_list, dtype=torch.bool)  # [num_examples, num_seq]
+
         # Generate one-hot encoding for labels
-        example_label_one_hot = nn.functional.one_hot(example_label_id, num_classes=len(grades)).to(torch.float32)
+        example_grade_one_hot = nn.functional.one_hot(example_grade_id, num_classes=len(grades)).to(torch.float32)
 
         # print(f'grade_one_hot={example_label_one_hot.shape}, label_id={example_label_id.shape}')
         # print(f'grades: example_grades_id',example_label_id)
-        return example_label_one_hot, example_label_id
+        return example_grade_one_hot, example_grade_id, example_grade_valid
 
 
 def create_dataset(embedding_db:EmbeddingDb
@@ -492,10 +499,10 @@ def create_dataset(embedding_db:EmbeddingDb
     def plain_grade(self_rating:int, judgment: List[str])->int:
         return self_rating
 
-    example_grades_list_train = [[plain_grade(r, tup.judgment) 
+    example_grades_list_train = [[filtered_grade(r, tup.judgment) 
                                     for r in tup.self_ratings] 
                                         for tup in train_tensors_with_grades_labels.itertuples()]
-    example_grades_list_test = [[plain_grade(r, tup.judgment)  
+    example_grades_list_test = [[filtered_grade(r, tup.judgment)  
                                     for r in tup.self_ratings] 
                                     for tup in test_tensors_with_grades_labels.itertuples()]
     # example_grades_list_test = [tup.self_ratings for tup in test_tensors_with_grades_labels.itertuples()]
@@ -529,25 +536,27 @@ def create_dataset(embedding_db:EmbeddingDb
     # print(f'test labels: example_label_id_train',example_label_id_test)
     example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
     example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
-    example_grades_one_hot_train, example_grades_id_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
-    example_grades_one_hot_test, example_grades_id_test = conv_grades(example_grades_list_test, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_train, example_grades_id_train,example_grades_valid_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_test, example_grades_id_test, example_grades_valid_test = conv_grades(example_grades_list_test, grades=grades, grade_idx=grade_idx)
 
     
     train_ds = EmbeddingStackDataset(embedding=dataset_embedding_train
                                      , label_one_hot=example_label_one_hot_train
                                      , label_id=example_label_id_train
                                      , grades_one_hot=example_grades_one_hot_train
-                                     , grades_id=example_grades_id_train)
+                                     , grades_id=example_grades_id_train
+                                     , grades_valid = example_grades_valid_train)
     test_ds = EmbeddingStackDataset(embedding=dataset_embedding_test
                                     , label_one_hot=example_label_one_hot_test
                                     , label_id=example_label_id_test
                                     , grades_one_hot=example_grades_one_hot_test
-                                    , grades_id=example_grades_id_test)
+                                    , grades_id=example_grades_id_test
+                                    , grades_valid = example_grades_valid_test)
 
     # print("train_ds", train_ds[3])
     # print("test_ds", test_ds[3])
 
-    return (train_ds, test_ds, [label_idx[c] for c in classes], [grade_idx[g] for g in grades])
+    return (train_ds, test_ds, [label_idx[c] for c in classes], grades)
     tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
 class CachingDataset(Dataset):

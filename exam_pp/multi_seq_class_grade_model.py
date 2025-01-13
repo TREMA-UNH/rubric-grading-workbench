@@ -341,7 +341,8 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         final_logits: torch.Tensor,
         class_targets: torch.Tensor,
         seq_logits_grades: Optional[torch.Tensor] = None,
-        grade_targets: Optional[torch.Tensor] = None
+        grade_targets: Optional[torch.Tensor] = None,
+        grade_valid: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Returns (total_loss, class_loss, grade_loss).
@@ -363,17 +364,53 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
             class_loss = self.loss_fn_class(final_logits, class_targets.long())
 
         # B) Grade-level loss
+        # grade_loss = torch.tensor(0.0, device=final_logits.device)
+        # if seq_logits_grades is not None and grade_targets is not None:
+        #     if self.grade_problem_type == ProblemType.multi_label:
+        #         # seq_logits_grades: (b, k, n_grades), grade_targets: (b, k, n_grades)
+        #         grade_loss = self.loss_fn_grade(seq_logits_grades, grade_targets)
+        #     else:  # multi_class
+        #         # Flatten to (b*k, n_grades)
+        #         seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
+        #         # Flatten targets to (b*k)
+        #         grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')
+        #         grade_loss = self.loss_fn_grade(seq_logits_grades_2d, grade_targets_1d.long())
+
+
         grade_loss = torch.tensor(0.0, device=final_logits.device)
         if seq_logits_grades is not None and grade_targets is not None:
-            if self.grade_problem_type == ProblemType.multi_label:
-                # seq_logits_grades: (b, k, n_grades), grade_targets: (b, k, n_grades)
-                grade_loss = self.loss_fn_grade(seq_logits_grades, grade_targets)
+            # Check if a grade_valid mask is provided
+            if grade_valid is None:
+                grade_valid = torch.ones_like(grade_targets, dtype=torch.bool)  # Default: all valid
+                # num_valid_grades = -1
+            # else:
+                # num_valid_grades = grade_valid.sum().item()
+
+            # Apply mask for multi-label or multi-class loss
+            if self.grade_problem_type == "multi_label":
+                # Ensure seq_logits_grades and grade_targets match shape
+                assert seq_logits_grades.shape == grade_targets.shape, (
+                    f"Shape mismatch: seq_logits_grades={seq_logits_grades.shape}, "
+                    f"grade_targets={grade_targets.shape}"
+                )
+                # Mask logits and targets
+                masked_logits = seq_logits_grades[grade_valid]
+                masked_targets = grade_targets[grade_valid]
+                grade_loss = self.loss_fn_grade(masked_logits, masked_targets)
             else:  # multi_class
-                # Flatten to (b*k, n_grades)
+                # Reshape logits and targets
                 seq_logits_grades_2d = rearrange(seq_logits_grades, 'b k g -> (b k) g')
-                # Flatten targets to (b*k)
                 grade_targets_1d = rearrange(grade_targets, 'b k -> (b k)')
-                grade_loss = self.loss_fn_grade(seq_logits_grades_2d, grade_targets_1d.long())
+                grade_valid_1d = rearrange(grade_valid, 'b k -> (b k)')  # Flatten valid mask
+
+                # Mask logits and targets
+                masked_logits = seq_logits_grades_2d[grade_valid_1d]
+                masked_targets = grade_targets_1d[grade_valid_1d]
+                # print("valid target_grades:", len(masked_targets), "mask non-zero:",num_valid_grades)
+                grade_loss = self.loss_fn_grade(masked_logits, masked_targets.long())
+
+
+
 
         total_loss = class_loss + grade_loss
         return total_loss, class_loss, grade_loss

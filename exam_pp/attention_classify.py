@@ -479,6 +479,7 @@ def run_num_seqs(root: Path
                                    , seq_logits_grades=pred_grades
                                    , class_targets= true_labels # batch['label_one_hot'].to(device)
                                    , grade_targets= true_grades # batch['grades_id'].to(device)
+                                   , grade_valid= batch['grades_valid'].to(device)
                                    )
                 total_loss.backward()
                 optimizer.step()
