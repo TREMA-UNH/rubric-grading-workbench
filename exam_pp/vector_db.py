@@ -49,6 +49,7 @@ CREATE TABLE label_assignment (
 
 class EmbeddingDb:
     def __init__(self, path: Path, write:bool=False):
+        self.read_only = not write
         self.tensor_dir = path / "tensors"
         needs_init = not path.exists()
         self.tensor_dir.mkdir(parents=True, exist_ok=True)

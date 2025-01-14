@@ -404,41 +404,46 @@ def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx
         return example_grade_one_hot, example_grade_id, example_grade_valid
 
 def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_items:List[ClassificationItemId], metadata:Dict[str,Any]):
+    if not db.read_only:
+        DATASET_SCHEMA = \
+            '''---sql
+            CREATE SEQUENCE IF NOT EXISTS dataset_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS dataset (
+                dataset_id INTEGER PRIMARY KEY DEFAULT nextval('dataset_id_seq'),
+                exp_name TEXT,
+                split_name TEXT,
+                metadata JSON,
+                UNIQUE (exp_name, split_name),
+            );
+            CREATE TABLE IF NOT EXISTS dataset_item  (
+                dataset_id INTEGER REFERENCES dataset(dataset_id),
+                classification_item_id INTEGER REFERENCES classification_item(classification_item_id),
+                UNIQUE (dataset_id, classification_item_id),
+            );
+            '''
+        
+        db.db.execute(DATASET_SCHEMA)
 
-    DATASET_SCHEMA = \
-        '''---sql
-        CREATE SEQUENCE IF NOT EXISTS dataset_id_seq START 1;
-        CREATE TABLE IF NOT EXISTS dataset (
-            dataset_id INTEGER PRIMARY KEY DEFAULT nextval('dataset_id_seq'),
-            exp_name TEXT,
-            split_name TEXT,
-            metadata JSON,
-            UNIQUE (exp_name, split_name),
-        );
-        CREATE TABLE IF NOT EXISTS dataset_item  (
-            dataset_id INTEGER REFERENCES dataset(dataset_id),
-            classification_item_id INTEGER REFERENCES classification_item(classification_item_id),
-            UNIQUE (dataset_id, classification_item_id),
-        );
-        '''
-    
-    db.db.execute(DATASET_SCHEMA)
+        db.db.execute('''---sql
+                    INSERT INTO dataset (exp_name, split_name, metadata)
+                    VALUES (?,?,?)
+                    ON CONFLICT DO NOTHING
+                    RETURNING dataset_id
+                    ''', (exp_name, split_name, metadata,))
+        res = db.db.fetchone()
 
-    db.db.execute('''---sql
-                  INSERT INTO dataset (exp_name, split_name, metadata)
-                  VALUES (?,?,?)
-                  RETURNING dataset_id
-                  ''', (exp_name, split_name, metadata,))
-    ds_id, = db.db.fetchone()
+        if res is not None:
+            ds_id, = res
+            db.db.executemany('''---sql
+                    INSERT INTO dataset_item (dataset_id, classification_item_id)
+                    VALUES (?,?)
+                    ON CONFLICT DO NOTHING
+                    ''', 
+                    [(ds_id, classification_item_id,) for classification_item_id in classification_items]
+                    )
 
-    db.db.executemany('''---sql
-                  INSERT INTO dataset_item (dataset_id, classification_item_id)
-                  VALUES (?,?)
-                  ''', 
-                   [(ds_id, classification_item_id,) for classification_item_id in classification_items]
-                  )
-
-
+    else:
+        print("Cannot store dataset as Embedding DB is read only.")
 
 def create_dataset(embedding_db:EmbeddingDb
                    , prompt_class:str
@@ -669,6 +674,7 @@ def main(cmdargs=None) -> None:
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
     parser.add_argument('--rubric-db', type=str, metavar='PATH', help='Path for the database directory for rubric paragraph data')
+    parser.add_argument('--db-write', action="store_true", help='If set,open embedding DB in write mode, to store dataset info', default=False)
 
     parser.add_argument('--exp-name', type=str, metavar='str', help='Name of the experiment (used to store dataset)')
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
@@ -721,7 +727,7 @@ def main(cmdargs=None) -> None:
 
     with TrainingTimer("Data Loading"):
 
-        embedding_db = EmbeddingDb(Path(args.embedding_db), write=True)
+        embedding_db = EmbeddingDb(Path(args.embedding_db), write=args.db_write)
 
         embedding_db.db.execute(f'''--sql
                                 ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
