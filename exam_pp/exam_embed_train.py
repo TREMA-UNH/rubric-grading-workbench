@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 from enum import Enum, auto
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
+from sklearn.utils import compute_class_weight
 from torch import nn
 import torch as pt
 from torch.nn import TransformerEncoder
@@ -203,26 +204,26 @@ def lookup_classification_tensors(db:EmbeddingDb, classification_item_id: List[C
     #     print(f"Index: {row['i']}, Tensor: {row['pt_tensor']}")
     # return metadata_df
 
-def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
-    embedding_db.db.execute(
-        '''--sql
-        SELECT classification_item.metadata->>'$.query' as query,
-        classification_item.metadata->>'$.passage' as passage,
-               label_assignment.true_labels as true_labels,
-               classification_item.classification_item_id as classification_item_id
-        FROM classification_item
-        INNER JOIN label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
-        WHERE len(label_assignment.true_labels) = 1
-        '''
-    )
-    df = embedding_db.db.fetch_df()
-    df['positive'] = df['true_labels'].apply(lambda x: '0' in x)
-    by_label = df.groupby('positive')
-    counts = by_label['classification_item_id'].count()
-    n = counts.min()
-    sampled = by_label.sample(n)
-    sampled.drop(columns=['positive'], inplace=True)
-    return sampled
+# def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
+#     embedding_db.db.execute(
+#         '''--sql
+#         SELECT classification_item.metadata->>'$.query' as query,
+#         classification_item.metadata->>'$.passage' as passage,
+#                label_assignment.true_labels as true_labels,
+#                classification_item.classification_item_id as classification_item_id
+#         FROM classification_item
+#         INNER JOIN label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
+#         WHERE len(label_assignment.true_labels) = 1
+#         '''
+#     )
+#     df = embedding_db.db.fetch_df()
+#     df['positive'] = df['true_labels'].apply(lambda x: '0' in x)
+#     by_label = df.groupby('positive')
+#     counts = by_label['classification_item_id'].count()
+#     n = counts.min()
+#     sampled = by_label.sample(n)
+#     sampled.drop(columns=['positive'], inplace=True)
+#     return sampled
 
 def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class: str):
     """
@@ -510,6 +511,45 @@ def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_
         print("Cannot store dataset as Embedding DB is read only.")
 
 
+
+def compute_class_weights_mc(example_label_id_train:torch.Tensor, classes:list[int])-> torch.Tensor:
+    num_classes = len(classes)
+    class_counts = torch.bincount(example_label_id_train[example_label_id_train>-1], minlength=num_classes)  # [num_classes]
+
+    # Compute total number of examples
+    num_examples = example_label_id_train.size(0)
+
+    # Compute class weights: Inverse of class frequency
+    class_weights_mc = num_examples / (class_counts * num_classes)
+
+    class_weights_mc = torch.where(torch.isinf(class_weights_mc), torch.tensor(0.0), class_weights_mc)
+
+    # Convert to PyTorch tensor (if not already)
+    class_weights_mc = (class_weights_mc+0.01).to(torch.float32)
+
+    print("Multi-class class weights:", class_weights_mc)
+    return class_weights_mc
+
+
+def compute_class_weights_ml(example_label_one_hot_train:torch.Tensor)->torch.Tensor:
+    # Compute the number of positive examples per class
+    positive_counts = example_label_one_hot_train.sum(dim=0)  # [num_classes]
+
+    # Compute total number of examples
+    num_examples = example_label_one_hot_train.size(0)
+
+    # Compute class weights: Inverse of class frequency
+    class_weights_ml = (num_examples - positive_counts) / positive_counts
+
+    # Convert to PyTorch tensor (if not already)
+    class_weights_ml = class_weights_ml.to(torch.float32)
+
+    class_weights_ml = torch.where(torch.isinf(class_weights_ml), torch.tensor(0.0), class_weights_ml)
+    class_weights_ml = class_weights_ml+0.01
+
+    print("Multi-label class weights:", class_weights_ml)
+    return class_weights_ml
+
 def create_dataset(embedding_db:EmbeddingDb
                    , prompt_class:str
                    , query_list: Optional[List[str]]
@@ -520,7 +560,8 @@ def create_dataset(embedding_db:EmbeddingDb
                    , split_same_query: bool = False
                    , exp_name:str = ""
                    , fold: int = 0
-                   )->Tuple[Dataset, Dataset, List[int], List[int], Dict[int,Any], Dataset]:
+                   )->Tuple[Dataset, Dataset, List[int], List[int], Dict[int,Any], Dataset
+                            , torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
     queries = None
     if query_list:
@@ -648,9 +689,18 @@ def create_dataset(embedding_db:EmbeddingDb
 
 
     class_ids =  [label_idx[c] for c in classes]
+    grade_ids =  [grade_idx[g] for g in grades]
     label_lookup = {v:k for k,v in label_idx.items()}
 
-    return (train_ds, test_ds, class_ids, grades, label_lookup, predict_ds)
+    
+    class_weights_mc = compute_class_weights_mc(example_label_id_train=example_label_id_train, classes=class_ids)
+    class_weights_ml = compute_class_weights_ml(example_label_one_hot_train=example_label_one_hot_train)
+
+
+    grade_weights_mc = compute_class_weights_mc(example_label_id_train=example_grades_id_train, classes=grade_ids)
+    grade_weights_ml = compute_class_weights_ml(example_label_one_hot_train=example_grades_one_hot_train)
+
+    return (train_ds, test_ds, class_ids, grades, label_lookup, predict_ds, class_weights_mc, class_weights_ml, grade_weights_mc, grade_weights_ml)
 
 class CachingDataset(Dataset):
     def __init__(self, cachee:Dataset):
@@ -802,7 +852,7 @@ def main(cmdargs=None) -> None:
     with TrainingTimer("Data Loading"):
 
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-        (train_ds, test_ds, class_list, grades_list, label_lookup, predict_ds) = \
+        (train_ds, test_ds, class_list, grades_list, label_lookup, predict_ds, class_weights_mc, class_weights_ml, grade_weights_mc, grade_weights_ml) = \
             create_dataset(embedding_db
                             , prompt_class=args.prompt_class
                             , query_list = args.queries
@@ -839,7 +889,6 @@ def main(cmdargs=None) -> None:
         for item, y_pred in zip(items, pred_labels):
             classification_item = item.item()
             predicted_label = label_lookup.get(y_pred.item())
-            print ("prediction", classification_item, predicted_label)
             predictions.append( (classification_item, predicted_label))
 
         exp_db.executemany(
@@ -888,7 +937,11 @@ def main(cmdargs=None) -> None:
                         , test_ds=test_ds
                         , predict_ds=predict_ds
                         , class_list=class_list
+                        , class_weights_mc=class_weights_mc
+                        , class_weights_ml=class_weights_ml 
                         , grades_list=grades_list
+                        , grade_weights_mc=grade_weights_mc
+                        , grade_weights_ml=grade_weights_ml 
                         , batch_size=args.batch_size
                         , snapshot_every=args.snapshots_every
                         , eval_every=args.eval_every

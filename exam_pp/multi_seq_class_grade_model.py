@@ -241,9 +241,11 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
     def __init__(self,
                  n_classes: int,
-                 class_weights: torch.Tensor,
+                 class_weights_mc: torch.Tensor,
+                 class_weights_ml: torch.Tensor,
                  n_grades: int,
-                 grade_weights: torch.Tensor,
+                 grade_weights_mc: torch.Tensor,
+                 grade_weights_ml: torch.Tensor,
                  llm_dim: int,
                  inner_dim: int,
                  num_seqs: int,
@@ -308,17 +310,17 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         # 3) Define the loss functions
         self.loss_fn_class: nn.Module
         if self.label_problem_type == ProblemType.multi_label:
-            self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights)
+            self.loss_fn_class = nn.BCEWithLogitsLoss(pos_weight=class_weights_ml)
         elif self.label_problem_type == ProblemType.multi_class:
-            self.loss_fn_class = nn.CrossEntropyLoss(weight=class_weights)
+            self.loss_fn_class = nn.CrossEntropyLoss(weight=class_weights_mc)
         else:
             raise ValueError("label_problem_type must be 'ProblemType.multi_label' or 'ProblemType.multi_class'")
 
         self.loss_fn_grade: nn.Module
         if self.grade_problem_type == ProblemType.multi_label:
-            self.loss_fn_grade = nn.BCEWithLogitsLoss(pos_weight=grade_weights)
+            self.loss_fn_grade = nn.BCEWithLogitsLoss(pos_weight=grade_weights_ml)
         elif self.grade_problem_type == ProblemType.multi_class:
-            self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights)
+            self.loss_fn_grade = nn.CrossEntropyLoss(weight=grade_weights_mc)
         else:
             raise ValueError("grade_problem_type must be 'ProblemType.multi_label' or 'ProblemType.multi_class'")
 
@@ -370,11 +372,15 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
             assert class_targets.dim() == 2, f"Multi-label class: Expected class_targets to have 2 dimensions (b, n_classes), got {class_targets.shape}"
             assert class_targets.dtype == torch.float, f"Multi-label class: Expected class_targets dtype to be float for multi-label, got {class_targets.dtype}"
 
+            # print(f"loss multi-label label:  true {class_targets}, predict {final_logits}")
+
             # final_logits: (b, n_classes), class_targets: (b, n_classes)
             class_loss = self.loss_fn_class(final_logits, class_targets)
         else:  # multi_class
             assert class_targets.dim() == 1, f"Multi-class class: Expected class_targets to have 1 dimension (b,), got {class_targets.shape}"
             assert class_targets.dtype == torch.long, f"Multi-class class: Expected class_targets dtype to be long for multi-class, got {class_targets.dtype}"
+
+            # print(f"loss multi-class label:  true {class_targets}, predict {final_logits}")
 
             # final_logits: (b, n_classes), class_targets: (b,)
             class_loss = self.loss_fn_class(final_logits, class_targets.long())
@@ -451,9 +457,11 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
 def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     n_classes: int,
-    class_weights: torch.Tensor,
+    class_weights_mc: torch.Tensor,
+    class_weights_ml: torch.Tensor,
     n_grades: int,
-    grade_weights: torch.Tensor,
+    grade_weights_mc: torch.Tensor,
+    grade_weights_ml: torch.Tensor,
     llm_dim: int,
     inner_dim: int,
     num_seqs: int,
@@ -470,9 +478,11 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     """
     return MultiLabelMultiSeqEmbeddingClassifier(
         n_classes=n_classes,
-        class_weights=class_weights,
+        class_weights_mc=class_weights_mc,
+        class_weights_ml=class_weights_ml,
         n_grades=n_grades,
-        grade_weights=grade_weights,
+        grade_weights_mc=grade_weights_mc,
+        grade_weights_ml=grade_weights_ml,        
         llm_dim=llm_dim,
         inner_dim=inner_dim,
         num_seqs=num_seqs,

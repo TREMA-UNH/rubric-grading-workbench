@@ -4,7 +4,7 @@ from enum import Enum, auto
 from pathlib import Path
 import sys
 import typing
-from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
+from sklearn.metrics import balanced_accuracy_score, f1_score, jaccard_score, roc_auc_score, accuracy_score, multilabel_confusion_matrix, confusion_matrix
 from torch import nn
 from torch.nn import TransformerEncoder
 from torch.utils.data import StackDataset, ConcatDataset, TensorDataset, Dataset, DataLoader, Subset
@@ -163,17 +163,27 @@ def classification_metrics(y_pred_logits, y_true_one_hot, class_list: List[int],
     majority_class_false = majority_class_predictions[np.arange(len(majority_class_predictions)) != majority_class_index].sum()
 
     roc_y_true = None
+    roc_y_pred_prob = None
+
     if label_problem_type == ProblemType.multi_class:
         roc_y_true = y_true_label # if label multiclass problem
+        roc_y_pred_prob = y_pred_prob
     else:
-        roc_y_true = y_true_one_hot # if label is multi_label problem
+        roc_y_true = y_true_one_hot.view(-1) # if label is multi_label problem
+        roc_y_pred_prob = y_pred_prob.view(-1)
+
+
+    # print(f"eval auc: pred={y_pred_prob} truth={roc_y_true}")
+    # print(f"eval f1: y_true= {y_true_label}, y_pred={y_pred_label}")
     metrics = {
-            'f1_micro': f1_score(y_true_label, y_pred_label, average='micro'),
-            'roc_auc': roc_auc_score(y_true=roc_y_true,  y_score= y_pred_prob, multi_class='ovo', labels=np.array(class_list)),
+            'f1_micro': f1_score(y_true= y_true_label, y_pred=y_pred_label, average='micro'),
+            'roc_auc': round(roc_auc_score(y_true=roc_y_true,  y_score= roc_y_pred_prob, multi_class='ovo', labels=np.array(class_list)),4),
             'true_pos': int(true_positives), # (confusion * np.eye(n_classes)).sum(),
             # The sum of predictions where the predicted class is the majority class but the true class is not the majority class.
             'majority_class_false': int(majority_class_false),
-            'accuracy': accuracy_score(y_true_label, y_pred_label),
+            'accuracy': round(accuracy_score(y_true=y_true_label, y_pred=y_pred_label),4),
+            'balanced-accuracy': round(balanced_accuracy_score(y_true=y_true_label, y_pred=y_pred_label),4),
+            'jaccard': round(jaccard_score(y_true=y_true_label, y_pred=y_pred_label,average="micro"),4),
             }
     return metrics
 
@@ -357,9 +367,9 @@ def evaluate_better(model: MultiLabelMultiSeqEmbeddingClassifier, dataloader: Da
 
     y_true = torch.cat(all_labels)
     metrics = classification_metrics(y_pred_logits=torch.cat(all_preds), y_true_one_hot=y_true, class_list=class_list, label_problem_type= model.label_problem_type)
-    metrics['loss'] = total_loss / len(dataloader)
-    metrics['label_loss'] = total_label_loss / len(dataloader)
-    metrics['grade_loss'] = total_grades_loss / len(dataloader)
+    metrics['loss'] = round(total_loss / len(dataloader),4)
+    metrics['label_loss'] = round(total_label_loss / len(dataloader),4)
+    metrics['grade_loss'] = round(total_grades_loss / len(dataloader),4)
     # print(f"Evaluate: total_loss: {total_loss}, label_loss: {total_label_loss},  grades_loss: {total_grades_loss}")
     return metrics
 
@@ -369,7 +379,11 @@ def run_num_seqs( model_type: ClassificationModel
         ,test_ds:Dataset
         , predict_ds:Dataset
         ,class_list:List[int]
-        ,grades_list:List[int]
+        , class_weights_mc: torch.Tensor
+        , class_weights_ml: torch.Tensor
+        , grades_list:List[int]
+        , grade_weights_mc: torch.Tensor
+        , grade_weights_ml: torch.Tensor
         , grade_problem_type:ProblemType
         , label_problem_type:ProblemType
         , root: Optional[Path]=Path(".")
@@ -413,8 +427,11 @@ def run_num_seqs( model_type: ClassificationModel
                                                                                 , nhead = nhead
                                                                                 , inner_dim=inner_dim
                                                                                 , num_seqs=num_seqs
-                                                                                , class_weights=torch.ones(len(class_list)).to(device)
-                                                                                , grade_weights=torch.ones(len(grades_list)).to(device)
+                                                                                # , class_weights=torch.ones(len(class_list)).to(device)
+                                                                                , class_weights_mc = class_weights_mc.to(device)
+                                                                                , class_weights_ml = class_weights_ml.to(device)
+                                                                                , grade_weights_mc = grade_weights_mc.to(device)
+                                                                                , grade_weights_ml = grade_weights_ml.to(device)
                                                                                 , aggregation = aggregation
                                                                                 , label_problem_type=label_problem_type
                                                                                 , grade_problem_type=grade_problem_type
@@ -499,6 +516,7 @@ def run_num_seqs( model_type: ClassificationModel
         torch.save(model.state_dict(), out_dir / f"model_final.pt")
 
     # Predict 
+    print("\n\n PREDICT \n\n")
     model.eval()
     all_preds:List[int] = []
     with torch.no_grad():
@@ -510,6 +528,8 @@ def run_num_seqs( model_type: ClassificationModel
 
             # todo handle multi-label and multi-class cases
             label_logits = final_logits.cpu()
+            # print(f"loss multi-class label:  predict {label_logits}")
+
             # Same for both: if model.label_problem_type == ProblemType.multi_class:
             y_pred_label = label_logits.argmax(dim=1)
             all_preds.append(y_pred_label)
