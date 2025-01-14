@@ -726,6 +726,7 @@ def main(cmdargs=None) -> None:
 
     parser.add_argument('--exp-name', type=str, metavar='str', help='Name of the experiment (used to store dataset)')
     parser.add_argument('--fold', type=int, metavar="DIM", help="Which fold to use, currently 0 or 1", default=0)
+    parser.add_argument('--load-model-path', type=str, metavar='str', help='Name of *pt file from which to load the model. Note that it must be instantiated with exactly the same parameters.')
 
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
@@ -775,6 +776,9 @@ def main(cmdargs=None) -> None:
     test_ds = None
     class_list = None
 
+    load_model_path = Path(args.load_model_path)  \
+                            if args.load_model_path is not None \
+                            else None
 
     embedding_db = EmbeddingDb(Path(args.embedding_db), write=args.db_write)
 
@@ -894,6 +898,7 @@ def main(cmdargs=None) -> None:
                         , grade_problem_type=args.grade_problem_type
                         , use_transformer=args.use_transformers
                         , use_inner_proj=args.use_inner_proj
+                        , load_model_path= load_model_path
                         , submit_predictions=submit_predictions
                         )
 

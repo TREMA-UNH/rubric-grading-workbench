@@ -162,18 +162,20 @@ def noodle_grading_rubric(queryWithFullParagraphList:QueryWithFullParagraphList,
 
 
 def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt
-                                          , qaPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
+                                          , llmPipeline:LlmPipeline, max_paragraphs:Optional[int]=None
                                           , keep_going_on_llm_parse_error:bool=False
                                           , system_message:Optional[str]=None
                                           , embedding_db:Optional[EmbeddingDb]=None
                                           , **kwargs
                                           )->None:
-    '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
-
+    query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
-    async def noodle_one_paragraph(para):
+    async def noodle_one_paragraph(para)-> None:
+        paragraph_id = para.paragraph_id
         paragraph_txt = para.text
+
+        print(f"Query: {query_id} / Para: {para.paragraph_id}")
 
         def record_embeddings(prompts:List[str], embeddings:torch.Tensor, answers:List[str]):
             if embedding_db is not None:
@@ -192,33 +194,53 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
 
 
 
-        answerTuples = await qaPipeline.grade_paragraph([grading_prompt]
+        answer_or_error_tuples = await llmPipeline.grade_paragraph([grading_prompt]
                                                         , paragraph_txt=paragraph_txt
+                                                        , full_paragraph=para
                                                         , system_message=system_message
                                                         , record_embeddings=record_embeddings
                                                         , **kwargs)
         
-        (_, answer) = answerTuples[0]
+        # print(answer_or_error_tuples)
+        answerTuples:List[Tuple[Prompt,str]] = [ (p,cast(str,a))  for p,a in answer_or_error_tuples if not isinstance(a, LlmResponseError)]
+        just_answer_errors:List[Tuple[Prompt,LlmResponseError]]  = [ (p,cast(LlmResponseError,a))  for p,a in answer_or_error_tuples if  isinstance(a,LlmResponseError)]
+        just_answer_error = just_answer_errors[0][1] if len(just_answer_errors)>0 else None
+
+
 
         if not keep_going_on_llm_parse_error:
-            if isinstance(answer, LlmResponseError):
-                raise RuntimeError("Obtained LlmresponseError {answer}")
-        
+            for p,llm_error in just_answer_errors:
+                raise RuntimeError(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
         else:
-            grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
-                            , answer=answer if not isinstance(answer,LlmResponseError) else ""
-                            , llm_response_error= (cast(LlmResponseError,answer).failure_reason) if isinstance(answer, LlmResponseError) else None
-                            , self_ratings= grading_prompt.check_answer_rating(answer)
-                            , llm = qaPipeline.exp_modelName()
-                            , llm_options={}
-                            , prompt_type= grading_prompt.prompt_type()
-                            , prompt_info = grading_prompt.prompt_info()
-                            )
-            
-            if grade_obj.self_ratings is not None:
-                grade_obj.relevance_label = grade_obj.self_ratings
-            else:
-                grade_obj.relevance_label = 1 if grade_obj.correctAnswered else 0
+            for p,llm_error in just_answer_errors:
+                print(f"Obtained LlmResponseError for paragraph id {paragraph_id}:  {llm_error}",llm_error)
+
+
+
+        (_, answer) = answerTuples[0] if len(answerTuples)>0 else (None, "")
+
+        # grade_obj = None
+        # if not keep_going_on_llm_parse_error:
+        #     if isinstance(answer, LlmResponseError):
+        #         raise RuntimeError("Obtained LlmresponseError {answer}")
+        
+        # else:
+        grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
+                        , answer=answer
+                        # , llm_response_error= (cast(LlmResponseError,answer).failure_reason) if isinstance(answer, LlmResponseError) else None
+                        , llm_response_error= just_answer_error
+                        # , llm_response_errors= {qpc.prompt_id(): llm_error for qpc,llm_error in just_answer_errors}
+                        , self_ratings= grading_prompt.check_answer_rating(answer)
+                        , llm = llmPipeline.exp_modelName()
+                        , llm_options={}
+                        , prompt_type= grading_prompt.prompt_type()
+                        , prompt_info = grading_prompt.prompt_info()
+                        )
+        
+        if grade_obj.self_ratings is not None:
+            grade_obj.relevance_label = grade_obj.self_ratings
+        else:
+            grade_obj.relevance_label = 1 if grade_obj.correctAnswered else 0
 
 
 
@@ -230,12 +252,15 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
     #     for para in itertools.islice(paragraphs, max_paragraphs):
     #         tg.create_task(noodle_one_paragraph(para))
 
-    async def run_all_paras():
-        async with asyncio.TaskGroup() as tg:
-            for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
-                tg.create_task(noodle_one_paragraph(para))
+    # async def run_all_paras():
+    #     async with asyncio.TaskGroup() as tg:
+    #         for para in (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs):
+    #             tg.create_task(noodle_one_paragraph(para))
     
-    asyncio.run (run_all_paras())
+    asyncio.run ( apply_concurrently( noodle_one_paragraph, (itertools.islice(paragraphs, max_paragraphs) if max_paragraphs > 0 else paragraphs), n_workers = 20))
+
+
+    # asyncio.run (run_all_paras())
 
 
 def noodle(llmPipeline:LlmPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None

@@ -72,7 +72,7 @@ class ExamGrades(BaseModel):
 class Grades(BaseModel):
     correctAnswered: bool               # true if relevant,  false otherwise
     answer: str                        #  llm_response_text
-    llm_response_error:Optional[str] = None       # When an Llm error occurs (e.g. non-parsable response)
+    llm_response_error:Optional[LlmResponseError] = None       # When an Llm error occurs (e.g. non-parsable response)
     llm: str                                 # huggingface model name  google/flan-t5-large
     llm_options: Dict[str,Any]               # anything that seems relevant
     prompt_info: Optional[Dict[str,Any]]     # more info about the style of prompting
