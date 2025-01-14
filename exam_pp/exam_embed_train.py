@@ -771,7 +771,6 @@ def main(cmdargs=None) -> None:
  
     args = parser.parse_args(args = cmdargs) 
 
-    root = Path(args.root)
     train_ds = None
     test_ds = None
     class_list = None
@@ -855,10 +854,13 @@ def main(cmdargs=None) -> None:
 
 
 
+    root = Path(args.root)
+    out_dir = root / Path(args.exp_name) / Path(f"fold-{args.fold}")
 
     with TrainingTimer("Training"):
         # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
         # attention_classify.run(root = root
+        #                 , out_dir = out_dir
         #                 , overwrite=args.overwrite
         #                 , model_type=args.class_model
         #                 , train_ds=train_ds
@@ -876,7 +878,10 @@ def main(cmdargs=None) -> None:
         #                 , target_metric= args.snapshots_target_metric
         #                 )
 
+
+
         attention_classify.run_num_seqs(root = root
+                        , out_dir=out_dir
                         , overwrite=args.overwrite
                         , model_type=args.class_model
                         , train_ds=train_ds
@@ -900,7 +905,6 @@ def main(cmdargs=None) -> None:
                         , use_inner_proj=args.use_inner_proj
                         , load_model_path= load_model_path
                         , submit_predictions=submit_predictions
-                        , fold_str=f"fold-{args.fold}"
                         )
 
 

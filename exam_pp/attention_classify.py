@@ -364,8 +364,7 @@ def evaluate_better(model: MultiLabelMultiSeqEmbeddingClassifier, dataloader: Da
     return metrics
 
 
-def run_num_seqs(root: Path
-        , model_type: ClassificationModel
+def run_num_seqs( model_type: ClassificationModel
         ,train_ds:Dataset
         ,test_ds:Dataset
         , predict_ds:Dataset
@@ -373,6 +372,7 @@ def run_num_seqs(root: Path
         ,grades_list:List[int]
         , grade_problem_type:ProblemType
         , label_problem_type:ProblemType
+        , root: Optional[Path]=Path(".")
         ,out_dir: Optional[Path]=None
         ,overwrite:bool=False
         ,batch_size: int=128
@@ -390,7 +390,6 @@ def run_num_seqs(root: Path
         ,use_inner_proj: bool = True
         , load_model_path:Optional[Path] = None
         , submit_predictions:Callable[Tuple[Any,Any],None] = None
-        , fold_str:str =""
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -473,7 +472,7 @@ def run_num_seqs(root: Path
 
             # Save model checkpoint
             if snapshot_every and epoch_t % snapshot_every == 0 :
-                torch.save(model.state_dict(), out_dir / f"model_{fold_str}_epoch_{epoch_t}.pt")
+                torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
 
             if  eval_every is None or epoch_t % eval_every == 0 :
                 # Evaluate loss
@@ -494,10 +493,10 @@ def run_num_seqs(root: Path
                     prev_highest = target
                     if snapshot_best_after and epoch_t >= snapshot_best_after :
                         print("Epoch {epoch_t}: Saving best snapshot")
-                        torch.save(model.state_dict(), out_dir / f"model_{fold_str}_best_epoch_{epoch_t}.pt")
+                        torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
-        torch.save(model.state_dict(), out_dir / f"model_{fold_str}_final.pt")
+        torch.save(model.state_dict(), out_dir / f"model_final.pt")
 
     # Predict 
     model.eval()
