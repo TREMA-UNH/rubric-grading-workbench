@@ -900,6 +900,7 @@ def main(cmdargs=None) -> None:
                         , use_inner_proj=args.use_inner_proj
                         , load_model_path= load_model_path
                         , submit_predictions=submit_predictions
+                        , fold_str=f"fold-{args.fold}"
                         )
 
 

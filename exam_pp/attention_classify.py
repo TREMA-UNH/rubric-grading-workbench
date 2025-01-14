@@ -390,6 +390,7 @@ def run_num_seqs(root: Path
         ,use_inner_proj: bool = True
         , load_model_path:Optional[Path] = None
         , submit_predictions:Callable[Tuple[Any,Any],None] = None
+        , fold_str:str =""
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -469,9 +470,10 @@ def run_num_seqs(root: Path
                     total_loss.backward()
                     optimizer.step()
 
+
             # Save model checkpoint
             if snapshot_every and epoch_t % snapshot_every == 0 :
-                torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
+                torch.save(model.state_dict(), out_dir / f"model_{fold_str}_epoch_{epoch_t}.pt")
 
             if  eval_every is None or epoch_t % eval_every == 0 :
                 # Evaluate loss
@@ -492,10 +494,10 @@ def run_num_seqs(root: Path
                     prev_highest = target
                     if snapshot_best_after and epoch_t >= snapshot_best_after :
                         print("Epoch {epoch_t}: Saving best snapshot")
-                        torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
+                        torch.save(model.state_dict(), out_dir / f"model_{fold_str}_best_epoch_{epoch_t}.pt")
 
 
-        torch.save(model.state_dict(), out_dir / f"model_final.pt")
+        torch.save(model.state_dict(), out_dir / f"model_{fold_str}_final.pt")
 
     # Predict 
     model.eval()
@@ -513,8 +515,6 @@ def run_num_seqs(root: Path
             y_pred_label = label_logits.argmax(dim=1)
             all_preds.append(y_pred_label)
             submit_predictions(items=batch['classification_item_id'], pred_labels=y_pred_label)
-
-
 
 
 
