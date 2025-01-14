@@ -554,7 +554,6 @@ class PromptTruncater():
         available_tokens_for_context = max_length - len(prompt_tokens) - num_special_tokens -5 # 5 for good measure
 
         # Tokenize and truncate the context
-        print(f"tokenize: context={context} available_tokens_for_context={available_tokens_for_context}")
         truncated_context_tokens = tokenizer.encode(context, add_special_tokens=False, max_length = available_tokens_for_context, truncation=True)
 
         return tokenizer.decode(truncated_context_tokens)
