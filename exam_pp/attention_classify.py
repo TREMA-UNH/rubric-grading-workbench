@@ -8,7 +8,7 @@ from sklearn.metrics import f1_score, roc_auc_score, accuracy_score, multilabel_
 from torch import nn
 from torch.nn import TransformerEncoder
 from torch.utils.data import StackDataset, ConcatDataset, TensorDataset, Dataset, DataLoader, Subset
-from typing import Any, Dict, Set, Tuple, List, Optional
+from typing import Any, Callable, Dict, Set, Tuple, List, Optional
 import collections
 import io
 import itertools
@@ -142,7 +142,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader, loss_fn:nn.Module,  class
 
 
 
-def classification_metrics(y_pred_logits, y_true_one_hot, class_list: List[int]) -> Dict[str, object]:
+def classification_metrics(y_pred_logits, y_true_one_hot, class_list: List[int], label_problem_type:Optional[ProblemType]=None) -> Dict[str, object]:
     """
     y_pred_logits: predicted logits
     y_true_one_hot: true one-hot
@@ -162,9 +162,14 @@ def classification_metrics(y_pred_logits, y_true_one_hot, class_list: List[int])
     majority_class_predictions = conf_matrix[:, majority_class_index]  # Extract the column of majority class prediction
     majority_class_false = majority_class_predictions[np.arange(len(majority_class_predictions)) != majority_class_index].sum()
 
+    roc_y_true = None
+    if label_problem_type == ProblemType.multi_class:
+        roc_y_true = y_true_label # if label multiclass problem
+    else:
+        roc_y_true = y_true_one_hot # if label is multi_label problem
     metrics = {
             'f1_micro': f1_score(y_true_label, y_pred_label, average='micro'),
-            'roc_auc': roc_auc_score(y_true_one_hot, y_pred_prob, multi_class='ovo', labels=np.array(class_list)),
+            'roc_auc': roc_auc_score(y_true=roc_y_true,  y_score= y_pred_prob, multi_class='ovo', labels=np.array(class_list)),
             'true_pos': int(true_positives), # (confusion * np.eye(n_classes)).sum(),
             # The sum of predictions where the predicted class is the majority class but the true class is not the majority class.
             'majority_class_false': int(majority_class_false),
@@ -351,7 +356,7 @@ def evaluate_better(model: MultiLabelMultiSeqEmbeddingClassifier, dataloader: Da
             all_labels.append(batch['label_one_hot'])
 
     y_true = torch.cat(all_labels)
-    metrics = classification_metrics(y_pred_logits=torch.cat(all_preds), y_true_one_hot=y_true, class_list=class_list)
+    metrics = classification_metrics(y_pred_logits=torch.cat(all_preds), y_true_one_hot=y_true, class_list=class_list, label_problem_type= model.label_problem_type)
     metrics['loss'] = total_loss / len(dataloader)
     metrics['label_loss'] = total_label_loss / len(dataloader)
     metrics['grade_loss'] = total_grades_loss / len(dataloader)
@@ -363,6 +368,7 @@ def run_num_seqs(root: Path
         , model_type: ClassificationModel
         ,train_ds:Dataset
         ,test_ds:Dataset
+        , predict_ds:Dataset
         ,class_list:List[int]
         ,grades_list:List[int]
         , grade_problem_type:ProblemType
@@ -382,6 +388,8 @@ def run_num_seqs(root: Path
         ,snapshot_best_after:Optional[int] = None
         ,use_transformer:bool = True
         ,use_inner_proj: bool = True
+        , load_model_path:Optional[Path] = None
+        , submit_predictions:Callable[Tuple[Any,Any],None] = None
         ):
     if out_dir is None:
         out_dir = root / Path('runs') / str(model_type)
@@ -420,69 +428,94 @@ def run_num_seqs(root: Path
     model = model.to(device)
     # torchinfo.summary(model, input_size=(batch_size, seq_len, llm_dim), device=device)
 
-    print('Training...')
-    reporter = Reporter((out_dir / 'history-log.json').open('w'))
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    for epoch_t in range(n_epochs):
-        with epoch_timer:
-            print(f'epoch {epoch_t}...')
-            model.train()
-            for batch in DataLoader(train_ds, batch_size=batch_size, shuffle=True):
-                optimizer.zero_grad()
-                (pred_classes, pred_grades) = model(batch['embedding'].to(device))
+    if load_model_path is not None:
+        model.load_state_dict(torch.load(load_model_path))
 
-                true_labels: torch.Tensor # select the right shape of y_truth
-                if model.label_problem_type == ProblemType.multi_class:
-                    true_labels = batch['label_id'].to(device)
-                else:
-                    true_labels = batch['label_one_hot'].to(device)
+    else:     
+        print('Training...')
 
-                true_grades: torch.Tensor # select the right shape of y_truth
-                if model.grade_problem_type == ProblemType.multi_class:
-                    true_grades = batch['grades_id'].to(device)
-                else:
-                    true_grades = batch['grades_one_hot'].to(device)
-                grade_valid = batch['grades_valid'].to(device)
+        reporter = Reporter((out_dir / 'history-log.json').open('w'))
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        for epoch_t in range(n_epochs):
+            with epoch_timer:
+                print(f'epoch {epoch_t}...')
+                model.train()
+                for batch in DataLoader(train_ds, batch_size=batch_size, shuffle=True):
+                    optimizer.zero_grad()
+                    (pred_classes, pred_grades) = model(batch['embedding'].to(device))
 
-                # index_grades = MultiLabelMultiSeqEmbeddingClassifier.convert_one_hot_to_indices(batch['grades_one_hot']).to(device)
-                # print(f"training shapes: {model.label_problem_type} label:{true_labels.shape} / {model.grade_problem_type} grades:{true_grades.shape}  index_grades:{index_grades.shape}")
+                    true_labels: torch.Tensor # select the right shape of y_truth
+                    if model.label_problem_type == ProblemType.multi_class:
+                        true_labels = batch['label_id'].to(device)
+                    else:
+                        true_labels = batch['label_one_hot'].to(device)
 
-                total_loss, class_loss, grade_loss = model.compute_loss(final_logits= pred_classes
-                                   , seq_logits_grades=pred_grades
-                                   , class_targets= true_labels # batch['label_one_hot'].to(device)
-                                   , grade_targets= true_grades # batch['grades_id'].to(device)
-                                   , grade_valid= grade_valid
-                                   )
-                total_loss.backward()
-                optimizer.step()
+                    true_grades: torch.Tensor # select the right shape of y_truth
+                    if model.grade_problem_type == ProblemType.multi_class:
+                        true_grades = batch['grades_id'].to(device)
+                    else:
+                        true_grades = batch['grades_one_hot'].to(device)
+                    grade_valid = batch['grades_valid'].to(device)
 
-        # Save model checkpoint
-        if snapshot_every and epoch_t % snapshot_every == 0 :
-            torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
+                    # index_grades = MultiLabelMultiSeqEmbeddingClassifier.convert_one_hot_to_indices(batch['grades_one_hot']).to(device)
+                    # print(f"training shapes: {model.label_problem_type} label:{true_labels.shape} / {model.grade_problem_type} grades:{true_grades.shape}  index_grades:{index_grades.shape}")
 
-        if  eval_every is None or epoch_t % eval_every == 0 :
-            # Evaluate loss
-            test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
-            test_metrics = evaluate_better(model=model, dataloader=test_loader, class_list = class_list, device=device)
-            print("test_metrics", test_metrics)
+                    total_loss, class_loss, grade_loss = model.compute_loss(final_logits= pred_classes
+                                    , seq_logits_grades=pred_grades
+                                    , class_targets= true_labels # batch['label_one_hot'].to(device)
+                                    , grade_targets= true_grades # batch['grades_id'].to(device)
+                                    , grade_valid= grade_valid
+                                    )
+                    total_loss.backward()
+                    optimizer.step()
 
-            train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
-            train_metrics = evaluate_better(model=model, dataloader=train_eval_loader, class_list = class_list, device=device)
-            reporter.report(epoch_t, test_metrics, train_metrics)
+            # Save model checkpoint
+            if snapshot_every and epoch_t % snapshot_every == 0 :
+                torch.save(model.state_dict(), out_dir / f"model_epoch_{epoch_t}.pt")
 
-            # Save model checkpoint on better validation metric
-            if test_metrics.get(target_metric) is None:
-                raise RuntimeError(f"Snapshot target metric {target_metric} not available. Choices: {test_metrics.keys()}")
-            target=test_metrics[target_metric]
-            if target > prev_highest:
-                print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
-                prev_highest = target
-                if snapshot_best_after and epoch_t >= snapshot_best_after :
-                    print("Epoch {epoch_t}: Saving best snapshot")
-                    torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
+            if  eval_every is None or epoch_t % eval_every == 0 :
+                # Evaluate loss
+                test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+                test_metrics = evaluate_better(model=model, dataloader=test_loader, class_list = class_list, device=device)
+                print("test_metrics", test_metrics)
+
+                train_eval_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False)
+                train_metrics = evaluate_better(model=model, dataloader=train_eval_loader, class_list = class_list, device=device)
+                reporter.report(epoch_t, test_metrics, train_metrics)
+
+                # Save model checkpoint on better validation metric
+                if test_metrics.get(target_metric) is None:
+                    raise RuntimeError(f"Snapshot target metric {target_metric} not available. Choices: {test_metrics.keys()}")
+                target=test_metrics[target_metric]
+                if target > prev_highest:
+                    print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
+                    prev_highest = target
+                    if snapshot_best_after and epoch_t >= snapshot_best_after :
+                        print("Epoch {epoch_t}: Saving best snapshot")
+                        torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
-    # torch.save(model.state_dict(), out_dir / f"model_final.pt")
+        torch.save(model.state_dict(), out_dir / f"model_final.pt")
+
+    # Predict 
+    model.eval()
+    all_preds:List[int] = []
+    with torch.no_grad():
+        for batch in DataLoader(predict_ds, batch_size=batch_size, shuffle=False):
+            inputs = batch['embedding'].to(device)
+            final_logits, _seq_logits_grades =  model(inputs)
+
+            # todo get the classification_item_ids
+
+            # todo handle multi-label and multi-class cases
+            label_logits = final_logits.cpu()
+            # Same for both: if model.label_problem_type == ProblemType.multi_class:
+            y_pred_label = label_logits.argmax(dim=1)
+            all_preds.append(y_pred_label)
+            submit_predictions(items=batch['classification_item_id'], pred_labels=y_pred_label)
+
+
+
 
 
 

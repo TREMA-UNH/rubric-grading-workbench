@@ -89,6 +89,24 @@ def lookup_queries_paragraphs_judgments(db:EmbeddingDb, classification_item_id: 
     ''')
     return db.db.df()
 
+def lookup_queries_paragraphs(db:EmbeddingDb, classification_item_id: List[ClassificationItemId]):
+    '''Same as lookup_queries_paragraphs_judgments, just without judgments'''
+    classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
+    classification_item_ids_df['i'] = classification_item_ids_df.index
+    db.db.execute(
+        '''--sql
+        SELECT needles.i,
+                   classification_item.metadata->>'$.query' as query,
+                   classification_item.metadata->>'$.passage' as passage,
+                   classification_item.classification_item_id as classification_item_id
+
+        FROM classification_item
+        INNER JOIN (SELECT * FROM classification_item_ids_df) AS needles ON classification_item.classification_item_id = needles.classification_item_id
+        INNER JOIN label_assignment on label_assignment.classification_item_id = classification_item.classification_item_id
+        ORDER BY needles.i ASC;
+    ''')
+    return db.db.df()
+
 
 def get_classification_features(db: EmbeddingDb, query:str):
 
@@ -206,27 +224,6 @@ def balanced_training_data(embedding_db: EmbeddingDb) -> pd.DataFrame:
     sampled.drop(columns=['positive'], inplace=True)
     return sampled
 
-
-# def annotate_with_grades(embedding_db:EmbeddingDb, data_tensors:pd.DataFrame) -> pd.DataFrame:
-#     embedding_db.db.execute(
-#         '''--sql
-#         SELECT needles.tensor_id, exam_grade.self_rating, exam_grade.test_bank_id
-#         FROM (SELECT of data_tensors.tensor_id FROM data_tensors) AS needles
-#         INNER JOIN classification_feature AS cf
-#         ON cf.tensor_id = needles.tensor_id
-#         INNER JOIN classification_item AS ci
-#         ON ci.classification_item_id = cf.classification_item_id
-#         INNER JOIN relevance_item AS ri
-#         ON ri.query_id = ci.metadata->>'$.query'
-#             AND ri.paragraph_id = ci.metadata->>'$.paragraph'
-#         INNER JOIN exam_grade
-#         ON exam_grade.relevance_item_id = ri.relevance_item_id
-#             AND exam_grade.test_bank_id = cf.metadata->>'$.test_bank'
-#         '''
-#     )
-#     grade_df = embedding_db.db.fetch_df()
-#     return data_tensors.join(grade_df, on="tensor_id")
-
 def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class: str):
     """
     For each classification_item_id, fetch:
@@ -277,6 +274,58 @@ def get_tensor_ids_with_grades(db: EmbeddingDb, classification_item_id: List[Cla
             (cf.metadata->>'$.prompt_class') = ?
         GROUP BY 
             needles.i, ci.classification_item_id, judgment
+        ORDER BY 
+            needles.i ASC;
+        ''', (prompt_class,))
+    
+    return db.db.df()
+
+
+def get_tensor_ids_plain(db: EmbeddingDb, classification_item_id: List[ClassificationItemId], prompt_class: str):
+    """
+    For each classification_item_id, fetch:
+      - array of tensor_ids
+      - array of test_bank_ids
+      - array of exam_grade fields (e.g., self_rating, is_correct)
+
+        # df_with_grades columns might look like:
+        # i | tensor_ids         | test_bank_ids       | self_ratings        | is_corrects
+        # --|--------------------|---------------------|---------------------|-------------
+        # 0 | [t1, t2, ...]      | ['tb1', 'tb1', ...] | [2, 3, ...]         | [False, True, ...]
+        # 1 | [t17, t18, ...]    | ['tb2', ...]        | [1, 4, ...]         | [True, False, ...]
+        # ...
+
+    """    
+
+    classification_item_ids_df = pd.DataFrame(data={'classification_item_id': classification_item_id})
+    classification_item_ids_df['i'] = classification_item_ids_df.index
+
+    # Register the DataFrame as a temporary table for use in SQL
+    db.db.register('classification_item_ids_df', classification_item_ids_df)
+
+    # Execute the query
+    db.db.execute(
+        '''--sql
+        SELECT 
+            needles.i,
+            array_agg(cf.tensor_id) AS tensor_ids,
+            array_agg(cf.metadata->>'$.test_bank') AS test_bank_ids,
+            ci.classification_item_id
+        FROM classification_feature AS cf
+        INNER JOIN classification_item_ids_df AS needles 
+            ON cf.classification_item_id = needles.classification_item_id
+        INNER JOIN classification_item AS ci
+            ON ci.classification_item_id = cf.classification_item_id
+        INNER JOIN rubric.relevance_item AS ri
+            ON ri.query_id = (ci.metadata->>'$.query')
+            AND ri.paragraph_id = (ci.metadata->>'$.passage')
+        INNER JOIN rubric.exam_grade AS eg
+            ON eg.relevance_item_id = ri.relevance_item_id
+            AND eg.test_bank_id = (cf.metadata->>'$.test_bank')
+        WHERE 
+            (cf.metadata->>'$.prompt_class') = ?
+        GROUP BY 
+            needles.i, ci.classification_item_id
         ORDER BY 
             needles.i ASC;
         ''', (prompt_class,))
@@ -351,8 +400,23 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
             "grades_one_hot": self.grades_one_hot[idx],
             "grades_id":self.grades_id[idx],
             "grades_valid":self.grades_valid[idx]
-
         }
+class EmbeddingPredictStackDataset(torch.utils.data.Dataset):
+    def __init__(self, embedding,classification_item_id):
+        # Check that all datasets have the same first dimension
+        self.embedding = embedding
+        self.classification_item_id = classification_item_id
+
+    def __len__(self):
+        return len(self.embedding)
+
+    def __getitem__(self, idx):
+        return {
+            "embedding": self.embedding[idx],
+            "classification_item_id": self.classification_item_id[idx]
+        }
+    
+    
     
 
 def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[Any,int]):
@@ -445,6 +509,7 @@ def store_dataset(db: EmbeddingDb, exp_name:str, split_name:str, classification_
     else:
         print("Cannot store dataset as Embedding DB is read only.")
 
+
 def create_dataset(embedding_db:EmbeddingDb
                    , prompt_class:str
                    , query_list: Optional[List[str]]
@@ -454,7 +519,8 @@ def create_dataset(embedding_db:EmbeddingDb
                    , sequence_mode:SequenceMode
                    , split_same_query: bool = False
                    , exp_name:str = ""
-                   )->Tuple[Dataset, Dataset, List[int], List[int]]:
+                   , fold: int = 0
+                   )->Tuple[Dataset, Dataset, List[int], List[int], Dict[int,Any], Dataset]:
 
     queries = None
     if query_list:
@@ -467,40 +533,51 @@ def create_dataset(embedding_db:EmbeddingDb
         
     classification_items_train:List[ClassificationItemId]
     classification_items_test:List[ClassificationItemId]
+    classification_items_predict:List[ClassificationItemId]
+
+    train_offset = fold % 2
+    test_offset = (1+fold) % 2
 
     if split_same_query:
         classification_items_train =[ example for query in queries 
-                                            for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs:2] 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[train_offset:max_paragraphs:2] 
                                     ]
         classification_items_test = [ example for query in queries 
-                                            for example in list(get_query_items(db=embedding_db, query=[query]))[1:max_paragraphs:2] 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[test_offset:max_paragraphs:2] 
+                                    ]
+        classification_items_predict = [ example for query in queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[test_offset::2] 
                                     ]
         print(f"queries: {list(queries)}")
     else:
-        train_queries = queries[::2]
-        test_queries = queries[1::2]
+        train_queries = queries[train_offset::2]
+        test_queries = queries[test_offset::2]
         classification_items_train =[ example for query in train_queries 
                                             for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs] 
                                     ]
         classification_items_test = [ example for query in test_queries 
                                             for example in list(get_query_items(db=embedding_db, query=[query]))[:max_paragraphs] 
                                     ]
+        classification_items_predict = [ example for query in test_queries 
+                                            for example in list(get_query_items(db=embedding_db, query=[query]))[:] 
+                                    ]
 
         print(f"train_queries: {list(train_queries)}")
         print(f"test_queries: {list(test_queries)}")
-
-        
 
 
     # query, passage, labels
     classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
     classification_data_test:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_test)
+    classification_data_predict:pd.DataFrame = lookup_queries_paragraphs(embedding_db, classification_items_test)
 
     classification_items_train = classification_data_train["classification_item_id"].to_list()
     classification_items_test = classification_data_test["classification_item_id"].to_list()
+    classification_items_predict = classification_data_predict["classification_item_id"].to_list()
 
     store_dataset(embedding_db, exp_name = exp_name, split_name="train", classification_items= classification_items_train, metadata={})
     store_dataset(embedding_db, exp_name = exp_name, split_name="test", classification_items= classification_items_test, metadata={})
+    store_dataset(embedding_db, exp_name = exp_name, split_name="predict", classification_items= classification_items_predict, metadata={})
 
     train_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                 , classification_item_id=classification_items_train
@@ -508,30 +585,20 @@ def create_dataset(embedding_db:EmbeddingDb
     test_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                , classification_item_id=classification_items_test
                                                , prompt_class= prompt_class)
-    # print("test_tensors", test_tensors)
-
-    # train_tensors_with_grade:pd.DataFrame = annotate_with_grades(embedding_db=embedding_db, data_tensors=train_tensors)
-    # test_tensors_with_grade:pd.DataFrame = annotate_with_grades(embedding_db=embedding_db, data_tensors=test_tensors)
-
-    # print("train_tensors_with_grade", train_tensors)
-    # print("len(dataset_embedding_test)", len(dataset_embedding_test))
-
+    
+    predict_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_plain(embedding_db
+                                               , classification_item_id=classification_items_test
+                                               , prompt_class= prompt_class)
+    
 
     example_label_list_train = [d.true_labels[0] for d in  classification_data_train.itertuples() ]
     example_label_list_test = [d.true_labels[0] for d in  classification_data_test.itertuples() ]
     classes = sorted(list(set(example_label_list_train)))
     label_idx = {c:i for i,c in enumerate(classes)}
 
-    # fake some grade info
-    # print("classification_data_train", classification_data_train[0:2])
-    # print("train_tensors_with_grades", train_tensors_with_grades[0:2])
-    # print("dataset_embedding_train", dataset_embedding_train[0:2])
-    
-    # print("train_tensors_with_grades_labels", train_tensors_with_grades_labels)
-
-
     dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
     dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
+    dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
 
     def filtered_grade(self_rating:int, judgment:List[str])->int:
         label = int(judgment[0])
@@ -556,30 +623,7 @@ def create_dataset(embedding_db:EmbeddingDb
     grade_idx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:5} # Adding -1 as "Missing"
     grades = list(grade_idx.values())
     sorted(grades)
-    # print("example_grades_list_train", example_grades_list_train)
-    # print("grades", grades)
-
-  
-
-    # print(example_label_list_test)
-
-
-    # example_label_id_list_train = [label_idx[label] 
-    #                                for label in example_label_list_train]
-    # example_label_id_list_test = [label_idx[label] 
-    #                                if label_idx.get(label) is not None else label_idx['0'] # no training data for this label
-    #                                for label in example_label_list_test]
-
-    # example_label_id_train = torch.tensor(example_label_id_list_train, dtype=torch.long)  # [num_examples]
-    # example_label_id_test = torch.tensor(example_label_id_list_test, dtype=torch.long)  # [num_examples]
-    # # Generate one-hot encoding for labels
-    # example_label_one_hot_train = nn.functional.one_hot(example_label_id_train, num_classes=len(classes)).to(torch.float32)
-    # example_label_one_hot_test = nn.functional.one_hot(example_label_id_test, num_classes=len(classes)).to(torch.float32)
-
-    # print(f'train embedding={len(dataset_embedding_train)}, label_one_hot={example_label_one_hot_train.shape}, label_id={example_label_id_train.shape}')
-    # print(f'test embedding={len(dataset_embedding_test)}, label_one_hot={example_label_one_hot_test.shape}, label_id={example_label_id_test.shape}')
-    # print(f'train labels: example_label_id_train',example_label_id_train)
-    # print(f'test labels: example_label_id_train',example_label_id_test)
+    
     example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
     example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
     example_grades_one_hot_train, example_grades_id_train,example_grades_valid_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
@@ -598,13 +642,16 @@ def create_dataset(embedding_db:EmbeddingDb
                                     , grades_one_hot=example_grades_one_hot_test
                                     , grades_id=example_grades_id_test
                                     , grades_valid = example_grades_valid_test)
-
-    # print("train_ds", train_ds[3])
-    # print("test_ds", test_ds[3])
-
-    return (train_ds, test_ds, [label_idx[c] for c in classes], grades)
-    tensor_ids = lookup_classification_tensors(embedding_db, classification_items_train, prompt_class="QuestionSelfRatedUnanswerablePromptWithChoices")
     
+    predict_ds = EmbeddingPredictStackDataset(embedding=dataset_embedding_predict, classification_item_id=classification_items_predict)
+    
+
+
+    class_ids =  [label_idx[c] for c in classes]
+    label_lookup = {v:k for k,v in label_idx.items()}
+
+    return (train_ds, test_ds, class_ids, grades, label_lookup, predict_ds)
+
 class CachingDataset(Dataset):
     def __init__(self, cachee:Dataset):
         self.data:Dict[int,Any] = dict()
@@ -672,11 +719,14 @@ def main(cmdargs=None) -> None:
     parser = argparse.ArgumentParser(description="EXAM pipeline"
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--exp-db', type=str, metavar='PATH', help='Path for experiment DB')
     parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
     parser.add_argument('--rubric-db', type=str, metavar='PATH', help='Path for the database directory for rubric paragraph data')
     parser.add_argument('--db-write', action="store_true", help='If set,open embedding DB in write mode, to store dataset info', default=False)
 
     parser.add_argument('--exp-name', type=str, metavar='str', help='Name of the experiment (used to store dataset)')
+    parser.add_argument('--fold', type=int, metavar="DIM", help="Which fold to use, currently 0 or 1", default=0)
+
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
@@ -725,25 +775,42 @@ def main(cmdargs=None) -> None:
     test_ds = None
     class_list = None
 
+
+    embedding_db = EmbeddingDb(Path(args.embedding_db), write=args.db_write)
+
+    embedding_db.db.execute(f'''--sql
+                            ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
+                            ''')
+
+    exp_db = duckdb.connect(args.exp_db)
+    exp_db.execute('''--sql
+                    CREATE TABLE IF NOT EXISTS prediction (
+                    classification_item_id INTEGER PRIMARY KEY,
+                    predicted_label text,
+                    );
+                    ''')
+    exp_db.execute(f'''--sql
+                    ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
+                    ''')
+    exp_db.execute(f'''--sql
+                    ATTACH '{args.embedding_db}/embeddings.duckdb' as embeddings (READ_ONLY)
+                    ''')
+        
     with TrainingTimer("Data Loading"):
 
-        embedding_db = EmbeddingDb(Path(args.embedding_db), write=args.db_write)
-
-        embedding_db.db.execute(f'''--sql
-                                ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
-                                ''')
-
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
-        (train_ds, test_ds, class_list, grades_list) = create_dataset(embedding_db
-                                                         , prompt_class=args.prompt_class
-                                                         , query_list = args.queries
-                                                         , max_queries=args.max_queries
-                                                         , max_paragraphs=args.max_paragraphs
-                                                         , max_token_len=args.max_token_len
-                                                         , sequence_mode=args.sequence_mode
-                                                         , split_same_query=args.split_same_query
-                                                         , exp_name=args.exp_name
-                                                         )
+        (train_ds, test_ds, class_list, grades_list, label_lookup, predict_ds) = \
+            create_dataset(embedding_db
+                            , prompt_class=args.prompt_class
+                            , query_list = args.queries
+                            , max_queries=args.max_queries
+                            , max_paragraphs=args.max_paragraphs
+                            , max_token_len=args.max_token_len
+                            , sequence_mode=args.sequence_mode
+                            , split_same_query=args.split_same_query
+                            , exp_name=args.exp_name
+                            , fold = args.fold
+                            )
 
         if args.caching:
             train_ds = CachingDataset(train_ds)
@@ -758,9 +825,32 @@ def main(cmdargs=None) -> None:
 
         print(f"Train data: {len(train_ds)}")
         print(f"Test data: {len(test_ds)}")
+        print(f"Predict data: {len(predict_ds)}")
 
 
     # print(f"Data loading took {elapsed_time_str(end_time - start_time)}.")
+
+    predictions = list()
+
+    def submit_predictions(items:torch.Tensor, pred_labels:torch.Tensor):
+        for item, y_pred in zip(items, pred_labels):
+            classification_item = item.item()
+            predicted_label = label_lookup.get(y_pred.item())
+            print ("prediction", classification_item, predicted_label)
+            predictions.append( (classification_item, predicted_label))
+
+        exp_db.executemany(
+            '''---sql
+            INSERT OR REPLACE INTO prediction
+            (classification_item_id, predicted_label)
+            VALUES (?,?)
+            ''', [( classification_item_id.item(),
+                   label_lookup.get(y_pred.item())) 
+                    for classification_item_id, y_pred in  zip(items, pred_labels)
+                 ])
+
+
+
 
     with TrainingTimer("Training"):
         # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
@@ -787,6 +877,7 @@ def main(cmdargs=None) -> None:
                         , model_type=args.class_model
                         , train_ds=train_ds
                         , test_ds=test_ds
+                        , predict_ds=predict_ds
                         , class_list=class_list
                         , grades_list=grades_list
                         , batch_size=args.batch_size
@@ -803,10 +894,12 @@ def main(cmdargs=None) -> None:
                         , grade_problem_type=args.grade_problem_type
                         , use_transformer=args.use_transformers
                         , use_inner_proj=args.use_inner_proj
+                        , submit_predictions=submit_predictions
                         )
 
 
         # prof.export_chrome_trace('profile.json')
 
+    print(predictions)
 if __name__ == '__main__':
     main()
