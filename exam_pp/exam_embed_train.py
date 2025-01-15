@@ -845,9 +845,10 @@ def main(cmdargs=None) -> None:
                             ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
                             ''')
 
-    exp_db_path = args.exp_db \
-                    if args.exp_db is not None \
-                    else root / Path(args.exp_name) / Path("exp_db.duckdb")
+    exp_db_path = args.exp_db
+    if exp_db_path is None:
+        exp_db_path = root / Path(args.exp_name) / Path("exp_db.duckdb")
+    exp_db_path.parent.mkdir(exist_ok=True)
     
     print(f"Creating experiment DB at {exp_db_path}")
     exp_db = duckdb.connect(exp_db_path)
