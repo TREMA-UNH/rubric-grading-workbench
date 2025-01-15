@@ -182,7 +182,7 @@ def classification_metrics(y_pred_logits, y_true_one_hot, class_list: List[int],
             # The sum of predictions where the predicted class is the majority class but the true class is not the majority class.
             'majority_class_false': int(majority_class_false),
             'accuracy': round(accuracy_score(y_true=y_true_label, y_pred=y_pred_label),4),
-            'balanced-accuracy': round(balanced_accuracy_score(y_true=y_true_label, y_pred=y_pred_label),4),
+            'balanced_accuracy': round(balanced_accuracy_score(y_true=y_true_label, y_pred=y_pred_label),4),
             'jaccard': round(jaccard_score(y_true=y_true_label, y_pred=y_pred_label,average="micro"),4),
             }
     return metrics
