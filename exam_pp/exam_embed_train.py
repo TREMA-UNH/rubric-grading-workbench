@@ -769,7 +769,6 @@ def main(cmdargs=None) -> None:
     parser = argparse.ArgumentParser(description="EXAM pipeline"
                                    , epilog=desc
                                    , formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--exp-db', type=str, metavar='PATH', help='Path for experiment DB')
     parser.add_argument('--embedding-db', type=str, metavar='PATH', help='Path for the database directory for recording embedding vectors')
     parser.add_argument('--rubric-db', type=str, metavar='PATH', help='Path for the database directory for rubric paragraph data')
     parser.add_argument('--db-write', action="store_true", help='If set,open embedding DB in write mode, to store dataset info', default=False)
@@ -779,6 +778,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--load-model-path', type=str, metavar='str', help='Name of *pt file from which to load the model. Note that it must be instantiated with exactly the same parameters.')
 
     parser.add_argument('-o', '--root', type=str, metavar="FILE", help='Directory to write training output to', default=Path("./attention_classify"))
+    parser.add_argument('--exp-db', type=str, metavar='PATH', help='Path for experiment DB')
     parser.add_argument('--device', type=str, metavar="FILE", help='Device to run on, cuda:0 or cpu', default=Path("cuda:0"))
     parser.add_argument('--epochs', type=int, metavar="T", help="How many epochs to run training for", default=30)
     parser.add_argument('--batch-size', type=int, metavar="S", help="Batchsize for training", default=128)
@@ -816,6 +816,9 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
 
 
+    parser.add_argument('--export-rubric', type=str, metavar='*.jsonl.gz', help='Export predictions in RUBRIC format')
+    parser.add_argument('--rubric-data', type=str, metavar='*.jsonl.gz', help='Input data in RUBRIC format (which will be annotated with predictions)')
+    
 
     
  
@@ -825,9 +828,16 @@ def main(cmdargs=None) -> None:
     test_ds = None
     class_list = None
 
+    root = Path(args.root)
+    out_dir = root / Path(args.exp_name) / Path(f"fold-{args.fold}")
+
     load_model_path = Path(args.load_model_path)  \
                             if args.load_model_path is not None \
                             else None
+
+
+
+
 
     embedding_db = EmbeddingDb(Path(args.embedding_db), write=args.db_write)
 
@@ -835,7 +845,12 @@ def main(cmdargs=None) -> None:
                             ATTACH '{args.rubric_db}' as rubric (READ_ONLY)
                             ''')
 
-    exp_db = duckdb.connect(args.exp_db)
+    exp_db_path = args.exp_db \
+                    if args.exp_db is not None \
+                    else root / Path(args.exp_name) / Path("exp_db.duckdb")
+    
+    print(f"Creating experiment DB at {exp_db_path}")
+    exp_db = duckdb.connect(exp_db_path)
     exp_db.execute('''--sql
                     CREATE TABLE IF NOT EXISTS prediction (
                     classification_item_id INTEGER PRIMARY KEY,
@@ -848,7 +863,77 @@ def main(cmdargs=None) -> None:
     exp_db.execute(f'''--sql
                     ATTACH '{args.embedding_db}/embeddings.duckdb' as embeddings (READ_ONLY)
                     ''')
+
+
+
+
+    if args.export_rubric is not None:
+        print("Post Training Predict and Export")
+        if args.rubric_data is None:
+            raise RuntimeError("Must give RUBRIC file for annotation with --rubric-data FILE")
+        else:
+            print(f"Annotating {args.rubric_data}, and writing to {args.export_rubric}")
         
+        exp_db.execute( '''---sql
+                        select ci.classification_item_id, predicted_label, ci.metadata->>'$.query', ci.metadata->>'$.passage'
+                        from prediction
+                        inner join embeddings.classification_item as ci 
+                            on ci.classification_item_id = prediction.classification_item_id
+                        ;
+                    ''', None
+                )
+        df = exp_db.fetch_df()
+        print(df)
+
+
+        qfs = parseQueryWithFullParagraphs(args.rubric_data)
+        for qf in qfs:
+            print(f"Query: {qf.queryId}")
+            for para in qf.paragraphs:
+                # print(f"Paragraph: {para.paragraph_id}")
+
+                if para.grades is None:
+                    para.grades = list()
+                
+                exp_db.execute( \
+                    '''---sql
+                        select predicted_label
+                        from prediction
+                        inner join embeddings.classification_item as ci 
+                            on ci.classification_item_id = prediction.classification_item_id
+                        where CAST(ci.metadata->>'$.query' AS TEXT) = CAST(? AS TEXT)
+                             and CAST(ci.metadata->>'$.passage' AS TEXT) = CAST(? AS TEXT)
+                        ;
+                    ''',
+                    (qf.queryId,para.paragraph_id,)
+                )
+                result = exp_db.fetchone()
+                if result is None:
+                    # print(f"no prediction for {qf.queryId} / {para.paragraph_id}. Skipping ")
+                    pass
+                if result is not None:
+                    (predicted_label_str,) = result
+                    predicted_label = int(predicted_label_str)
+ 
+                    print(f"{qf.queryId} / {para.paragraph_id} -> predicted label: {predicted_label} ")
+                    para.grades.append(Grades(correctAnswered=predicted_label>0
+                                            , answer=f"{predicted_label}"
+                                            , llm="exam_embed_train"
+                                            , prompt_info={"prompt_class":"exam_embed_train"}
+                                            , self_ratings=predicted_label
+                                            , prompt_type=DIRECT_GRADING_PROMPT_TYPE
+                                            , relevance_label=predicted_label
+                                            , llm_options={}
+                    ))
+        writeQueryWithFullParagraphs(file_path=args.export_rubric, queryWithFullParagraphList=qfs)
+        print("Export complete")
+
+        sys.exit()
+
+
+
+
+
     with TrainingTimer("Data Loading"):
 
         # embedding_db = EmbeddingDb(Path("embedding_db_classify/exam_grading"))
@@ -902,9 +987,6 @@ def main(cmdargs=None) -> None:
                  ])
 
 
-
-    root = Path(args.root)
-    out_dir = root / Path(args.exp_name) / Path(f"fold-{args.fold}")
 
     with TrainingTimer("Training"):
         # with ptp.profile(activities=[ptp.ProfilerActivity.CPU, ptp.ProfilerActivity.CUDA], with_stack=True) as prof:
