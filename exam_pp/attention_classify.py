@@ -317,7 +317,7 @@ def run(root: Path
                 print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
                 prev_highest = target
                 if snapshot_best_after and epoch_t >= snapshot_best_after :
-                    print("Epoch {epoch_t}: Saving best snapshot")
+                    print(f"Epoch {epoch_t}: Saving best snapshot")
                     torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
@@ -509,7 +509,7 @@ def run_num_seqs( model_type: ClassificationModel
                     print(f"Epoch {epoch_t}: Best {target_metric} on test: {target} (was: {prev_highest}).")
                     prev_highest = target
                     if snapshot_best_after and epoch_t >= snapshot_best_after :
-                        print("Epoch {epoch_t}: Saving best snapshot")
+                        print(f"Epoch {epoch_t}: Saving best snapshot")
                         torch.save(model.state_dict(), out_dir / f"model_best_epoch_{epoch_t}.pt")
 
 
