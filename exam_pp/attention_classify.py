@@ -402,6 +402,7 @@ def run_num_seqs( model_type: ClassificationModel
         ,snapshot_best_after:Optional[int] = None
         ,use_transformer:bool = True
         ,use_inner_proj: bool = True
+        , predict_grade_from_class_logits: bool = True
         , load_model_path:Optional[Path] = None
         , submit_predictions:Callable[Tuple[Any,Any],None] = None
         ):
@@ -437,6 +438,7 @@ def run_num_seqs( model_type: ClassificationModel
                                                                                 , grade_problem_type=grade_problem_type
                                                                                 , use_transformer=use_transformer
                                                                                 , use_inner_proj=use_inner_proj
+                                                                                ,predict_grade_from_class_logits = predict_grade_from_class_logits
                                                                                 )
     else:
 

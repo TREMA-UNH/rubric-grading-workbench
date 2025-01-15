@@ -326,7 +326,6 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
                 for min_level in min_levels:
                     methodScores = trec_eval_leaderboard(run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
                     correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=official_leaderboard)
-
                     file.write('\t'.join([f"{qrels_file}"
                                         , f"{min_level:.0f}"
                                         , trec_eval_metric

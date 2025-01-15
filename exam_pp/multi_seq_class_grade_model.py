@@ -92,9 +92,14 @@ class MultiSequenceClassifier(nn.Module):
           seq_logits_classes: (batch_size*k, n_classes)
           seq_logits_grades:  (batch_size*k, n_grades)
     """
-    def __init__(self, n_classes: int, inner_dim: int, n_grades: int):
+    def __init__(self, n_classes: int, inner_dim: int, n_grades: int, predict_grade_from_class_logits:bool = True):
         super().__init__()
+        self.predict_grade_from_class_logits = predict_grade_from_class_logits
         self.class_head = PackedClassHead(llm_dim=inner_dim, n_classes=n_classes)
+
+
+        self.grade_head = PackedClassHead(llm_dim=inner_dim, n_classes=n_grades)
+
         # Project from class logits (n_classes) to grade logits (n_grades).
         self.grade_proj = nn.Linear(n_classes, n_grades)
 
@@ -105,7 +110,11 @@ class MultiSequenceClassifier(nn.Module):
           seq_logits_grades:  (batch_size*k, n_grades)
         """
         seq_logits_classes = self.class_head(cls_tokens)          # (bk, n_classes)
-        seq_logits_grades  = self.grade_proj(seq_logits_classes)  # (bk, n_grades)
+
+        if self.predict_grade_from_class_logits:
+            seq_logits_grades  = self.grade_proj(seq_logits_classes)  # (bk, n_grades)
+        else:
+            seq_logits_grades  = self.grade_head(cls_tokens)  # (bk, n_grades)
         return seq_logits_classes, seq_logits_grades
 
 
@@ -116,7 +125,7 @@ class Aggregate(nn.Module):
     def __init__(self, method: str = "max"):
         super().__init__()
         if method == "max":
-            self.aggregate = lambda logits: logits.max(dim=1)[0]
+            self.aggregate = lambda logits: logits.max(dim=1)[0]  # avoid return of second element which is an object of arg_max indices.
         elif method == "mean":
             self.aggregate = lambda logits: logits.mean(dim=1)
         elif method == "argmax":
@@ -255,7 +264,8 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                  label_problem_type: ProblemType = ProblemType.multi_class,
                  grade_problem_type: ProblemType = ProblemType.multi_class,
                  use_transformer: bool = True,
-                 use_inner_proj: bool = True
+                 use_inner_proj: bool = True,
+                 predict_grade_from_class_logits: bool = True
                  ):
         super().__init__()
 
@@ -302,7 +312,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
 
 
         # 2) Single-layer predictor that returns (final_logits, seq_logits_grades).
-        multi_seq_classifier = MultiSequenceClassifier(n_classes, self.inner_dim, n_grades)
+        multi_seq_classifier = MultiSequenceClassifier(n_classes, self.inner_dim, n_grades, predict_grade_from_class_logits=predict_grade_from_class_logits)
         aggregator = Aggregate(method=aggregation)
         self.predictor = ClassAndGradePredictor(multi_seq_classifier, aggregator, num_seqs)
 
@@ -471,7 +481,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     label_problem_type: ProblemType = ProblemType.multi_class,
     grade_problem_type: ProblemType = ProblemType.multi_class, 
     use_transformer: bool = True,
-    use_inner_proj: bool = True
+    use_inner_proj: bool = True,
+    predict_grade_from_class_logits:bool = True
     ) -> MultiLabelMultiSeqEmbeddingClassifier:
     """
     Convenience factory function for building the model with desired hyperparams.
@@ -492,7 +503,8 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
         label_problem_type=label_problem_type,
         grade_problem_type=grade_problem_type,
         use_transformer=use_transformer,
-        use_inner_proj=use_inner_proj
+        use_inner_proj=use_inner_proj,
+        predict_grade_from_class_logits= predict_grade_from_class_logits
     )
 
 
@@ -527,7 +539,8 @@ if __name__ == "__main__":
         nhead=1,
         aggregation="mean",
         label_problem_type=ProblemType.multi_class,  # or "multi_label"
-        grade_problem_type=ProblemType.multi_class   # or "multi_label"
+        grade_problem_type=ProblemType.multi_class,   # or "multi_label"
+        predict_grade_from_class_logits = True
     )
 
     # Example input shape: (batch_size=2, k=3, seq_len=5, llm_dim=16)

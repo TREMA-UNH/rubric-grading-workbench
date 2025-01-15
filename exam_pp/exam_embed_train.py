@@ -798,6 +798,10 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--no-transformers', dest="use_transformers", action="store_false", help='If set, replaces the transformer layer with an mean pooling', default=True)
     parser.add_argument('--no-inner-proj', dest="use_inner_proj", action="store_false", help='If set, will not perform an projection to inner_dimension, use llm_dim as is', default=True)
 
+    parser.add_argument('--predict-grade-from-head', dest="predict_grade_from_class_logits", action="store_false", help='If set, will not predict grades from class logits but from the packed head directly.', default=True)
+    parser.add_argument('--class-aggregation', type=str, default="max", metavar="AGGR", help="How to aggregate across classification heads of sequences. Choices: max, mean, argmax")
+
+
     parser.add_argument('--prompt-class', type=str, required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--class-model', type=attention_classify.ClassificationModel.from_string, required=True, choices=list(attention_classify.ClassificationModel), metavar="MODEL"
@@ -848,6 +852,8 @@ def main(cmdargs=None) -> None:
     exp_db_path = args.exp_db
     if exp_db_path is None:
         exp_db_path = root / Path(args.exp_name) / Path("exp_db.duckdb")
+    else:
+        exp_db_path = Path(args.exp_db)
     exp_db_path.parent.mkdir(exist_ok=True)
     
     print(f"Creating experiment DB at {exp_db_path}")
@@ -1041,6 +1047,8 @@ def main(cmdargs=None) -> None:
                         , use_inner_proj=args.use_inner_proj
                         , load_model_path= load_model_path
                         , submit_predictions=submit_predictions
+                        , predict_grade_from_class_logits = args.predict_grade_from_class_logits
+                        , aggregation=args.class_aggregation
                         )
 
 
