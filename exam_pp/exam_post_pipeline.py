@@ -187,11 +187,11 @@ def cover_leaderboard_analysis(grade_filter_list:List[GradeFilter], query_paragr
 
 
 
-def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   official_leaderboard:Dict[str,float], min_self_rating = Optional[int]):
+def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_paragraphs, use_ratings:bool,   official_leaderboard:Dict[str,float], min_self_rating = Optional[List[int]]):
     with open(leaderboard_file, 'wt') as file:
         min_rating:Optional[int]
 
-        for min_rating in ([min_self_rating] if min_self_rating is not None else ([1,2,3,4,5] if use_ratings else [None])):
+        for min_rating in (min_self_rating if min_self_rating is not None else ([1,2,3,4,5] if use_ratings else [None])):
             exam_factory = ExamCoverScorerFactory(grade_filter=grade_filter, min_self_rating=min_rating)
             resultsPerMethod:Dict[str, ExamCoverEvals] = compute_exam_cover_scores(query_paragraphs, exam_factory=exam_factory)
             # resultsPerMethod__ = [val for key, val in resultsPerMethod.items() if key != exam_cover_metric.OVERALL_ENTRY]
@@ -221,11 +221,11 @@ def run_leaderboard(leaderboard_file:Path, grade_filter:GradeFilter, query_parag
 
 
 
-def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[int], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), official_leaderboard:Dict[str,float] =dict(), leaderboard_sort:Optional[str]=None):
+def run_qrel_variance_leaderboard(qrels_file:Path, run_dir:Path, leaderboard_out:Path, min_level = Optional[List[int]], trec_eval_metric:str = "P.20", grade_filter:GradeFilter=GradeFilter.noFilter(), official_leaderboard:Dict[str,float] =dict(), leaderboard_sort:Optional[str]=None):
     with open(leaderboard_out, 'wt') as file:
         # min_rating:Optional[int]
 
-        for min_level_x in ([1,2,3,4,5] if min_level is None else [min_level]):
+        for min_level_x in ([1,2,3,4,5] if min_level is None else min_level):
 
             resultsPerMethod:Dict[str, ExamCoverEvals]
             
@@ -701,7 +701,7 @@ def main(cmdargs=None):
                         , help="The QuestionPrompt class or custom prompt name implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('-r', '--use-ratings', action='store_true', help='If set, correlation analysis will use graded self-ratings. Default is to use the number of correct answers.')
     parser.add_argument('--use-relevance-prompt', action='store_true', help='If set, use relevance prompt instead of exam grades. (Inter-annotator only)')
-    parser.add_argument('--min-self-rating', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
+    parser.add_argument('--min-self-rating', nargs='+', type=int, metavar="RATING", help='If set, will only count ratings >= RATING as relevant for leaderboards. (Only applies to when -r is used.)')
     
     parser.add_argument('--question-set', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
     parser.add_argument('--question-set-for-facets', type=str, choices=["tqa","genq","question-bank"], metavar="SET ", help='Which question set to use. Options: tqa, genq,  or question-bank ')
@@ -870,7 +870,7 @@ def main(cmdargs=None):
 
         qrel_leaderboard_analysis(qrels_files=[Path(args.trec_eval_qrel_correlation or args.qrel_out)]
                                 , run_dir=Path(args.run_dir)
-                                , min_levels=[1,2,3,4,5]
+                                , min_levels=args.min_trec_eval_level or args.min_self_rating or [1,2,3,4,5]
                                 , official_leaderboard=official_leaderboard
                                 , analysis_out=args.qrel_analysis_out
                                 , trec_eval_metrics=args.trec_eval_metric # ["ndcg_cut.10", "map", "recip_rank"]
