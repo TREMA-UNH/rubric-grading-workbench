@@ -840,7 +840,9 @@ def main(cmdargs=None):
                      )
         print("qrel leaderboard")
 
-        if args.run_dir is not None:
+        if args.qrel_leaderboard_out is not None:
+            if args.run_dir is None:
+                raise RuntimeError(f"Must set --run-dir for generation of --qrel-leaderboard-out")
             # run_qrel_leaderboard(qrels_file=Path(args.qrel_out)
             #                      ,run_dir=Path(args.run_dir)
             #                      , min_level=args.min_trec_eval_level or args.min_self_rating
@@ -863,6 +865,9 @@ def main(cmdargs=None):
 
 
     if args.qrel_analysis_out is not None:
+        if args.run_dir is None:
+            raise RuntimeError(f"Must set --run-dir for generation of --qrel-analysis-out")
+
         qrel_leaderboard_analysis(qrels_files=[Path(args.trec_eval_qrel_correlation or args.qrel_out)]
                                 , run_dir=Path(args.run_dir)
                                 , min_levels=[1,2,3,4,5]
