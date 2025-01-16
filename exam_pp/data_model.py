@@ -2,7 +2,7 @@ from collections import defaultdict
 import itertools
 from pydantic.v1 import BaseModel
 
-from typing import Iterable, List, Any, Optional, Dict, Tuple, Union, cast
+from typing import Iterable, List, Any, Optional, Dict, Set, Tuple, Union, cast
 from dataclasses import dataclass
 import gzip
 import json

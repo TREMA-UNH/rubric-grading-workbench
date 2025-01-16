@@ -34,29 +34,73 @@ class AnswerProcessor(ABC):
         return None
 
 class Llama3yesNoAnswerProcessor(AnswerProcessor):
-    def __init__(self, grade_filter:GradeFilter):
-        self.grade_filter = grade_filter        
+    def __init__(self, grade_filters:List[GradeFilter]):
+        self.grade_filters = grade_filters        
 
     def want_to_process(self, grade: Union[ExamGrades, Grades]) -> bool:
-        return self.grade_filter.filter(grade)
+        return any(grade_filter.filter(grade) for grade_filter in self.grade_filters)
 
 
     def convert_grades(self, grade: Grades, paragraph:FullParagraphData) -> Optional[Grades]:
         if grade.answer.lower().startswith("yes"):
             grade.correctAnswered = True
             grade.self_ratings = 1
+
+            if grade.prompt_info is None:
+                grade.prompt_info = dict()
+            grade.prompt_info["answer_post_processing"]=self.__class__.__name__
             return grade  
 
-        if grade.answer.lower().startswith("no"):
+        elif grade.answer.lower().startswith("no"):
             grade.correctAnswered = False
             grade.self_ratings = 0
+
+            if grade.prompt_info is None:
+                grade.prompt_info = dict()
+            grade.prompt_info["answer_post_processing"]=self.__class__.__name__
             return grade  
 
+        else: 
+            return None
+    
+    def convert_exam_grade_entry(self, answer:str, paragraph:FullParagraphData)-> Optional[Tuple[bool,int]]:
+        if answer.lower().startswith("yes"):
+            correctAnswered = True
+            self_ratings = 1
+            return (correctAnswered,self_ratings)
+
+        if answer.lower().startswith("no"):
+            correctAnswered = False
+            self_ratings = 0
+            return (correctAnswered,self_ratings)
+
         return None
-    
-    
+
+
     def convert_exam_grades(self, grade: ExamGrades, paragraph:FullParagraphData) -> Optional[ExamGrades]:
-        raise RuntimeError("Not implemented:convert_exam_grades")
+        for i in range(len(grade.answers)):
+            (question_id, answer) = grade.answers[i]
+
+            opt_result = self.convert_exam_grade_entry(answer=answer, paragraph=paragraph)
+            if opt_result is not None:
+                is_correct, self_rating = opt_result
+                if grade.self_ratings is not None:
+                    for r in grade.self_ratings:
+                        if r.question_id == question_id:
+                            r.self_rating = self_rating
+
+
+                grade.correctAnswered.remove(question_id)
+                grade.wrongAnswered.remove(question_id)
+                if is_correct:
+                    grade.correctAnswered.append(question_id)
+                else:
+                    grade.wrongAnswered.append(question_id)
+
+        if grade.prompt_info is None:
+            grade.prompt_info = dict()
+        grade.prompt_info["answer_post_processing"]=self.__class__.__name__
+        return grade
 
 
 def noodle_grades(query_paragraphs:List[QueryWithFullParagraphList], answer_processor:AnswerProcessor)->List[QueryWithFullParagraphList]:
@@ -106,7 +150,7 @@ def answer_processing_main(cmdargs=None):
     parser.add_argument('--model', type=str, metavar='MODEL', help='the huggingface model used to answer questions')
 
 
-    parser.add_argument('--prompt-class', type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
+    parser.add_argument('--prompt-class', nargs="+", type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--dont-check-prompt-class',action='store_true',  help='If set, will allow any prompt_class to be used that is in the data, without any verification. Any data errors are your own fault!')
     prompt_type_choices=[QuestionPrompt.my_prompt_type, NuggetPrompt.my_prompt_type, DirectGradingPrompt.my_prompt_type]
@@ -121,8 +165,13 @@ def answer_processing_main(cmdargs=None):
  
 
     if not args.dont_check_prompt_class:
-        if args.prompt_class not in get_prompt_classes():
-            raise RuntimeError(f"Unknown promptclass {args.prompt_class}. Valid choices: {get_prompt_classes()}. You can disable the check with \'--dont-check-prompt-class\'")
+        if isinstance(args.prompt_class, list):
+            for prompt_class in args.prompt_class:
+                if prompt_class not in get_prompt_classes():
+                    raise RuntimeError(f"Unknown promptclass {args.prompt_class}. Valid choices: {get_prompt_classes()}. You can disable the check with \'--dont-check-prompt-class\'")
+        else:
+            if args.prompt_class not in get_prompt_classes():
+                raise RuntimeError(f"Unknown promptclass {args.prompt_class}. Valid choices: {get_prompt_classes()}. You can disable the check with \'--dont-check-prompt-class\'")
     if args.dont_check_prompt_class:
         #  make sure that prompt_type argument is specified
         if args.prompt_type is None:
@@ -161,14 +210,23 @@ def answer_processing_main(cmdargs=None):
     
 
 
-    grade_filter = GradeFilter(model_name=args.model
+    grade_filters =  [ GradeFilter(model_name=args.model
+                               , prompt_class = prompt_class
+                               , is_self_rated=None
+                               , min_self_rating=None
+                               , question_set=None # args.question_set
+                               , prompt_type=get_prompt_type_from_prompt_class(prompt_class)
+                               , data_set=None)
+                            for  prompt_class in args.prompt_class]  if isinstance(args.prompt_class, list) else \
+                          [GradeFilter(model_name=args.model
                                , prompt_class = args.prompt_class
                                , is_self_rated=None
                                , min_self_rating=None
                                , question_set=None # args.question_set
                                , prompt_type=get_prompt_type_from_prompt_class(args.prompt_class)
-                               , data_set=None)
-    answer_processor = Llama3yesNoAnswerProcessor(grade_filter=grade_filter)
+                               , data_set=None)]
+    print("grade_filters", grade_filters)
+    answer_processor = Llama3yesNoAnswerProcessor(grade_filters=grade_filters)
 
     qfs = parseQueryWithFullParagraphs(args.paragraph_file)
 
