@@ -25,59 +25,15 @@ from .async_utils import *
 class AnswerProcessor(ABC):
     
     def want_to_process(self, grade: Union[ExamGrades, Grades]) -> bool:
+        ''''Returns True on ExamGrades or Grades objects it can process an answer'''
         return False
     
     def convert_grades(self, grade: Grades, paragraph:FullParagraphData) -> Optional[Grades]:
+        '''Process and convert answers of a Grades object'''
         return None
 
     def convert_exam_grades(self, grade: ExamGrades, paragraph:FullParagraphData) -> Optional[ExamGrades]:
-        return None
-
-class Llama3yesNoAnswerProcessor(AnswerProcessor):
-    def __init__(self, grade_filters:List[GradeFilter]):
-        self.grade_filters = grade_filters        
-
-    def want_to_process(self, grade: Union[ExamGrades, Grades]) -> bool:
-        return any(grade_filter.filter(grade) for grade_filter in self.grade_filters)
-
-
-    def convert_grades(self, grade: Grades, paragraph:FullParagraphData) -> Optional[Grades]:
-        if grade.answer.lower().startswith("yes"):
-            grade.correctAnswered = True
-            grade.self_ratings = 1
-
-            if grade.prompt_info is None:
-                grade.prompt_info = dict()
-            grade.prompt_info["answer_post_processing"]=self.__class__.__name__
-            return grade  
-
-        elif grade.answer.lower().startswith("no"):
-            grade.correctAnswered = False
-            grade.self_ratings = 0
-
-            if grade.prompt_info is None:
-                grade.prompt_info = dict()
-            grade.prompt_info["answer_post_processing"]=self.__class__.__name__
-            return grade  
-
-        else: 
-            return None
-    
-    def convert_exam_grade_entry(self, answer:str, paragraph:FullParagraphData)-> Optional[Tuple[bool,int]]:
-        if answer.lower().startswith("yes"):
-            correctAnswered = True
-            self_ratings = 1
-            return (correctAnswered,self_ratings)
-
-        if answer.lower().startswith("no"):
-            correctAnswered = False
-            self_ratings = 0
-            return (correctAnswered,self_ratings)
-
-        return None
-
-
-    def convert_exam_grades(self, grade: ExamGrades, paragraph:FullParagraphData) -> Optional[ExamGrades]:
+        '''Process and convert the list of answers in an ExamGrades object'''
         for i in range(len(grade.answers)):
             (question_id, answer) = grade.answers[i]
 
@@ -97,10 +53,55 @@ class Llama3yesNoAnswerProcessor(AnswerProcessor):
                 else:
                     grade.wrongAnswered.append(question_id)
 
+        self.append_prompt_info(grade=grade)
+        return grade
+
+    def convert_exam_grade_entry(self, answer:str, paragraph:FullParagraphData)-> Optional[Tuple[bool,int]]:
+        '''Process and convert one answer inside an ExamGrades object.'''
+        return None
+
+    def append_prompt_info(self, grade: Union[ExamGrades,Grades]):
         if grade.prompt_info is None:
             grade.prompt_info = dict()
         grade.prompt_info["answer_post_processing"]=self.__class__.__name__
-        return grade
+
+class Llama3yesNoAnswerProcessor(AnswerProcessor):
+    def __init__(self, grade_filters:List[GradeFilter]):
+        self.grade_filters = grade_filters        
+
+    def want_to_process(self, grade: Union[ExamGrades, Grades]) -> bool:
+        return any(grade_filter.filter(grade) for grade_filter in self.grade_filters)
+
+
+    def convert_grades(self, grade: Grades, paragraph:FullParagraphData) -> Optional[Grades]:
+        if grade.answer.lower().startswith("yes"):
+            grade.correctAnswered = True
+            grade.self_ratings = 1
+            self.append_prompt_info(grade=grade)
+            return grade  
+
+        elif grade.answer.lower().startswith("no"):
+            grade.correctAnswered = False
+            grade.self_ratings = 0
+            self.append_prompt_info(grade=grade)
+            return grade  
+
+        else: 
+            return None
+    
+    def convert_exam_grade_entry(self, answer:str, paragraph:FullParagraphData)-> Optional[Tuple[bool,int]]:
+        if answer.lower().startswith("yes"):
+            correctAnswered = True
+            self_ratings = 1
+            return (correctAnswered,self_ratings)
+
+        if answer.lower().startswith("no"):
+            correctAnswered = False
+            self_ratings = 0
+            return (correctAnswered,self_ratings)
+
+        return None
+
 
 
 def noodle_grades(query_paragraphs:List[QueryWithFullParagraphList], answer_processor:AnswerProcessor)->List[QueryWithFullParagraphList]:
@@ -147,7 +148,7 @@ def answer_processing_main(cmdargs=None):
 
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
-    parser.add_argument('--model', type=str, metavar='MODEL', help='the huggingface model used to answer questions')
+    parser.add_argument('--model', type=str, metavar='MODEL', help='the huggingface model used for grading')
 
 
     parser.add_argument('--prompt-class', nargs="+", type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
