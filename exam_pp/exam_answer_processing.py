@@ -65,6 +65,53 @@ class AnswerProcessor(ABC):
             grade.prompt_info = dict()
         grade.prompt_info["answer_post_processing"]=self.__class__.__name__
 
+
+
+class Llama3NumericalAnswerProcessor(AnswerProcessor):
+    def __init__(self, grade_filters:List[GradeFilter], max_grade:int):
+        self.grade_filters = grade_filters
+        self.max_grade = max_grade
+
+    def find_first_number(self, text:str)->Optional[int]:
+        # Regular expression to find standalone numbers
+        match = re.search(r'\b\d+\b', text)
+        if match:
+            if 0<=int(match.group())<=self.max_grade:
+                return int(match.group())
+
+        return None
+
+
+    def want_to_process(self, grade: Union[ExamGrades, Grades]) -> bool:
+        return any(grade_filter.filter(grade) for grade_filter in self.grade_filters)
+
+
+    def convert_grades(self, grade: Grades, paragraph:FullParagraphData) -> Optional[Grades]:
+        rating = self.find_first_number(grade.answer.lower())
+        if rating is not None:
+            if rating >0:
+                grade.correctAnswered = True
+            else:
+                grade.correctAnswered = False
+            grade.self_ratings = rating
+            self.append_prompt_info(grade=grade)
+            return grade  
+
+        else: 
+            return None
+    
+    def convert_exam_grade_entry(self, answer:str, paragraph:FullParagraphData)-> Optional[Tuple[bool,int]]:
+        rating = self.find_first_number(answer.lower())
+        if rating is not None:
+            if rating >0:
+                correctAnswered = True
+            else:
+                correctAnswered = False
+            self_ratings = rating
+            return (correctAnswered,self_ratings)
+        return None
+
+
 class Llama3yesNoAnswerProcessor(AnswerProcessor):
     def __init__(self, grade_filters:List[GradeFilter]):
         self.grade_filters = grade_filters        
@@ -150,12 +197,19 @@ def answer_processing_main(cmdargs=None):
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
     parser.add_argument('--model', type=str, metavar='MODEL', help='the huggingface model used for grading')
 
+    parser.add_argument('--answer-processor',type=str, choices=["yesno","number"], required=True, metavar="CLASS"
+                        , help="The answer processing to appluy. Choices: "+", ".join(["yesno","number"]))
+    parser.add_argument('--max-grade',type=int, metavar="K", help="Max grade to be set for --answer-processor number")
+
+
 
     parser.add_argument('--prompt-class', nargs="+", type=str, choices=get_prompt_classes(), required=True, default="QuestionPromptWithChoices", metavar="CLASS"
                         , help="The QuestionPrompt class implementation to use. Choices: "+", ".join(get_prompt_classes()))
     parser.add_argument('--dont-check-prompt-class',action='store_true',  help='If set, will allow any prompt_class to be used that is in the data, without any verification. Any data errors are your own fault!')
     prompt_type_choices=[QuestionPrompt.my_prompt_type, NuggetPrompt.my_prompt_type, DirectGradingPrompt.my_prompt_type]
     parser.add_argument('--prompt-type', type=str, choices=prompt_type_choices, required=False,  metavar="PROMPT_TYPE", help=f"Manually set the prompt_type when setting --dont-check-prompt-class (it will otherwise be automatically set based on known prompt_classes). Choices: {prompt_type_choices}")
+
+
 
     parser.add_argument('--max-queries', type=int, metavar="n", default=-1, help="Limit number of queries to be processed")
     parser.add_argument('--max-paragraphs', type=int, metavar="n", default=-1, help="Limit number of paragraphs to be processed")
@@ -227,7 +281,16 @@ def answer_processing_main(cmdargs=None):
                                , prompt_type=get_prompt_type_from_prompt_class(args.prompt_class)
                                , data_set=None)]
     print("grade_filters", grade_filters)
-    answer_processor = Llama3yesNoAnswerProcessor(grade_filters=grade_filters)
+
+    answer_processor:AnswerProcessor
+    if args.answer_processor == "yesno":
+        answer_processor =   Llama3yesNoAnswerProcessor(grade_filters=grade_filters)
+    elif args.answer_processor == "number":
+        if args.max_grade is None:
+            raise RuntimeError("for --answer-processing number, you must set --max-grade also!")
+        answer_processor =   Llama3NumericalAnswerProcessor(grade_filters=grade_filters, max_grade=args.max_grade)
+    else:
+        raise RuntimeError(f"answer_processing must be `yesno` or `number`, but is {args.answer_processor}")
 
     qfs = parseQueryWithFullParagraphs(args.paragraph_file)
 
