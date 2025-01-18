@@ -933,7 +933,7 @@ def main(cmdargs=None) -> None:
                         , help="The classification problem to use for grade prediction. Choices: "+", ".join(list(x.name for x in ProblemType)))
     parser.add_argument('--no-transformers', dest="use_transformers", action="store_false", help='If set, replaces the transformer layer with an mean pooling', default=True)
     parser.add_argument('--no-inner-proj', dest="use_inner_proj", action="store_false", help='If set, will not perform an projection to inner_dimension, use llm_dim as is', default=True)
-
+    parser.add_argument('--use-grade-signal', action="store_true", help='If set, uses the grade signal for loss', default=False)
     parser.add_argument('--predict-grade-from-head', dest="predict_grade_from_class_logits", action="store_false", help='If set, will not predict grades from class logits but from the packed head directly.', default=True)
     parser.add_argument('--class-aggregation', type=str, default="max", metavar="AGGR", help="How to aggregate across classification heads of sequences. Choices: max, mean, argmax")
 
@@ -1187,6 +1187,7 @@ def main(cmdargs=None) -> None:
                         , grade_problem_type=args.grade_problem_type
                         , use_transformer=args.use_transformers
                         , use_inner_proj=args.use_inner_proj
+                        , use_grade_signal= args.use_grade_signal
                         , load_model_path= load_model_path
                         , submit_predictions=submit_predictions
                         , predict_grade_from_class_logits = args.predict_grade_from_class_logits

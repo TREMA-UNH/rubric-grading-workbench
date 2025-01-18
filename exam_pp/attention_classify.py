@@ -402,6 +402,7 @@ def run_num_seqs( model_type: ClassificationModel
         ,snapshot_best_after:Optional[int] = None
         ,use_transformer:bool = True
         ,use_inner_proj: bool = True
+        , use_grade_signal:bool = True
         , predict_grade_from_class_logits: bool = True
         , load_model_path:Optional[Path] = None
         , submit_predictions:Callable[Tuple[Any,Any],None] = None
@@ -438,7 +439,7 @@ def run_num_seqs( model_type: ClassificationModel
                                                                                 , grade_problem_type=grade_problem_type
                                                                                 , use_transformer=use_transformer
                                                                                 , use_inner_proj=use_inner_proj
-                                                                                ,predict_grade_from_class_logits = predict_grade_from_class_logits
+                                                                                , predict_grade_from_class_logits = predict_grade_from_class_logits
                                                                                 )
     else:
 
@@ -469,12 +470,15 @@ def run_num_seqs( model_type: ClassificationModel
                     else:
                         true_labels = batch['label_one_hot'].to(device)
 
-                    true_grades: torch.Tensor # select the right shape of y_truth
-                    if model.grade_problem_type == ProblemType.multi_class:
-                        true_grades = batch['grades_id'].to(device)
-                    else:
-                        true_grades = batch['grades_one_hot'].to(device)
-                    grade_valid = batch['grades_valid'].to(device)
+
+                    true_grades: Optional[torch.Tensor] =None # select the right shape of y_truth
+                    grade_valid: Optional[torch.Tensor] =None 
+                    if use_grade_signal:
+                        if model.grade_problem_type == ProblemType.multi_class:
+                            true_grades = batch['grades_id'].to(device)
+                        else:
+                            true_grades = batch['grades_one_hot'].to(device)
+                        grade_valid = batch['grades_valid'].to(device)
 
                     # index_grades = MultiLabelMultiSeqEmbeddingClassifier.convert_one_hot_to_indices(batch['grades_one_hot']).to(device)
                     # print(f"training shapes: {model.label_problem_type} label:{true_labels.shape} / {model.grade_problem_type} grades:{true_grades.shape}  index_grades:{index_grades.shape}")
