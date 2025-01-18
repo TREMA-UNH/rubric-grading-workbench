@@ -932,6 +932,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--grade-problem-type', type=ProblemType.from_string, required=True, choices=list(ProblemType), metavar="MODEL"
                         , help="The classification problem to use for grade prediction. Choices: "+", ".join(list(x.name for x in ProblemType)))
     parser.add_argument('--no-transformers', dest="use_transformers", action="store_false", help='If set, replaces the transformer layer with an mean pooling', default=True)
+    parser.add_argument('--2-transformers', dest="two_transformers", action="store_true", help='If set, uses two lauers of transformers', default=False)
     parser.add_argument('--no-inner-proj', dest="use_inner_proj", action="store_false", help='If set, will not perform an projection to inner_dimension, use llm_dim as is', default=True)
     parser.add_argument('--no-grade-signal', dest="use_grade_signal", action="store_false", help='If set, deactivates the grade signal for loss', default=True)
     parser.add_argument('--predict-grade-from-head', dest="predict_grade_from_class_logits", action="store_false", help='If set, will not predict grades from class logits but from the packed head directly.', default=True)
@@ -1186,6 +1187,7 @@ def main(cmdargs=None) -> None:
                         , label_problem_type=args.label_problem_type
                         , grade_problem_type=args.grade_problem_type
                         , use_transformer=args.use_transformers
+                        , two_transformers = args.two_transformers
                         , use_inner_proj=args.use_inner_proj
                         , use_grade_signal= args.use_grade_signal
                         , load_model_path= load_model_path

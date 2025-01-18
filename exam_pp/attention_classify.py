@@ -401,6 +401,7 @@ def run_num_seqs( model_type: ClassificationModel
         ,target_metric:str = 'roc_auc'
         ,snapshot_best_after:Optional[int] = None
         ,use_transformer:bool = True
+        ,two_transformers:bool = False
         ,use_inner_proj: bool = True
         , use_grade_signal:bool = True
         , predict_grade_from_class_logits: bool = True
@@ -438,6 +439,7 @@ def run_num_seqs( model_type: ClassificationModel
                                                                                 , label_problem_type=label_problem_type
                                                                                 , grade_problem_type=grade_problem_type
                                                                                 , use_transformer=use_transformer
+                                                                                ,two_transformers = two_transformers
                                                                                 , use_inner_proj=use_inner_proj
                                                                                 , predict_grade_from_class_logits = predict_grade_from_class_logits
                                                                                 )

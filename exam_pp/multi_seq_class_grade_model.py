@@ -264,6 +264,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                  label_problem_type: ProblemType = ProblemType.multi_class,
                  grade_problem_type: ProblemType = ProblemType.multi_class,
                  use_transformer: bool = True,
+                 two_transformers:bool = False,
                  use_inner_proj: bool = True,
                  predict_grade_from_class_logits: bool = True
                  ):
@@ -276,6 +277,7 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
         self.label_problem_type = label_problem_type
         self.grade_problem_type = grade_problem_type
         self.use_transformer = use_transformer
+        self.two_transformers = two_transformers
         self.use_inner_proj = use_inner_proj
 
         # -------------------------------
@@ -298,13 +300,14 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
                     dropout=0.1,
                     batch_first=True,
                 ))
-            self.pipeline.add_module ("transformer2", nn.TransformerEncoderLayer(
-                    d_model=self.inner_dim,
-                    nhead=nhead,
-                    dim_feedforward=ff_dim,
-                    dropout=0.1,
-                    batch_first=True,
-                ))
+            if self.two_transformers:
+                self.pipeline.add_module ("transformer2", nn.TransformerEncoderLayer(
+                        d_model=self.inner_dim,
+                        nhead=nhead,
+                        dim_feedforward=ff_dim,
+                        dropout=0.1,
+                        batch_first=True,
+                    ))
         else:
             self.pipeline.add_module ("token_pool", MeanPoolAsCLS())
 
@@ -481,6 +484,7 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
     label_problem_type: ProblemType = ProblemType.multi_class,
     grade_problem_type: ProblemType = ProblemType.multi_class, 
     use_transformer: bool = True,
+    two_transformers:bool = False,
     use_inner_proj: bool = True,
     predict_grade_from_class_logits:bool = True
     ) -> MultiLabelMultiSeqEmbeddingClassifier:
@@ -503,6 +507,7 @@ def build_better_model_multi_label_multi_seq_embedding_classifier_proj_packed(
         label_problem_type=label_problem_type,
         grade_problem_type=grade_problem_type,
         use_transformer=use_transformer,
+        two_transformers=two_transformers,
         use_inner_proj=use_inner_proj,
         predict_grade_from_class_logits= predict_grade_from_class_logits
     )
