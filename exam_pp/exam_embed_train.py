@@ -350,23 +350,24 @@ class SequenceMode(Enum):
         
 
 class ClassificationItemDataset(Dataset):
-    def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb, sequence_mode:SequenceMode, max_token_len:int):
+    def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb, sequence_mode:SequenceMode, max_token_len:int, align:Align):
         self.tensor_df = tensor_df
         self.db = db
         self.sequence_mode = sequence_mode
         self.max_token_len = max_token_len
+        self.align = align
 
 
     def __getitem__(self, index) -> pt.Tensor:
         tensor_ids = self.tensor_df.loc[index,"tensor_ids"]
         tensor=None
         if self.sequence_mode == SequenceMode.single_sequence:
-            tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=self.max_token_len)
+            tensor = self.db.fetch_tensors_single(tensor_ids=tensor_ids, token_length=self.max_token_len, align=self.align)
         elif self.sequence_mode == SequenceMode.multi_sequence:
                         # self.fetch_tensors(tensor_ids=tensor_ids, token_length=token_length, align=align)
-            tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=self.max_token_len)
+            tensor = self.db.fetch_tensors(tensor_ids=tensor_ids, token_length=self.max_token_len, align=self.align)
         elif self.sequence_mode == SequenceMode.concat_sequence:
-            tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=self.max_token_len)
+            tensor = self.db.fetch_tensors_concat(tensor_ids=tensor_ids, token_length=self.max_token_len, align=self.align)
         else:
             raise RuntimeError(f"sequence mode {self.sequence_mode} is not defined.")
 
@@ -556,6 +557,7 @@ def create_dataset(embedding_db:EmbeddingDb
                    , max_queries:Optional[int]
                    , max_paragraphs:Optional[int]
                    , max_token_len:Optional[int]
+                   , align: Optional[Align]
                    , sequence_mode:SequenceMode
                    , split_same_query: bool = False
                    , exp_name:str = ""
@@ -637,9 +639,9 @@ def create_dataset(embedding_db:EmbeddingDb
     classes = sorted(list(set(example_label_list_train)))
     label_idx = {c:i for i,c in enumerate(classes)}
 
-    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
-    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
-    dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len)
+    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+    dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
 
     def filtered_grade(self_rating:int, judgment:List[str])->int:
         label = int(judgment[0])
@@ -815,6 +817,9 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--split-same-query',action="store_true", help='Train/test split on same queries, but different paragraphs.')
 
     parser.add_argument('--max-token-len', type=int, metavar="N", help="Use up to N embedding tokens")
+    parser.add_argument('--token-align', type=Align.from_string, required=True, choices=list(Align), metavar="MODE"
+                        , help=f"Whether tokens are used from beginning or end. To use last --max-token-len tokens of embedding: set to {Align.ALIGN_END}. To use the first tokens, set to {Align.ALIGN_BEGIN}. Choices: "+", ".join(list(x.name for x in Align)))
+
     parser.add_argument('--sequence-mode',  type=SequenceMode.from_string, required=True, choices=list(SequenceMode), metavar="MODE", help=f'Select how to handle multiple sequences for classification. Choices: {list(SequenceMode)}')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
@@ -951,6 +956,7 @@ def main(cmdargs=None) -> None:
                             , max_queries=args.max_queries
                             , max_paragraphs=args.max_paragraphs
                             , max_token_len=args.max_token_len
+                            , align=args.token_align
                             , sequence_mode=args.sequence_mode
                             , split_same_query=args.split_same_query
                             , exp_name=args.exp_name

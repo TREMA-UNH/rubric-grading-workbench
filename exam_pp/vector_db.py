@@ -13,8 +13,19 @@ ClassificationItemId = NewType('ClassificationItemId', int)
 
 
 class Align(Enum):
+    
     ALIGN_END = auto()
     ALIGN_BEGIN = auto()
+
+
+    @staticmethod
+    def from_string(arg:str):
+        import argparse
+        try:
+            return Align[arg]
+        except KeyError:
+            raise argparse.ArgumentTypeError("Invalid Align choice: %s" % arg)
+        
 
 SCHEMA = '''--sql
 CREATE SEQUENCE tensor_storage_id_seq START 1;
@@ -111,6 +122,17 @@ class EmbeddingDb:
             return pt.cat(adjusted_tensors, dim=dim)
 
 
+    def chop_trailing_padding(self,t:pt.Tensor)->pt.Tensor:
+        # '''Chop off any padding/zero vectors at the end of t. t must be a 2ax tensor of embedded token sequences.''
+        last_nonzero_plus_one = (
+            (t.abs().sum(dim=1) != 0)
+            .nonzero(as_tuple=True)[0]
+            [-1]
+            .item()
+            + 1
+        )
+
+        return t[:last_nonzero_plus_one]
     
     def fetch_tensors(self, tensor_ids: List[VectorId], token_length:Optional[int]=None, align:Align=Align.ALIGN_BEGIN) -> pt.Tensor:
         """
@@ -141,8 +163,10 @@ class EmbeddingDb:
                 self.storage_cache[tsid] = pt.load(self._storage_path(tsid), weights_only=True)
 
             t:pt.Tensor = (self.storage_cache[tsid])[v.index_n]  # [tok_len, d_model]
+            t = self.chop_trailing_padding(t)
 
             batch_sz = len(tensor_ids)
+
             token_len = token_length or t.shape[0]
             model_dim = t.shape[1]
             if out is None:
