@@ -647,6 +647,7 @@ def create_dataset(embedding_db:EmbeddingDb
                    , align: Optional[Align]
                    , sequence_mode:SequenceMode
                    , split_same_query: bool = False
+                   , use_grade_as_embedding:bool = False
                    , exp_name:str = ""
                    , fold: int = 0
                    )->Tuple[Dataset, Dataset, List[int], List[int], Dict[int,Any], Dataset
@@ -779,14 +780,19 @@ def create_dataset(embedding_db:EmbeddingDb
     example_grades_one_hot_predict, example_grades_id_predict, example_grades_valid_predict= conv_grades(example_grades_list_predict, grades=grades, grade_idx=grade_idx)
     
 
+    dataset_embedding_train=None
+    dataset_embedding_test=None
+    dataset_embedding_predict=None
+    if use_grade_as_embedding:
+        dataset_embedding_train = GradeClassificationItemDataset(tensor_df=train_tensors_with_grades_labels)
+        dataset_embedding_test = GradeClassificationItemDataset(tensor_df=test_tensors_with_grades_labels)
+        dataset_embedding_predict = GradeClassificationItemDataset(tensor_df=predict_tensors_with_grades_labels)
+    else:
+        dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+        dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+        dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
 
-    # dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
-    # dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
-    # dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
 
-    dataset_embedding_train = GradeClassificationItemDataset(tensor_df=train_tensors_with_grades_labels)
-    dataset_embedding_test = GradeClassificationItemDataset(tensor_df=test_tensors_with_grades_labels)
-    dataset_embedding_predict = GradeClassificationItemDataset(tensor_df=predict_tensors_with_grades_labels)
 
     print("dataset_embedding_train", dataset_embedding_train[0])
 
@@ -949,6 +955,7 @@ def main(cmdargs=None) -> None:
                         , help=f"Whether tokens are used from beginning or end. To use last --max-token-len tokens of embedding: set to {Align.ALIGN_END}. To use the first tokens, set to {Align.ALIGN_BEGIN}. Choices: "+", ".join(list(x.name for x in Align)))
 
     parser.add_argument('--sequence-mode',  type=SequenceMode.from_string, required=True, choices=list(SequenceMode), metavar="MODE", help=f'Select how to handle multiple sequences for classification. Choices: {list(SequenceMode)}')
+    parser.add_argument('--use-grade-as-embedding', action="store_true", help='If set, ignored the LLM embeddings and uses a triagle-hot representation of the grade')
     parser.add_argument('--caching', action="store_true", help='Dataset: build in-memory cache as needed')
     parser.add_argument('--preloaded', action="store_true", help='Dataset: preload into memory')
 
@@ -957,7 +964,7 @@ def main(cmdargs=None) -> None:
     parser.add_argument('--rubric-data', type=str, metavar='*.jsonl.gz', help='Input data in RUBRIC format (which will be annotated with predictions)')
     
 
-    
+  
  
     args = parser.parse_args(args = cmdargs) 
 
@@ -1086,6 +1093,7 @@ def main(cmdargs=None) -> None:
                             , max_token_len=args.max_token_len
                             , align=args.token_align
                             , sequence_mode=args.sequence_mode
+                            , use_grade_as_embedding = args.use_grade_as_embedding
                             , split_same_query=args.split_same_query
                             , exp_name=args.exp_name
                             , fold = args.fold
