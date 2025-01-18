@@ -404,7 +404,7 @@ class GradeClassificationItemDataset(Dataset):
         range_tensor = torch.arange(6)[None,None,:] # tensor([[[0, 1, 2, 3, 4, 5]]])
         tensor_triangle_hot = (range_tensor <= grades_tensor).to(torch.float)  # Triangle-hot. 
 
-        return tensor_triangle_hot
+        return tensor_one_hot
 
     def __len__(self) -> int:
         return len(self.tensor_df)
