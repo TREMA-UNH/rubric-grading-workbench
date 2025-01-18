@@ -397,14 +397,29 @@ class GradeClassificationItemDataset(Dataset):
         # Convert to a tensor
         
 
-        # tensor=None
+        # # tensor=None
+        # grades_tensor = torch.tensor([[g] for g in grades], dtype=torch.long)
+        # tensor_one_hot = torch.nn.functional.one_hot(grades_tensor, num_classes=6).to(torch.float)
+
+        # range_tensor = torch.arange(6).unsqueeze(0).unsqueeze(0)  # tensor([[[0, 1, 2, 3, 4, 5]]])
+        # tensor_triangle_hot = (grades_tensor >= range_tensor).to(torch.float)  # Triangle-hot. 
+
+
+        # Convert grades to tensor
         grades_tensor = torch.tensor([[g] for g in grades], dtype=torch.long)
+
+        # One-hot encoding
         tensor_one_hot = torch.nn.functional.one_hot(grades_tensor, num_classes=6).to(torch.float)
 
-        range_tensor = torch.arange(6)[None,None,:] # tensor([[[0, 1, 2, 3, 4, 5]]])
-        tensor_triangle_hot = (range_tensor <= grades_tensor).to(torch.float)  # Triangle-hot. 
+        # Triangle-hot encoding
+        range_tensor = torch.arange(6).view(1, -1)  # Shape (1, 6)
+        tensor_triangle_hot = (range_tensor <= grades_tensor).to(torch.float)  # Shape (3, 6)
 
-        return tensor_one_hot
+        # Add a singleton dimension to match one-hot shape (3, 1, 6)
+        tensor_triangle_hot = tensor_triangle_hot.unsqueeze(1)
+
+        # print("tensor_one_hot.shape",tensor_one_hot.shape," tensor_triangle_hot.shape", tensor_triangle_hot.shape)
+        return tensor_triangle_hot
 
     def __len__(self) -> int:
         return len(self.tensor_df)
