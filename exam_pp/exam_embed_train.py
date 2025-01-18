@@ -33,21 +33,21 @@ from .vector_db import Align, EmbeddingDb, ClassificationItemId
 Label = str
 
 
-class ClassificationItemDataset(Dataset):
-    def __init__(self, db: EmbeddingDb, ):
-        self.db = db
+# class ClassificationItemDataset(Dataset):
+#     def __init__(self, db: EmbeddingDb, ):
+#         self.db = db
 
-    def __getitem__(self, item: ClassificationItemId) -> pt.Tensor:
-        self.db.db.execute(
-            '''--sql
-            SELECT tensor_id
-            FROM classification_feature
-            WHERE classification_item_id = ?
-            ''',
-            (item,)
-        )
-        tensor_ids = self.db.db.fetch_df()
-        return self.db.fetch_tensors(tensor_ids['tensor_id'])
+#     def __getitem__(self, item: ClassificationItemId) -> pt.Tensor:
+#         self.db.db.execute(
+#             '''--sql
+#             SELECT tensor_id
+#             FROM classification_feature
+#             WHERE classification_item_id = ?
+#             ''',
+#             (item,)
+#         )
+#         tensor_ids = self.db.db.fetch_df()
+#         return self.db.fetch_tensors(tensor_ids['tensor_id'])
 
 
 def get_queries(db:EmbeddingDb)-> Set[str]:
@@ -379,8 +379,71 @@ class ClassificationItemDataset(Dataset):
     def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
         return ConcatDataset([self, other])
 
+
+class GradeClassificationItemDataset(Dataset):
+    def __init__(self, tensor_df:pd.DataFrame):
+        self.tensor_df = tensor_df
+
+
+    def __getitem__(self, index) -> pt.Tensor:
+        grades = self.tensor_df.loc[index,"self_ratings"]
+        # grades = self.tensor_df.self_ratings
+
+        # example_grades_list_train = [[plain_grade(r, tup.judgment) 
+        #                                 for r in tup.self_ratings] 
+        #                                     for tup in tensor_df.itertuples()]
+        
+        # tensor=None
+        grades_tensor = torch.tensor([[g] for g in grades], dtype=torch.long)
+        tensor = torch.nn.functional.one_hot(grades_tensor, num_classes=6).to(torch.float)
+
+        return tensor
+
+    def __len__(self) -> int:
+        return len(self.tensor_df)
+    
+    def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
+        return ConcatDataset([self, other])
+
+
+
+# class GradeClassificationItemDataset(Dataset):
+#     def __init__(self, tensor_df:pd.DataFrame, db:EmbeddingDb, sequence_mode:SequenceMode, max_token_len:int, align:Align):
+#         self.tensor_df = tensor_df
+#         self.db = db
+#         self.sequence_mode = sequence_mode
+#         self.max_token_len = max_token_len
+#         self.align = align
+
+
+#     def __getitem__(self, index) -> pt.Tensor:
+#         example_num = 10
+#         tok_len = 1
+#         llm_dim = 6
+
+#         grades_list_label = self.tensor_df.loc[index,"grade_label"]
+#         # grades_list_dense = [grades_idx(g) for g in grades_list_label]
+#         grades_list_dense = grades_list_label
+
+        
+#         # Convert them to a PyTorch tensor
+#         grades_tensor = torch.tensor(grades_list_dense)
+
+#         # One-hot encode with 6 classes (0 through 5)
+#         tensor = torch.nn.functional.one_hot(grades_tensor, num_classes=6)
+
+#         return tensor
+
+#     def __len__(self) -> int:
+#         # return len(self.tensor_df)
+#         return ...a
+    
+#     def __add__(self, other: "Dataset[T_co]") -> "ConcatDataset[T_co]":
+#         return ConcatDataset([self, other])
+
+
 class EmbeddingStackDataset(torch.utils.data.Dataset):
-    def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id, grades_valid):
+    def __init__(self, embedding, label_one_hot, label_id, grades_one_hot, grades_id, grades_valid, classification_item_id):
         # Check that all datasets have the same first dimension
         if not (len(embedding) == label_one_hot.size(0) == label_id.size(0)):
             raise ValueError(f"Size mismatch between datasets:  ({len(embedding)} == {label_one_hot.size(0)} == {label_id.size(0)})")
@@ -390,6 +453,7 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
         self.grades_one_hot = grades_one_hot
         self.grades_id = grades_id
         self.grades_valid = grades_valid
+        self.classification_item_id = classification_item_id
 
     def __len__(self):
         return len(self.embedding)
@@ -401,7 +465,8 @@ class EmbeddingStackDataset(torch.utils.data.Dataset):
             "label_id": self.label_id[idx],
             "grades_one_hot": self.grades_one_hot[idx],
             "grades_id":self.grades_id[idx],
-            "grades_valid":self.grades_valid[idx]
+            "grades_valid":self.grades_valid[idx],
+            "classification_item_id": self.classification_item_id[idx]
         }
 class EmbeddingPredictStackDataset(torch.utils.data.Dataset):
     def __init__(self, embedding,classification_item_id):
@@ -443,7 +508,7 @@ def conv_class(example_label_list:list[Any], classes:list[int], label_idx:Dict[A
 
 
 
-def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int]):
+def conv_grades(example_grades_list:list[list[Any]], grades:list[int], grade_idx:Dict[Any,int])->Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
         def default_grade(grade, d):
             g = grade_idx.get(grade)
             if (g is None):
@@ -612,7 +677,8 @@ def create_dataset(embedding_db:EmbeddingDb
     # query, passage, labels
     classification_data_train:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_train)
     classification_data_test:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_test)
-    classification_data_predict:pd.DataFrame = lookup_queries_paragraphs(embedding_db, classification_items_test)
+    # for a real world case, we should not rely on judgments for predict, use: lookup_queries_paragraphs
+    classification_data_predict:pd.DataFrame = lookup_queries_paragraphs_judgments(embedding_db, classification_items_predict)
 
     classification_items_train = classification_data_train["classification_item_id"].to_list()
     classification_items_test = classification_data_test["classification_item_id"].to_list()
@@ -622,6 +688,13 @@ def create_dataset(embedding_db:EmbeddingDb
     store_dataset(embedding_db, exp_name = exp_name, split_name="test", classification_items= classification_items_test, metadata={})
     store_dataset(embedding_db, exp_name = exp_name, split_name="predict", classification_items= classification_items_predict, metadata={})
 
+    # needles.i,
+    # array_agg(cf.tensor_id) AS tensor_ids,
+    # array_agg(cf.metadata->>'$.test_bank') AS test_bank_ids,
+    # array_agg(eg.self_rating) AS self_ratings,
+    # array_agg(eg.is_correct) AS correctness,
+    # la.true_labels AS judgment,
+    # ci.classification_item_id
     train_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
                                                 , classification_item_id=classification_items_train
                                                 , prompt_class= prompt_class)
@@ -629,19 +702,21 @@ def create_dataset(embedding_db:EmbeddingDb
                                                , classification_item_id=classification_items_test
                                                , prompt_class= prompt_class)
     
-    predict_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_plain(embedding_db
-                                               , classification_item_id=classification_items_test
+    predict_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_with_grades(embedding_db
+                                               , classification_item_id=classification_items_predict
                                                , prompt_class= prompt_class)
+    
+    # predict_tensors_with_grades_labels:pd.DataFrame = get_tensor_ids_plain(embedding_db
+    #                                            , classification_item_id=classification_items_predict
+    #                                            , prompt_class= prompt_class)
     
 
     example_label_list_train = [d.true_labels[0] for d in  classification_data_train.itertuples() ]
     example_label_list_test = [d.true_labels[0] for d in  classification_data_test.itertuples() ]
+    example_label_list_predict = [d.true_labels[0] for d in  classification_data_predict.itertuples() ]
     classes = sorted(list(set(example_label_list_train)))
     label_idx = {c:i for i,c in enumerate(classes)}
 
-    dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
-    dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
-    dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
 
     def filtered_grade(self_rating:int, judgment:List[str])->int:
         label = int(judgment[0])
@@ -655,38 +730,69 @@ def create_dataset(embedding_db:EmbeddingDb
     def plain_grade(self_rating:int, judgment: List[str])->int:
         return self_rating
 
-    example_grades_list_train = [[filtered_grade(r, tup.judgment) 
+    # example_grades_list_train = [[filtered_grade(r, tup.judgment)  # TODO WAS
+    example_grades_list_train = [[plain_grade(r, tup.judgment) 
                                     for r in tup.self_ratings] 
                                         for tup in train_tensors_with_grades_labels.itertuples()]
-    example_grades_list_test = [[filtered_grade(r, tup.judgment)  
+    example_grades_list_test = [[plain_grade(r, tup.judgment)  
                                     for r in tup.self_ratings] 
                                     for tup in test_tensors_with_grades_labels.itertuples()]
+    example_grades_list_predict = [[plain_grade(r, tup.judgment)  
+                                    for r in tup.self_ratings] 
+                                    for tup in predict_tensors_with_grades_labels.itertuples()]
+    
     # example_grades_list_test = [tup.self_ratings for tup in test_tensors_with_grades_labels.itertuples()]
 
     grade_idx = {0:0, 1:1, 2:2, 3:3, 4:4, 5:5} # Adding -1 as "Missing"
     grades = list(grade_idx.values())
     sorted(grades)
-    
-    example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
-    example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
-    example_grades_one_hot_train, example_grades_id_train,example_grades_valid_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
-    example_grades_one_hot_test, example_grades_id_test, example_grades_valid_test = conv_grades(example_grades_list_test, grades=grades, grade_idx=grade_idx)
 
     
+    # example_label_one_hot_train = [examples][seq_idx][num_grades]
+    example_label_one_hot_train, example_label_id_train = conv_class(example_label_list_train, classes=classes, label_idx=label_idx)
+    example_label_one_hot_test, example_label_id_test = conv_class(example_label_list_test, classes=classes, label_idx=label_idx)
+    example_label_one_hot_predict, example_label_id_predict = conv_class(example_label_list_predict, classes=classes, label_idx=label_idx)
+    example_grades_one_hot_train, example_grades_id_train,example_grades_valid_train = conv_grades(example_grades_list_train, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_test, example_grades_id_test, example_grades_valid_test = conv_grades(example_grades_list_test, grades=grades, grade_idx=grade_idx)
+    example_grades_one_hot_predict, example_grades_id_predict, example_grades_valid_predict= conv_grades(example_grades_list_predict, grades=grades, grade_idx=grade_idx)
+    
+
+
+    # dataset_embedding_train = ClassificationItemDataset(db=embedding_db, tensor_df=train_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+    # dataset_embedding_test = ClassificationItemDataset(db=embedding_db, tensor_df=test_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+    # dataset_embedding_predict = ClassificationItemDataset(db=embedding_db, tensor_df=predict_tensors_with_grades_labels, sequence_mode=sequence_mode, max_token_len=max_token_len, align=align)
+
+    dataset_embedding_train = GradeClassificationItemDataset(tensor_df=train_tensors_with_grades_labels)
+    dataset_embedding_test = GradeClassificationItemDataset(tensor_df=test_tensors_with_grades_labels)
+    dataset_embedding_predict = GradeClassificationItemDataset(tensor_df=predict_tensors_with_grades_labels)
+
+    print("dataset_embedding_train", dataset_embedding_train[0])
+
+
     train_ds = EmbeddingStackDataset(embedding=dataset_embedding_train
                                      , label_one_hot=example_label_one_hot_train
                                      , label_id=example_label_id_train
                                      , grades_one_hot=example_grades_one_hot_train
                                      , grades_id=example_grades_id_train
-                                     , grades_valid = example_grades_valid_train)
+                                     , grades_valid = example_grades_valid_train
+                                    , classification_item_id=classification_items_train)
     test_ds = EmbeddingStackDataset(embedding=dataset_embedding_test
                                     , label_one_hot=example_label_one_hot_test
                                     , label_id=example_label_id_test
                                     , grades_one_hot=example_grades_one_hot_test
                                     , grades_id=example_grades_id_test
-                                    , grades_valid = example_grades_valid_test)
+                                    , grades_valid = example_grades_valid_test
+                                    , classification_item_id=classification_items_test)
+    predict_ds = EmbeddingStackDataset(embedding=dataset_embedding_predict
+                                    , label_one_hot=example_label_one_hot_predict
+                                    , label_id=example_label_id_predict
+                                    , grades_one_hot=example_grades_one_hot_predict
+                                    , grades_id=example_grades_id_predict
+                                    , grades_valid = example_grades_valid_predict
+                                    , classification_item_id=classification_items_predict)
     
-    predict_ds = EmbeddingPredictStackDataset(embedding=dataset_embedding_predict, classification_item_id=classification_items_predict)
+    # predict_ds = EmbeddingPredictStackDataset(embedding=dataset_embedding_predict
+    #                                           , classification_item_id=classification_items_predict)
     
 
 

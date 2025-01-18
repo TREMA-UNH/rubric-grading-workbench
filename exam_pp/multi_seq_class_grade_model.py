@@ -341,7 +341,9 @@ class MultiLabelMultiSeqEmbeddingClassifier(nn.Module):
           seq_logits_grades: (batch_size, k, n_grades)
         """
         # 1) Pass input through the pipeline
+        print("x.shape",x.shape)
         out = self.pipeline(x)  # shape: (b*k, inner_dim)
+        print("out.shape",out.shape)
 
         # 2) Produce final_logits & seq_logits_grades
         final_logits, seq_logits_grades = self.predictor(out)
