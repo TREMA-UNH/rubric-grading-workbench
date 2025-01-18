@@ -393,11 +393,18 @@ class GradeClassificationItemDataset(Dataset):
         #                                 for r in tup.self_ratings] 
         #                                     for tup in tensor_df.itertuples()]
         
+
+        # Convert to a tensor
+        
+
         # tensor=None
         grades_tensor = torch.tensor([[g] for g in grades], dtype=torch.long)
-        tensor = torch.nn.functional.one_hot(grades_tensor, num_classes=6).to(torch.float)
+        tensor_one_hot = torch.nn.functional.one_hot(grades_tensor, num_classes=6).to(torch.float)
 
-        return tensor
+        range_tensor = torch.arange(6)[None,None,:] # tensor([[[0, 1, 2, 3, 4, 5]]])
+        tensor_triangle_hot = (range_tensor <= grades_tensor).to(torch.float)  # Triangle-hot. 
+
+        return tensor_triangle_hot
 
     def __len__(self) -> int:
         return len(self.tensor_df)
