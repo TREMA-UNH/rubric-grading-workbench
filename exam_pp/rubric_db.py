@@ -106,7 +106,6 @@ def import_rubric_data(data_path:Path, rubric_db:RubricDb):
     for qp in data:
         query_id = qp.queryId
         for para in qp.paragraphs:
-            print("para.paragraph", isinstance(para.paragraph, Dict) )
             para_meta = para.paragraph if isinstance(para.paragraph, Dict) else {}
             rubric_db.db.execute(
                 '''--sql
