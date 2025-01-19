@@ -106,76 +106,81 @@ def import_rubric_data(data_path:Path, rubric_db:RubricDb):
     for qp in data:
         query_id = qp.queryId
         for para in qp.paragraphs:
+            print("para.paragraph", isinstance(para.paragraph, Dict) )
+            para_meta = para.paragraph if isinstance(para.paragraph, Dict) else {}
             rubric_db.db.execute(
                 '''--sql
-                INSERT INTO relevance_item (query_id, paragraph_id, paragraph_text, metadata)
+                INSERT INTO relevance_item (query_id, paragraph_id, paragraph_text, metadata) 
                 VALUES (?, ?, ?, ?)
                 RETURNING relevance_item_id
                 ''',
-                (query_id, para.paragraph_id, para.text, para.paragraph)
+                (query_id, para.paragraph_id, para.text, para_meta)
             )
-            relevance_item_id, = rubric_db.db.fetchone()
+            res = rubric_db.db.fetchone()
 
-            if para.exam_grades is not None:
-                for exam_grades in para.exam_grades:
+            if res is not None:
+                relevance_item_id, = res
 
-                    # exam_grade_meta = GradeFilter.key_dict(exam_grades)
-                    prompt_class = GradeFilter.get_prompt_class(exam_grades)
-                    prompt_type = GradeFilter.get_prompt_type(exam_grades)
-                    is_self_rated = GradeFilter.get_is_self_rated(exam_grades)
-                    test_bank_type = GradeFilter.get_question_type(exam_grades)
-                    
-                    llm = exam_grades.llm
-                    llm_meta = exam_grades.llm_options
-                    prompt_meta = exam_grades.prompt_info
+                if para.exam_grades is not None:
+                    for exam_grades in para.exam_grades:
 
-                    answers = {test_bank_id:answer for test_bank_id, answer in exam_grades.answers}
-                    correct_ids = set(exam_grades.correctAnswered)
-                    wrong_ids = set(exam_grades.wrongAnswered)
-                    self_ratings = {}
-                    if exam_grades.self_ratings is not None:
-                        self_ratings = {r.get_id(): r.self_rating for r in exam_grades.self_ratings}
+                        # exam_grade_meta = GradeFilter.key_dict(exam_grades)
+                        prompt_class = GradeFilter.get_prompt_class(exam_grades)
+                        prompt_type = GradeFilter.get_prompt_type(exam_grades)
+                        is_self_rated = GradeFilter.get_is_self_rated(exam_grades)
+                        test_bank_type = GradeFilter.get_question_type(exam_grades)
+                        
+                        llm = exam_grades.llm
+                        llm_meta = exam_grades.llm_options
+                        prompt_meta = exam_grades.prompt_info
 
-                    all_test_bank_ids = correct_ids.union(wrong_ids).union(answers.keys()).union(self_ratings.keys())
+                        answers = {test_bank_id:answer for test_bank_id, answer in exam_grades.answers}
+                        correct_ids = set(exam_grades.correctAnswered)
+                        wrong_ids = set(exam_grades.wrongAnswered)
+                        self_ratings = {}
+                        if exam_grades.self_ratings is not None:
+                            self_ratings = {r.get_id(): r.self_rating for r in exam_grades.self_ratings}
 
-                    for test_bank_id in all_test_bank_ids:
-                        answer = answers.get(test_bank_id)
-                        correctAnswered = test_bank_id in correct_ids
-                        self_rating = self_ratings.get(test_bank_id)
+                        all_test_bank_ids = correct_ids.union(wrong_ids).union(answers.keys()).union(self_ratings.keys())
 
-                        # submit!
-                        # print(f"{query_id}, {paragraph_id}, {prompt_class}, {llm}, {test_bank_id}, {answer}, {correctAnswered}, {self_rating}")
-                        rubric_db.db.execute(
-                            '''--sql
-                            INSERT INTO exam_grade (
-                                relevance_item_id, test_bank_id, test_bank_type, test_bank_metadata,
-                                prompt_class, prompt_type, prompt_is_self_rated, prompt_info, llm, llm_options,
-                                self_rating, is_correct, answer, metadata )
-                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                            ''',
-                            (relevance_item_id,test_bank_id,test_bank_type, None
-                             , prompt_class, prompt_type, is_self_rated, prompt_meta, llm, llm_meta
-                             , self_rating, correctAnswered, answer, None
-                             )
-                        )
-                    
-                    if exam_grades.llm_response_errors is not None:
-                        # put LLM response errors in table
-                        for test_bank_id, llm_err in exam_grades.llm_response_errors.items():
+                        for test_bank_id in all_test_bank_ids:
+                            answer = answers.get(test_bank_id)
+                            correctAnswered = test_bank_id in correct_ids
+                            self_rating = self_ratings.get(test_bank_id)
 
+                            # submit!
+                            # print(f"{query_id}, {paragraph_id}, {prompt_class}, {llm}, {test_bank_id}, {answer}, {correctAnswered}, {self_rating}")
                             rubric_db.db.execute(
                                 '''--sql
-                                INSERT INTO exam_grade_errors (
+                                INSERT INTO exam_grade (
                                     relevance_item_id, test_bank_id, test_bank_type, test_bank_metadata,
                                     prompt_class, prompt_type, prompt_is_self_rated, prompt_info, llm, llm_options,
                                     self_rating, is_correct, answer, metadata )
-                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                                 ''',
                                 (relevance_item_id,test_bank_id,test_bank_type, None
                                 , prompt_class, prompt_type, is_self_rated, prompt_meta, llm, llm_meta
-                                , llm_err, None
+                                , self_rating, correctAnswered, answer, None
                                 )
                             )
+                        
+                        if exam_grades.llm_response_errors is not None:
+                            # put LLM response errors in table
+                            for test_bank_id, llm_err in exam_grades.llm_response_errors.items():
+
+                                rubric_db.db.execute(
+                                    '''--sql
+                                    INSERT INTO exam_grade_errors (
+                                        relevance_item_id, test_bank_id, test_bank_type, test_bank_metadata,
+                                        prompt_class, prompt_type, prompt_is_self_rated, prompt_info, llm, llm_options,
+                                        self_rating, is_correct, answer, metadata )
+                                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                    ''',
+                                    (relevance_item_id,test_bank_id,test_bank_type, None
+                                    , prompt_class, prompt_type, is_self_rated, prompt_meta, llm, llm_meta
+                                    , llm_err, None
+                                    )
+                                )
 
 #     exam_grade_id INTEGER PRIMARY KEY DEFAULT nextval('exam_grade_id_seq'),
 #     relevance_item_id integer references relevance_item(relevance_item_id),
