@@ -409,7 +409,6 @@ The entries of the given RUBRIC input file will be augmented with exam grades, t
     # MAX_TOKEN_LEN=512
     # MAX_OUT_TOKENS=512
 
-    
     modelPipelineOpts = {'text2text': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  Text2TextPipeline(model_name, max_token_len=MAX_TOKEN_LEN)
                 ,'question-answering': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  QaPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS)
                 ,'text-generation': lambda model_name, MAX_TOKEN_LEN, MAX_OUT_TOKENS, **kwargs:  TextGenerationPipeline(model_name, max_token_len=MAX_TOKEN_LEN, max_output_tokens=MAX_OUT_TOKENS) 

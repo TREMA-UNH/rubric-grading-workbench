@@ -16,6 +16,28 @@ def json_query_loader(query_json:Path)-> Dict[str,str]:
 
     raise RuntimeError(f"Could not load any queries from file {file}.")    
 
+def tsv_query_loader(query_tsv:Path)-> Dict[str,str]:
+    queries:Dict[str,str] = dict()
+    with open(query_tsv, "rt", encoding="utf-8") as file:
+        for line in file.readlines():
+            line = line.strip()
+            if len(line)>0:
+                splits = line.split("\\s+")
+                query_id = splits[0]
+                query_text = " ".join(splits[1:]) if len(splits)>1 else ""
+                queries[query_id] = query_text
+        print(f"Loaded {len(queries)} queries.")
+        return queries
+    raise RuntimeError(f"Could not load any queries from file {file}.")    
+
+
+def load_queries(query_path:Path) -> Dict[str,str]:
+    if query_path.suffix.lower() == ".tsv":
+        return tsv_query_loader(query_path)
+    elif query_path.suffix.lower() == ".json":
+        return json_query_loader(query_path)
+    else:
+        raise RuntimeError(f"Can only load queries from tsv or json file, but received {query_path} with suffix {query_path.suffix}")
 
 def direct_grading_prompt(prompt_class:str, query_id:str, query_text:Optional[str], facet_id:Optional[str], facet_text:Optional[str], self_rater_tolerant:bool)->Optional[DirectGradingPrompt]:
     if query_text is None: 
