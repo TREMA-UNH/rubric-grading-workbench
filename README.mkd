@@ -742,6 +742,37 @@ Note:
 This will write a LaTex table of inter-annotator agreement to `interannotator.tex`. Visualize with `pdflatex` or `pandoc`.
 
 
+# per-query leaderboard correlation
+
+You can get a table in per-query kendall tau/spearmans rho rank coefficients for each query.  
+
+Example:
+```
+ python -m exam_pp.exam_post_pipeline rubric.jsonl.gz --qrel-per-query-analysis-out qanalysis.tsv --prompt-class MyPromptClass --run-dir ./data/runs -q qrel.out  --trec-eval-metric ndcg_cut.10 --min-self-rating 4  --official-qrels-file dl20.qrels  --query-path dl20-queries.json 
+```
+
+Most of the command line arguments are just like for the --analysis-out.  But a few are new:
+
+* ` --official-qrels-file dl20.qrels ` this is the path to the qrels that produced the  `--official-leaderboard`  (that option is not needed, because every query has its own leaderboard, so we need to generate it ourselves).
+
+*  ` --query-path dl20-queries.json ` we choose which queries to  this is a path to a json query description (I used those for the direct prompts), alternatively you can pass in a tsv file of "{query_id}\t{text}" or a qrels file -- it will select the loading routines based on the file suffix.   You can also just add a list of query_ids, one per line, or even the official qrels file and it should just work
+
+The result will look like this 
+
+```
+Leaderboard Per-query Correlation Analysis Exam-Qrels
+run_dir ./data/runs
+grade_filter    GradeFilter(model_name=None, prompt_class='MyPrompt', is_self_rated=None, min_self_rating=None, question_set=None, prompt_type='nugget', data_set=None)
+qrels   query   min_rating      trec_eval_metric        spearman        kendall
+qrel.out        940547  4       ndcg    0.671  0.544
+qrel.out        1121353 4       ndcg    0.469  0.372
+qrel.out        997622  4       ndcg    0.409  0.300
+
+```
+
+
+
+
 --------------------------------
 
 # Internal Notes
