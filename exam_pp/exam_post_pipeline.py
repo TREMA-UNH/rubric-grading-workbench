@@ -359,8 +359,8 @@ def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,
         print(f"qrel_per_query_tau:  query_ids={query_ids},   qrels_files={qrels_files}, run_dir={run_dir}, min_levels={min_levels}, trec_eval_metrics={trec_eval_metrics}")
 
 
-        file.write('\t'.join(["method"
-                            , "query"
+        file.write('\t'.join(["qrels"
+                            ,  "query"
                             , "min_rating"
                             , "trec_eval_metric"
                             , "spearman"
@@ -375,8 +375,8 @@ def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,
                         methodScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
                         leaderboardScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=official_qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
                         correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=leaderboardScores)
-                        file.write('\t'.join([f"{qrels_file}"
-                                            f"{query_id}"
+                        file.write('\t'.join([ f"{qrels_file}"
+                                            , f"{query_id}"
                                             , f"{min_level:.0f}"
                                             , trec_eval_metric
                                             , f2s(correlationStats.spearman_correlation)

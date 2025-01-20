@@ -22,7 +22,7 @@ def tsv_query_loader(query_tsv:Path)-> Dict[str,str]:
         for line in file.readlines():
             line = line.strip()
             if len(line)>0:
-                splits = line.split("\\s+")
+                splits = line.split(sep=None)
                 query_id = splits[0]
                 query_text = " ".join(splits[1:]) if len(splits)>1 else ""
                 queries[query_id] = query_text
@@ -33,6 +33,8 @@ def tsv_query_loader(query_tsv:Path)-> Dict[str,str]:
 
 def load_queries(query_path:Path) -> Dict[str,str]:
     if query_path.suffix.lower() == ".tsv":
+        return tsv_query_loader(query_path)
+    elif query_path.suffix.lower() == ".qrel" or  query_path.suffix.lower() == ".qrels":
         return tsv_query_loader(query_path)
     elif query_path.suffix.lower() == ".json":
         return json_query_loader(query_path)
