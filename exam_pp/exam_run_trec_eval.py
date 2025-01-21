@@ -183,25 +183,26 @@ def trec_eval_leaderboard(run_dir:Path, qrels:Path, min_level:Optional[int],trec
     # output=mimic_trec_eval()
     return parse_trec_eval(output)
 
-def trec_eval_leaderboard_per_query(query_id:str, run_dir:Path, qrels:Path, min_level:Optional[int],trec_eval_metric:str)-> Dict[str,float]:
+def trec_eval_leaderboard_per_query(query_id:Optional[str], run_dir:Path, qrels:Path, min_level:Optional[int],trec_eval_metric:str)-> Dict[str,float]:
     '''Designed to interoperate with `leaderboard_rank_correlation` '''
     # per_query_qrels = Path("./tmp")/Path(f"{query_id}-{qrels.name}")
 
-    fd, per_query_qrels_str = tempfile.mkstemp(suffix=".qrels", prefix=f"{query_id}-{qrels.name}-", text=True)
+    query_id_str = query_id if query_id is not None else "ALL"
+    fd, per_query_qrels_str = tempfile.mkstemp(suffix=".qrels", prefix=f"{query_id_str}-{qrels.name}-", text=True)
     per_query_qrels = Path(per_query_qrels_str)
 
     with open(per_query_qrels, mode="tw") as w:
         found = 0
         with open(qrels, mode="tr") as f:
             for line in f.readlines():
-                if line.startswith(query_id):
+                if query_id is None or line.startswith(query_id):
                     w.write(line)
                     found += 1
-    print(f"wrote {found} lines for query {query_id} to {per_query_qrels} from { qrels}")
+    print(f"wrote {found} lines for query {query_id_str} to {per_query_qrels} from { qrels}")
     
 
     if found == 0:
-        raise RuntimeError(f"No entries for query {query_id} found in qrels file {qrels}")
+        raise RuntimeError(f"No entries for query {query_id_str} found in qrels file {qrels}")
 
     output=run_trec_eval(run_dir=run_dir, qrels=per_query_qrels, min_level=min_level, trec_eval_metric=trec_eval_metric)
     per_query_qrels.unlink()

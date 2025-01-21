@@ -387,17 +387,20 @@ def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,
             correlation_file.write('\n')
 
 
-
+            query_ids_list:List[Optional[str]] = list(query_ids)
+            query_ids_list.append(None)
 
             for trec_eval_metric in trec_eval_metrics:
-                for query_id in query_ids:
-                    for qrels_file in qrels_files:
-                        for min_level in min_levels:
+                for qrels_file in qrels_files:
+                    for min_level in min_levels:
+
+                        for query_id in query_ids_list:
+                            query_id_str = query_id if query_id is not None else "ALL"
                             methodScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
                             leaderboardScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=official_qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
                             correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=leaderboardScores)
                             correlation_file.write('\t'.join([ f"{qrels_file}"
-                                                , f"{query_id}"
+                                                , f"{query_id_str}"
                                                 , f"{min_level:.0f}"
                                                 , trec_eval_metric
                                                 , f2s(correlationStats.spearman_correlation)
@@ -413,7 +416,7 @@ def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,
                                 if official_score is not None and predicted_score is not None:
 
                                     scatter_file.write('\t'.join([ f"{qrels_file}"
-                                                        , f"{query_id}"
+                                                        , f"{query_id_str}"
                                                         , f"{method}"
                                                         , f"{min_level:.0f}"
                                                         , trec_eval_metric
