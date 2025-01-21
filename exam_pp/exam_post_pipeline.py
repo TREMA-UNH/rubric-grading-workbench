@@ -340,7 +340,8 @@ def qrel_leaderboard_analysis(qrels_files:List[Path], run_dir:Path,  official_le
     print(f"exam-qrels leaderboard analysis written to {analysis_out}")
 
 
-def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,  official_qrels_file:Path, analysis_out:Path, min_levels: List[int], trec_eval_metrics:List[str], grade_filter:Optional[GradeFilter]=None):
+def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,  official_qrels_file:Path
+                       , correlation_analysis_out:Path, scatter_out:Path, min_levels: List[int], trec_eval_metrics:List[str], grade_filter:Optional[GradeFilter]=None):
 
     def f2s(x:Optional[float])->str:
         if x is None:
@@ -350,44 +351,87 @@ def qrel_per_query_tau(query_ids:List[str],qrels_files:List[Path], run_dir:Path,
     
     
     print(f'run_dir={run_dir}')
-
-    with open(analysis_out, 'wt') as file:
-        file.write("Leaderboard Per-query Correlation Analysis Exam-Qrels\n")
-        file.write(f"run_dir\t{run_dir}\n")
+    with open(scatter_out, 'wt') as scatter_file:
+        scatter_file.write("Leaderboard Per-query Paired-scores Exam-Qrels\n")
+        scatter_file.write(f"run_dir\t{run_dir}\n")
         if grade_filter is not None: 
-            file.write(f"grade_filter\t{grade_filter}\n")
+            scatter_file.write(f"grade_filter\t{grade_filter}\n")
         print(f"qrel_per_query_tau:  query_ids={query_ids},   qrels_files={qrels_files}, run_dir={run_dir}, min_levels={min_levels}, trec_eval_metrics={trec_eval_metrics}")
 
 
-        file.write('\t'.join(["qrels"
+        scatter_file.write('\t'.join(["qrels"
                             ,  "query"
+                            , "method"
                             , "min_rating"
                             , "trec_eval_metric"
-                            , "spearman"
-                            , "kendall"
+                            , "predicted_score"
+                            , "manual_score"
                     ]))
-        file.write('\n')
+        scatter_file.write('\n')
 
-        for trec_eval_metric in trec_eval_metrics:
-            for query_id in query_ids:
-                for qrels_file in qrels_files:
-                    for min_level in min_levels:
-                        methodScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
-                        leaderboardScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=official_qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
-                        correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=leaderboardScores)
-                        file.write('\t'.join([ f"{qrels_file}"
-                                            , f"{query_id}"
-                                            , f"{min_level:.0f}"
-                                            , trec_eval_metric
-                                            , f2s(correlationStats.spearman_correlation)
-                                            , f2s(correlationStats.kendall_correlation)
-                                            ]))
-                        file.write('\n')
+        with open(correlation_analysis_out, 'wt') as correlation_file:
+            correlation_file.write("Leaderboard Per-query Correlation Analysis Exam-Qrels\n")
+            correlation_file.write(f"run_dir\t{run_dir}\n")
+            if grade_filter is not None: 
+                correlation_file.write(f"grade_filter\t{grade_filter}\n")
+            print(f"qrel_per_query_tau:  query_ids={query_ids},   qrels_files={qrels_files}, run_dir={run_dir}, min_levels={min_levels}, trec_eval_metrics={trec_eval_metrics}")
 
 
-            file.writelines(["\n","\n"])
-            file.close()
-    print(f"exam qrel_per_query_tau analysis written to {analysis_out}")
+            correlation_file.write('\t'.join(["qrels"
+                                ,  "query"
+                                , "min_rating"
+                                , "trec_eval_metric"
+                                , "spearman"
+                                , "kendall"
+                        ]))
+            correlation_file.write('\n')
+
+
+
+
+            for trec_eval_metric in trec_eval_metrics:
+                for query_id in query_ids:
+                    for qrels_file in qrels_files:
+                        for min_level in min_levels:
+                            methodScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
+                            leaderboardScores = trec_eval_leaderboard_per_query(query_id = query_id, run_dir=run_dir, qrels=official_qrels_file, min_level=min_level, trec_eval_metric=trec_eval_metric)
+                            correlationStats=exam_leaderboard_correlation.leaderboard_rank_correlation(methodScores, official_leaderboard=leaderboardScores)
+                            correlation_file.write('\t'.join([ f"{qrels_file}"
+                                                , f"{query_id}"
+                                                , f"{min_level:.0f}"
+                                                , trec_eval_metric
+                                                , f2s(correlationStats.spearman_correlation)
+                                                , f2s(correlationStats.kendall_correlation)
+                                                ]))
+                            correlation_file.write('\n')
+
+
+                            for method in leaderboardScores:
+                                official_score = leaderboardScores.get(method)
+                                predicted_score = methodScores.get(method)
+                                
+                                if official_score is not None and predicted_score is not None:
+
+                                    scatter_file.write('\t'.join([ f"{qrels_file}"
+                                                        , f"{query_id}"
+                                                        , f"{method}"
+                                                        , f"{min_level:.0f}"
+                                                        , trec_eval_metric
+                                                        , f2s(predicted_score)
+                                                        , f2s(official_score)
+                                                        ]))
+                                    scatter_file.write('\n')
+
+
+
+                correlation_file.writelines(["\n","\n"])
+                correlation_file.close()
+            print(f"exam qrel_per_query_tau analysis written to {correlation_analysis_out}")
+
+            scatter_file.writelines(["\n","\n"])
+            scatter_file.close()
+    print(f"exam qrel_per_query_scatter analysis written to {scatter_out}")
+
 
 
 def run_qrel_leaderboard(qrels_file:Path, run_dir:Path,  official_leaderboard:Dict[str,float], leaderboard_out:Path, min_level: Optional[int], trec_eval_metric:str ="P.20"):
@@ -734,7 +778,9 @@ def main(cmdargs=None):
     parser.add_argument('--trec-eval-metric', type=str, nargs='+', metavar="str", help='Which evaluation metric to use in trec_eval. Default: P.20. (applies only to -q)', default="P.20")
 
     parser.add_argument('--qrel-analysis-out', type=str, metavar="FILE", help='Export Rank Correlations to this file.', default=None)
+
     parser.add_argument('--qrel-per-query-analysis-out', type=str, metavar="FILE", help='Export Per-query Tau Correlations to this file.', default=None)
+    parser.add_argument('--qrel-per-query-scatter-out', type=str, metavar="FILE", help='For every query/method, print paired predicted and manual evaluation scores.', default=None)
     parser.add_argument('--official-qrels-file', type=str, metavar="str", help='Path to the official qrels file (the one for the official_leaderboard)')
     parser.add_argument('--query-path', type=str, metavar='PATH', help='Path to read queries from. (used as query set for --qrel-per-query-analysis-out)')
 
@@ -930,7 +976,7 @@ def main(cmdargs=None):
                                 , grade_filter=grade_filter
                                 )
 
-    if args.qrel_per_query_analysis_out is not None:
+    if args.qrel_per_query_analysis_out is not None and args.qrel_per_query_scatter_out is not None:
         if args.run_dir is None:
             raise RuntimeError(f"Must set --run-dir for generation of --qrel-per-query-analysis-out")
         if  args.trec_eval_metric is None:
@@ -948,12 +994,41 @@ def main(cmdargs=None):
                             , run_dir=Path(args.run_dir)
                             , min_levels=args.min_trec_eval_level or args.min_self_rating or [1,2,3,4,5]
                             , official_qrels_file=Path(args.official_qrels_file)
-                            , analysis_out=args.qrel_per_query_analysis_out
+                            , correlation_analysis_out=args.qrel_per_query_analysis_out
+                            , scatter_out=args.qrel_per_query_scatter_out
                             , trec_eval_metrics=args.trec_eval_metric # ["ndcg_cut.10", "map", "recip_rank"]
                             , grade_filter=grade_filter
                             )
+    elif (args.qrel_per_query_analysis_out is None and args.qrel_per_query_scatter_out is None):
+        pass
+    else: # XOR
+        raise RuntimeError("Must use -qrel-per-query-analysis-out  together with  --qrel-per-query-scatter-out!")
+
+    
+
+    # if args.qrel_per_query_scatter_out is not None:
+    #     if args.run_dir is None:
+    #         raise RuntimeError(f"Must set --run-dir for generation of --qrel-per-query-scatter-out")
+    #     if  args.trec_eval_metric is None:
+    #         raise RuntimeError(f"Must set --trec-eval-metric for generation of --qrel-per-query-scatter-out")
+    #     if  (args.trec_eval_qrel_correlation or args.qrel_out) is None:
+    #         raise RuntimeError(f"Must set -q or --trec-eval-qrel-correlation for generation of --qrel-per-query-scatter-out")
+    #     if  (args.official_qrels_file) is None:
+    #         raise RuntimeError(f"Must set --official-qrels-file for generation of --qrel-per-query-scatter-out")
+    #     query_ids = load_queries(Path(args.query_path))
+
+    #     qrel_per_query_scatter( query_ids=list(query_ids.keys())
+    #                         , qrels_files=[Path(args.trec_eval_qrel_correlation or args.qrel_out)]
+    #                         , run_dir=Path(args.run_dir)
+    #                         , min_levels=args.min_trec_eval_level or args.min_self_rating or [1,2,3,4,5]
+    #                         , official_qrels_file=Path(args.official_qrels_file)
+    #                         , scatter_out=args.qrel_per_query_scatter_out
+    #                         , trec_eval_metrics=args.trec_eval_metric # ["ndcg_cut.10", "map", "recip_rank"]
+    #                         , grade_filter=grade_filter
+    #                         )
 
 
+    
 
     if args.inter_annotator_out is not None or args.correlation_out is not None:
         correlation_out = args.inter_annotator_out if args.inter_annotator_out is not None else args.correlation_out
