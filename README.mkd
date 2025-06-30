@@ -33,22 +33,87 @@ This package includes python command line utilities for the phases of the above 
 Upon installation, each of these command line utilities supports extensive documentation when called with `--help`.
 
 
-## Installation via poetry
+## Installation via pyproject / pip
+
+Install code and dependencies via pip using metadata from `pyproject.toml`
+
+```
+pip install .
+```
+
+Test the installation via installed scripts (via pytoml):
+
+```bash
+autograder-grade --help
+```
 
 
-Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. First, clone this repository, fetch the `data-dl20.tar.xz` [tarball](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz), and extract it into directory `data/dl20`.
+
+This will install all required dependencies, and expose the RUBRIC code as library `exam_pp`
+
+## Oldschool installation
+
+
+If you are oldschool, you can also use 
+
+```bash
+pip -r requirements.txt
+```
+
+Note that this will not install `exam_pp` as a library.
+
+
+You will have to directly call the python classes from from the cloned directory, such as
+
+```bash
+python -m exam_pp.exam_grading --help
+```
+
+Replace commands described below as follows (also see project.pytoml for updated list):
+
+* autograder-generate = "exam_pp.question_generation"
+* autograder-grade = "exam_pp.exam_grading"
+* autograder-verify = "exam_pp.exam_verification"
+* autograder-evaluate = "exam_pp.exam_evaluation"
+* autograder-analyze = "exam_pp.exam_post_pipeline"
+
+## Developer installation
+
+If you want to contribute to this project consider use venv and install dev tools
+
+
 ```bash
 $ git clone <this repository>
 $ cd <cloned directory>
-$ poetry install
+$
+$ python -m venv .venv
+$ source .venv/bin/activate
+$
+$ # Install the package in editable mode with dev tools
+$ pip install -e '.[dev]'
+$
+```
+
+
+
+Alternative installation methods via flake.nix are described below.
+
+
+
+
+
+## Download TREC DL20 to reproduce the paper
+
+
+Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. Fetch the `data-dl20.tar.xz` [tarball](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz), and extract it into directory `data/dl20`.
+
+```bash
 $ wget [https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz)  # tarball with graded runs, questions, and nuggets
 $ tar -x -C data/dl20 data-dl20.tar.xz
 ```
 
 Official run files need to be obtained from <https://trec.nist.gov/results/trec29/deep.passages.input.html>. Access credentials are provided by the TREC Manager.  Decompressed run files need to be placed in `./data/dl20/dl20runs`
 
-
-Alternative installation methods are described below.
 
 
 ## Interchange Data Model 
@@ -172,7 +237,7 @@ Generate a test bank of nuggets as follows
 
 ```bash
 $ export OPENAI_API_KEY=...
-$ poetry run autograder-generate \
+$ autograder-generate \
  -q data/dl20/dl20-queries.json \
  -o data/dl20/dl20-nuggets.jsonl.gz \
  --use-nuggets \
@@ -204,7 +269,7 @@ Use device `None` to use CPUs.
 
 
 ```bash 
-$ poetry run autograder-grade \
+$ autograder-grade \
    data/dl20/dl20-passages.jsonl.gz \
    -o data/dl20/dl20-graded.jsonl.gz \
    --model-name google/flan-t5-large \
@@ -230,7 +295,7 @@ We support manual verification and process supervision with the following comman
 All answers to the grading prompts selfrated/extraction, grouped by question/nugget.
 
 ```bash
-$ poetry run autograder-verify \
+$ autograder-verify \
    data/dl20/dl20-graded.jsonl.gz \
    --verify-grading \
    --question-path data/dl20/dl20-questions.jsonl.gz  \
@@ -242,7 +307,7 @@ $ poetry run autograder-verify \
 Questions/nuggets frequently covered by non-relevant passages (those should be removed from the test bank).
 
 ```bash
-$ poetry run autograder-verify \
+$ autograder-verify \
    data/dl20/dl20-graded.jsonl.gz \
    --uncovered-passages \
    --min-judgment 1  \
@@ -255,7 +320,7 @@ $ poetry run autograder-verify \
 Relevant passages not covered by any question/nugget (these require additional test nuggets/questions).
 
 ```bash
-$ poetry run autograder-verify \
+$ autograder-verify \
    data/dl20/dl20-graded.jsonl.gz \
    --bad-question \
    --min-judgment 1  \
@@ -272,7 +337,7 @@ We envision that human verification will leads to an iterate and repeat previous
 To evaluate systems with Autograder qrels, a trec\_eval compatible QRELs file is exported. 
 
 ```bash
-$ poetry run autograder-evaluate \
+$ autograder-evaluate \
      data/dl20/dl20-graded.jsonl.gz \
      -q data/dl20/dl20-autograde-qrels.qrels \
      --min-self-rating 4 \
@@ -291,7 +356,7 @@ Our workbench supports to automatically run trec\_eval with this qrels file on a
 To evaluate systems with Autograde Cover, system information needs to be included in the passage file (e.g. `dl20-passages.jsonl.gz`). This information is preserved during the grading process. The leaderboard is produced with:
 
 ```bash
-$ poetry run autograder-evaluate \
+$ autograder-evaluate \
     data/dl20/dl20-graded.jsonl.gz \
     --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard.tsv 
     --min-self-rating 4 \
@@ -308,7 +373,7 @@ Direct grading prompts are only supported via Autograde Qrels.
 
 Rank correlation with official leaderboards using Autograde qrels.
 ```bash
-$ poetry run autograder-analyze \
+$ autograder-analyze \
     data/dl20/dl20-graded.jsonl.gz \ 
     -q data/dl20/dl20-autograde-qrels.qrels \
     --run-dir data/dl20/dl20runs  \
@@ -325,7 +390,7 @@ $ poetry run autograder-analyze \
 Rank correlation with official leaderboards using Autograde Cover.
 
 ```bash
-$ poetry run autograder-analyze \
+$ autograder-analyze \
     data/dl20/dl20-graded.jsonl.gz \ 
     --leaderboard-out data/dl20/dl20-autograde-cover-leaderboard.tsv \
     --official-leaderboard data/dl20/official_dl20_leaderboard.json \
@@ -340,7 +405,7 @@ $ poetry run autograder-analyze \
 Inter-annotator agreement of manual judgments and self-ratings.
 
 ```bash
-$ poetry run autograder-analyze \
+$ autograder-analyze \
       data/dl20/dl20-graded.jsonl.gz \
       --inter-annotator-out data/dl20/dl20-autograde-inter-annotator.tex \
       --min-relevant-judgment 2 \ 

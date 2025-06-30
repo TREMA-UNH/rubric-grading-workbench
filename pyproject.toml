@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,24 +11,33 @@ authors = [
     {name = "Ben Gamari", email = "ben@smart-cactus.org"},
     {name = "Naghmeh Farzi", email = "Naghmeh.Farzi@unh.edu"},
 ]
-requires-python = ">= 3.8"
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.8"
+
 dependencies = [
-    "pydantic ~= 2.6",
-    "fuzzywuzzy ~= 0.18",
-    "nltk ~= 3.8",
-    "pylatex ~= 1.4",
+    "pydantic ~=2.6",
+    "fuzzywuzzy ~=0.18",
+    "nltk ~=3.8",
+    "pylatex ~=1.4",
     "scipy",
-    "openai ~= 1.11",
-    "requests ~= 2.31",
-    "trec-car-tools ~= 2.6",
-    "torch ~= 2.1",
-    "transformers ~= 4.37",
+    "openai ~=1.11",
+    "requests ~=2.31",
+    "trec-car-tools ~=2.6",
+    "torch ~=2.1",
+    "transformers ~=4.37",
     "duckdb",
     "backports-asyncio-queues",
 ]
 
-[tool.setuptools]
-packages = ["exam_pp"]
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "mypy",
+    "pre-commit"
+]
 
 [project.scripts]
 autograder-generate = "exam_pp.question_generation:main"
@@ -36,3 +45,6 @@ autograder-grade = "exam_pp.exam_grading:main"
 autograder-verify = "exam_pp.exam_verification:main"
 autograder-evaluate = "exam_pp.exam_evaluation:main"
 autograder-analyze = "exam_pp.exam_post_pipeline:main"
+
+[tool.setuptools]
+packages = ["exam_pp"]
