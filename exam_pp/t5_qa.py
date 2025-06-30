@@ -62,11 +62,13 @@ PromptGeneratorQC = Callable[[Prompt],Dict[str,str]]
 def create_gpt_client()->openai.OpenAI:
     return openai_interface.default_openai_client()
 
-def create_vllm_client(base_url:str|None=os.getenv('VLLM_URL'))->openai.OpenAI:
+def create_vllm_client(base_url:str|None=os.getenv('VLLM_URL') ,api_key:str|None=os.getenv('OPEN_API_KEY'))->openai.OpenAI:
     if base_url is None and os.getenv('VLLM_URL') is None:
         raise RuntimeError ("Must set environment variable \"VLLM_URL\". For localhost use \'http://[::0]:8000/v1\' ")
+    if api_key is None:
+        api_key="NONE"
 
-    return openai_interface.createOpenAIClient(api_key="NONE", base_url=base_url)
+    return openai_interface.createOpenAIClient(api_key=api_key, base_url=base_url)
 
 class FetchGptGrade(FetchGptJson):
     def __init__(self, gpt_model:str, max_tokens:int, client:openai.OpenAI, use_chat_protocol:True):

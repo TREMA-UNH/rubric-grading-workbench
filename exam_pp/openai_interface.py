@@ -10,7 +10,6 @@ import requests
 import time
 import datetime
 
-import trec_car.read_data as trec_car
 
 from .exam_llm import LlmResponseError
 from .davinci_to_runs_with_text import *
@@ -137,7 +136,15 @@ def query_gpt_batch_with_rate_limiting(prompt:str, gpt_model:str, max_tokens:int
         if system_message is not None:
             messages.append({"role":"system", "content":system_message})
         messages.append({"role":"user", "content":prompt})
-        completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens, **kwargs) 
+        safe_kwargs = kwargs.copy()
+        safe_kwargs.pop("record_embeddings", None)
+        # ,response_format="json",
+        completion = retry_with_exponential_backoff(func=client.chat.completions.create)(model=gpt_model,messages=messages, max_tokens=max_tokens, **safe_kwargs) 
+        
+        
+        if not completion or not hasattr(completion, "choices") or completion.choices is None:
+            raise ValueError(f"Invalid completion response: {completion}")
+
         result = [choice.message.content.strip() for choice in completion.choices]
     else:
         completion = retry_with_exponential_backoff(func=client.completions.create)(model=gpt_model,prompt=prompt, max_tokens=max_tokens, **kwargs) 
