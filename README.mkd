@@ -517,11 +517,16 @@ export OPENAI_API_KEY="..."
 python -m exam_pp.exam_grading ... --model-pipeline OpenAI --model-name gpt-3.5-turbo ...
 ```
 
-# Grading with vLLM (uses JSON)
+# Grading with Chat-Completions endpoint (uses JSON)
 
-I am using Gwen for example, you will need a model that reliably responds in the requested JSON format.
+For grading you can use any Chat-Completions capable endpoint, such as vLLM or llm-lite, or LLM credits providers such as Together.AI or OpenRouter.
 
-You will need to first start the vLLM server in the background, for example like this:
+I am using Gwen for example, you will need a model that reliably responds in the requested JSON format. 
+
+
+
+### Example: start vLLM server
+To start the vLLM server in the background:
 
 ```bash
     ./bin/vllm serve Qwen/Qwen2-7B-Instruct-GPTQ-Int4 --device=cuda --max-model-len 1024
@@ -533,7 +538,10 @@ or
      HF_TOKEN="..." ./bin/vllm serve mistralai/Mistral-Nemo-Instruct-2407 --device=cuda  --max-model-len 400 --port 8889 --host 0.0.0.0
 ```
 
-Then configure RUBRIC as a vLLM client as follows. 
+
+### Configure Rubric as Chat Completions client:
+
+Then configure rubric to use your Chat Completions endpoint  as follows. 
 
 ```bash
     # configure end point 
@@ -543,6 +551,7 @@ Then configure RUBRIC as a vLLM client as follows.
     python -m exam_pp.exam_grading ...   --model-pipeline vLLM --model-name Qwen/Qwen2-7B-Instruct-GPTQ-Int4 ...
 ```
 
+While the environment variable is called  "VLLM", in fact, any endpoint can be configured here.
 
 
 
