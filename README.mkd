@@ -108,9 +108,18 @@ Alternative installation methods via flake.nix are described below.
 Let's examine usage of Autograder Workbench on the TREC DL 20 dataset. Fetch the `data-dl20.tar.xz` [tarball](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz), and extract it into directory `data/dl20`.
 
 ```bash
-$ wget [https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz](https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz)  # tarball with graded runs, questions, and nuggets
-$ tar -x -C data/dl20 data-dl20.tar.xz
+$ wget https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz  # tarball with graded runs, questions, and nuggets
+$ tar -x -f data-dl20.tar.xz
+$ ls data/dl20/  # data will be placed here
 ```
+
+To run the code examples below, you either create a `passages.jsonl.gz` or to trying it out with a small example use this:
+
+```bash
+$ cd data/dl20
+$ ln -s trecDL2020-qrels-runs-with-text.jsonl.gz dl20-passages.jsonl.gz
+```
+
 
 Official run files need to be obtained from <https://trec.nist.gov/results/trec29/deep.passages.input.html>. Access credentials are provided by the TREC Manager.  Decompressed run files need to be placed in `./data/dl20/dl20runs`
 
@@ -279,6 +288,9 @@ $ autograder-grade \
    --question-type question-bank \
    --use-nuggets 
 ```
+For a test run on fewer queries/passages add `--max-queries 1 --max-paragraphs 10`
+
+
 
 Alternative prompts classes are 
 
